@@ -1,0 +1,3 @@
+agent_environment: production
+agent_name: vibedeploy-agent
+entrypoint_file: main.py
