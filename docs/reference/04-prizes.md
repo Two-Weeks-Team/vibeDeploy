@@ -1,72 +1,55 @@
-# Prizes & Bonus Categories
+# Prizes - Official Source (Original)
 
-> Total Prize Pool: **$20,000 in cash** + DigitalOcean credits
-> Source: https://digitalocean.devpost.com/
+Source URLs:
+- https://digitalocean.devpost.com/rules
+- https://digitalocean.devpost.com/
+Fetched: 2026-03-04 (Asia/Seoul)
 
-## Overall Prizes
+From Official Rules -> "8. Prizes"
 
-| Place | Cash | DO Credits | Total Value |
-|-------|------|------------|-------------|
-| **1st Place** | $8,000 | $600 | $8,600 |
-| **2nd Place** | $4,000 | $400 | $4,400 |
-| **3rd Place** | $2,000 | $200 | $2,200 |
+Overall Prizes
+- 1st Place
+  - $8,000 USD cash
+  - $600 in DigitalOcean credits
+  - Qty: 1
+  - Eligible Submissions: All Eligible Submissions
 
-## Bonus Prizes ($2,000 each)
+- 2nd Place
+  - $4,000 USD cash
+  - $400 in DigitalOcean credits
+  - Qty: 1
+  - Eligible Submissions: All Eligible Submissions
 
-### Best AI Agent Persona - $2,000
-> "The most helpful, unique, or charismatic AI personality/agent"
+- 3rd Place
+  - $2,000 USD cash
+  - $200 in DigitalOcean credits
+  - Qty: 1
+  - Eligible Submissions: All Eligible Submissions
 
-**What this means for vibeDeploy:**
-- Create a distinct AI agent with personality
-- Focus on helpfulness and unique interaction patterns
-- Give the agent a memorable character/persona
-- Conversational UI that feels natural
+Bonus Prizes
+- Best AI Agent Persona
+  - $2,000 USD cash
+  - Qty: 1
+  - Eligible Submissions: All Eligible Submissions that created the most helpful, unique, or charismatic AI personality/agent.
 
-### The Great Whale Prize - $2,000
-> "The biggest and most massive idea"
+- The Great Whale Prize
+  - $2,000 USD cash
+  - Qty: 1
+  - Eligible Submissions: All Eligible Submissions that created the biggest and most massive idea.
 
-**What this means for vibeDeploy:**
-- Think BIG in scope and ambition
-- Enterprise-scale vision even if MVP
-- Show potential for massive impact
-- Platform-level thinking, not just a feature
+- Best Program for the People
+  - $2,000 USD cash
+  - Qty: 1
+  - Eligible Submissions: All Eligible Submissions that best serve open-source or public interests.
 
-### Best Program for the People - $2,000
-> "Best serve open-source or public interests"
+Important notes on multiple prize eligibility:
+- A project can only win one (1) prize.
 
-**What this means for vibeDeploy:**
-- Strong open-source focus
-- Community benefit clear
-- Public good / developer tooling angle
-- Accessible to all, not just enterprises
-
-## Critical Rule
-
-> **A project can only win ONE prize.**
-
-This means we need to strategically target either:
-1. An **Overall Prize** (1st/2nd/3rd) - highest value, hardest competition
-2. A **Bonus Prize** - lower competition, focused criteria
-
-## Strategic Prize Targeting
-
-### Best Strategy: Aim for 1st Place while naturally qualifying for a Bonus
-
-**Recommended Bonus Alignment:**
-- "Best Program for the People" pairs naturally with a developer tool (vibeDeploy)
-- "The Great Whale Prize" if we build something ambitious in scope
-- "Best AI Agent Persona" if we build a compelling AI deployment assistant
-
-### Why "Best Program for the People" is ideal for vibeDeploy:
-1. A deployment tool is inherently for developers (open-source community)
-2. Making deployment easier serves public interest
-3. Open-source by nature of submission requirements
-4. Developer tools have high community impact
-
-## Tax & Delivery Notes
-
-- Winners responsible for all applicable taxes
-- Prize delivered within 60 days of completing required forms
-- Must complete affidavit within 10 business days
-- US residents: W-9 required
-- Non-US residents: W-8BEN form required
+From Overview page -> "Prizes"
+- $20,000 in prizes
+- 1st Place: $8,000 in cash (1 winner), includes $600 in DigitalOcean credits
+- 2nd Place: $4,000 in cash (1 winner), includes $400 in DigitalOcean credits
+- 3rd Place: $2,000 in cash (1 winner), includes $200 in DigitalOcean credits
+- Best AI Agent Persona: $2,000 in cash (1 winner)
+- The Great Whale Prize: $2,000 in cash (1 winner)
+- Best Program for the People: $2,000 in cash (1 winner)

@@ -1,91 +1,116 @@
-# DigitalOcean Gradient AI Hackathon - Rules Summary
+# DigitalOcean Gradient AI Hackathon - Official Rules (Original Source)
 
-> Source: https://digitalocean.devpost.com/rules
+Source URL: https://digitalocean.devpost.com/rules
+Fetched: 2026-03-04 (Asia/Seoul)
 
-## Key Dates
+DigitalOcean Gradient™ AI Hackathon (the “Hackathon”) Official Rules
 
-| Milestone | Date |
-|-----------|------|
-| **Submission Period** | Jan 28, 2026 10:00am ET ~ **Mar 18, 2026 5:00pm ET** |
-| **Judging Period** | Apr 7 ~ Apr 14, 2026 |
-| **Winners Announced** | ~Apr 20, 2026 |
+NO PURCHASE OR PAYMENT NECESSARY TO ENTER OR WIN. A PURCHASE OR PAYMENT WILL NOT INCREASE YOUR CHANCES OF WINNING.
 
-## Eligibility
+SUBMISSION OF ANY ENTRY CONSTITUTES AGREEMENT TO THESE OFFICIAL RULES AS A CONTRACT BETWEEN ENTRANT (AND EACH INDIVIDUAL MEMBER OF ENTRANT), THE HACKATHON SPONSOR, AND DEVPOST.
 
-- **Open to**: Individuals (age of majority+) and Teams of eligible individuals
-- **Not open to**: Organizations/corporations, sanctioned countries (Brazil, Quebec, Russia, Cuba, Iran, North Korea, etc.)
-- One person can join multiple teams AND submit individually
-- Teams must appoint one "Representative" to manage the submission
+1. Dates and Timing
 
-## Project Requirements (CRITICAL)
+Submission Period: Wednesday, January 28, 2026 (10:00 am Eastern Time) – Wednesday, March 18, 2026 (5:00 pm Eastern Time) (“Submission Period”).
 
-### Must Build
-- **New working software application** using **DigitalOcean Gradient AI full-stack features**
-- Must be newly created during the Submission Period (Jan 28 ~ Mar 18)
-- Must function as depicted in demo video
+Judging Period: Tuesday, April 7, 2026 (2:00 pm Eastern Time) – Tuesday, April 14, 2026 (2:00 pm Eastern Time) (“Judging Period”).
 
-### Allowed
-- Using a pre-existing **idea** (just not pre-existing code)
-- Working on ideas already done by others (judged on quality)
-- Using libraries, frameworks, open-source code
-- Small bug fixes after deadline
+Winners Announced: On or around Monday, April 20, 2026 (2:00 pm Eastern Time).
 
-### NOT Allowed
-- Re-using code from before the hackathon
-- Open-sourcing old code just to use it in the hackathon
-- Large changes or new features after deadline
+3. Eligibility
 
-### Code Requirements
-- **Must remain public post-event** to be eligible for prizes
-- Must include an **open source license file** (OSI-approved)
-- License must be detectable/visible at top of repo (About section)
-- OSI licenses list: https://opensource.org/licenses
+The Hackathon IS open to:
+- Individuals who are at least the age of majority where they reside as of the time of entry (“Eligible Individuals”); and
+- Teams of Eligible Individuals (“Teams”);
 
-## Submission Requirements
+An Eligible Individual may join more than one Team and an Eligible Individual who is part of a Team may also enter the Hackathon on an individual basis.
 
-| Item | Required? | Details |
-|------|-----------|---------|
-| Code Repository URL | **YES** | Public, open source, with license file |
-| Text Description | **YES** | Explain features and functionality |
-| Demo Video | **YES** | < 3 minutes, show project running, public on YouTube/Vimeo/Facebook |
-| DO Gradient AI Usage Description | **YES** | Detailed description of DigitalOcean Gradient AI usage |
-| Functional Demo URL | Optional | Link to live demo |
-| Download Instructions | Optional | In repo |
+The Hackathon IS NOT open to:
+- Individuals who are residents of, or Organizations domiciled in, a country, state, province or territory where the laws of the United States or local law prohibits participating or receiving a prize in the Hackathon (including, but not limited to, Brazil, Quebec, Russia, Crimea, Cuba, Iran, North Korea, and any other country designated by the United States Treasury's Office of Foreign Assets Control)
+- Organizations (including corporations, not-for-profit corporations and other nonprofit organizations, limited liability companies, partnerships, and other legal entities) that exist and have been organized or incorporated at the time of entry.
+- Organizations involved with the design, production, paid promotion, execution, or distribution of the Hackathon, including the Sponsor and Administrator (“Promotion Entities”).
+- Employees, representatives and agents of such Promotion Entities, and all members of their immediate family or household.
 
-### Video Requirements
-- **Under 3 minutes** (judges not required to watch beyond 3 min)
-- Show project functioning on target platform
-- Must be publicly visible on YouTube, Vimeo, Facebook Video, or Youku
-- No unauthorized third-party trademarks or copyrighted music
+4. How To Enter
 
-## Important Rules
+Entrants may enter by visiting digitalocean.devpost.com (“Hackathon Website”) and following the below steps:
+- Register for the Hackathon on the Hackathon Website by clicking the “Join Hackathon” button.
+- Entrants may redeem $200 DigitalOcean credits via https://mlh.link/digitalocean-signup
+- All participants agree to uphold the MLH Code of Conduct.
+- Complete all required fields on the “Enter a Submission” page during the Submission Period.
 
-1. **Multiple submissions allowed** but each must be substantially different
-2. **All materials must be in English** (or provide English translation)
-3. **IP stays with you** - sponsor gets non-exclusive license for judging only
-4. **Judges may judge solely on text/images/video** - they are NOT required to test the project
-5. **One project = one prize only** (cannot win multiple prizes)
+Project Requirements
+- What to Create: Entrants must create a new working software application that uses DigitalOcean Gradient™ AI full stack features (each a “Project”).
+- Functionality: The Project must be capable of being successfully installed and running consistently on the platform for which it is intended and must function as depicted in the video and/or expressed in the text description.
+- Platforms: A submitted Project must run on the platform for which it is intended and which is specified in the Submission Requirements.
+- New Projects Only: Projects must be newly created by the Entrant during the Hackathon Submission Period.
 
-## Free Credits & Cost Optimization
+Rules under New Projects Only:
+1. Teams can use an idea they had before the event.
+2. Teams can work on ideas that have already been done. Hacks do not have to be “innovative”.
+3. Teams can work on an idea that they have worked on before (as long as they do not re-use code or other project materials).
+4. Teams can use libraries, frameworks, or open-source code in their projects.
+5. Teams must stop hacking once the time is up. Teams are allowed to debug and make small fixes after time is up. Making large changes or adding new features is not allowed.
+6. Your code must remain public post event to be eligible for prizes.
 
-### Step 1: Claim $200 Hackathon Credits
-1. Visit **https://mlh.link/digitalocean-signup**
-2. Create a **new** DigitalOcean account (existing accounts won't get credits)
-3. Add a valid credit card for verification
-4. **$200 credits** applied automatically to your account
-5. Trouble claiming? Discord: https://discord.mlh.io/
+Submission Requirements
+- Include a Project built with the required developer tools and meets the above Project Requirements.
+- Provide a URL to your code repository for judging and testing.
+- The repository must be public and open source by including an open source license file.
+- Include a text description that should explain the features and functionality of your Project.
+- Include a demonstration video of your Project.
+- Provide a detailed project description outlining usage and knowledge of DigitalOcean Gradient™ AI.
+- Optional: Provide a URL to a functional demo application.
 
-### Step 2: Additional Credit Sources
-| Source | Amount | How |
-|--------|--------|-----|
-| **Hackathon participant** | $200 | https://mlh.link/digitalocean-signup |
-| **GitHub Student Pack** | $200 (1yr) | https://education.github.com/pack |
-| **New account trial** | $200 (60 days) | https://try.digitalocean.com/freetrialoffer/ |
+Video portion of the Submission:
+- should be less than three (3) minutes.
+- should include footage that shows the Project functioning on the device for which it was built.
+- must be uploaded to and made publicly visible on YouTube, Vimeo, Facebook Video, or Youku.
+- must not include third party trademarks, or copyrighted music or other material unless the Entrant has permission to use such material.
 
-> Note: These may not stack. The hackathon link is the most reliable path.
+Language Requirements
+All Submission materials must be in English or, if not in English, the Entrant must provide an English translation.
 
-### Step 3: Maximize Free Usage
-- **ADK hosting**: **FREE** during Public Preview (no compute costs for deployed agents)
-- **Evaluation judge tokens**: Waived during Public Preview
-- **Cheapest models**: GPT-5 nano ($0.05/$0.40 per 1M tokens) for development/testing
-- **Cost-effective strategy**: Develop with GPT-5 nano, demo with Claude Sonnet 4.6
+6. Judges & Criteria
+
+Stage One:
+The first stage will determine via pass/fail whether the ideas meet a baseline level of viability, in that the Project reasonably fits the theme and reasonably applies the required APIs/SDKs featured in the Hackathon.
+
+Stage Two:
+All Submissions that pass Stage One will be evaluated in Stage Two based on the following equally weighted criteria:
+- Technological Implementation
+- Design
+- Potential Impact
+- Quality of the Idea
+
+Judges are not required to test the Project and may choose to judge based solely on the text description, images, and video provided in the Submission.
+
+8. Prizes
+
+Overall Prizes
+- 1st Place
+  - $8,000 USD cash
+  - $600 in DigitalOcean credits
+- 2nd Place
+  - $4,000 USD cash
+  - $400 in DigitalOcean credits
+- 3rd Place
+  - $2,000 USD cash
+  - $200 in DigitalOcean credits
+
+Bonus Prizes
+- Best AI Agent Persona
+  - $2,000 USD cash
+- The Great Whale Prize
+  - $2,000 USD cash
+- Best Program for the People
+  - $2,000 USD cash
+
+IMPORTANT NOTES ON MULTIPLE PRIZE ELIGIBILITY:
+- A project can only win one (1) prize.
+
+Tax and delivery clauses in the rules include:
+- Required forms deadline is ten (10) business days.
+- Prizes will be delivered within 60 days of receipt of completed forms.
+- United States residents may be required to provide a completed form W-9.
+- Residents of other countries may be required to provide a completed W-8BEN form.
