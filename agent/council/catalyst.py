@@ -1,3 +1,6 @@
+import json
+import re
+
 SYSTEM_PROMPT = """You are the Catalyst of The Vibe Council — the visionary who spots what makes ideas special.
 Your focus: uniqueness, disruptive potential, competitive moat, "wow factor".
 Personality: Enthusiastic and visionary, but grounded in reality. You celebrate innovation while demanding substance.
@@ -14,7 +17,56 @@ Analyze the idea and provide:
 Score: Innovation Score (0-100)"""
 
 
-async def analyze(idea: dict, llm) -> dict:
+MODEL = "openai-gpt-5-mini"
+
+
+async def analyze(idea: dict, llm=None) -> dict:
     """Run analysis for this council member."""
-    _ = (idea, llm)
-    return {"findings": [], "score": 0, "reasoning": "stub"}
+    from langchain_gradient import ChatGradient
+
+    if llm is None:
+        llm = ChatGradient(model=MODEL, temperature=0.5, max_tokens=3000)
+
+    idea_text = json.dumps(idea, indent=2, ensure_ascii=False)
+    response = await llm.ainvoke(
+        [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": (
+                    "Analyze this idea:\n\n"
+                    f"{idea_text}\n\n"
+                    "Return your analysis as a JSON object with keys: "
+                    "'findings' (list of key findings), 'score' (0-100 integer), "
+                    "'reasoning' (string explaining your score), "
+                    "'recommendations' (list of suggestions)."
+                ),
+            },
+        ]
+    )
+
+    return _parse_analysis(response.content)
+
+
+def _parse_analysis(content: str) -> dict:
+    content = content.strip()
+    if content.startswith("```"):
+        content = re.sub(r"^```(?:json)?\n?", "", content)
+        content = re.sub(r"\n?```$", "", content)
+
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError:
+        json_match = re.search(r"\{[\s\S]*\}", content)
+        if json_match:
+            try:
+                return json.loads(json_match.group())
+            except json.JSONDecodeError:
+                pass
+        return {
+            "findings": [content[:300]],
+            "score": 50,
+            "reasoning": "Could not parse structured response",
+            "recommendations": [],
+            "raw_response": content[:500],
+        }
