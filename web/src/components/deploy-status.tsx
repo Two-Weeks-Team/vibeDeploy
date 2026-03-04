@@ -1,14 +1,10 @@
 "use client";
 
+import { motion } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-
-/**
- * DeployStatus — Shows deployment progress and live URL.
- * Steps: Creating repo → Pushing code → Deploying to DO → Live.
- * TODO (Wave 8): Real-time deployment progress via SSE, live URL link.
- */
+import { Progress } from "@/components/ui/progress";
 
 type DeployStep = "repo" | "push" | "deploy" | "live" | "failed";
 
@@ -33,29 +29,37 @@ export function DeployStatus({
   error,
 }: DeployStatusProps) {
   const currentIndex = STEPS.findIndex((s) => s.key === currentStep);
+  const clampedIndex = currentIndex < 0 ? 0 : currentIndex;
+  const percent = Math.round((clampedIndex / (STEPS.length - 1)) * 100);
 
   return (
-    <Card>
+    <Card className="border-white/10 bg-card/60">
       <CardHeader>
         <CardTitle>Deployment</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="space-y-4">
+        <Progress value={currentStep === "live" ? 100 : percent} />
         {STEPS.map((step, i) => {
-          const isDone = i < currentIndex || currentStep === "live";
+          const isDone = i < clampedIndex || currentStep === "live";
           const isCurrent = step.key === currentStep;
+
           return (
-            <div key={step.key} className="flex items-center gap-2 text-sm">
-              {isDone && <span className="text-green-400">✓</span>}
-              {isCurrent && currentStep !== "live" && (
-                <span className="animate-pulse">●</span>
-              )}
+            <motion.div
+              key={step.key}
+              initial={{ opacity: 0, x: -6 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.2, delay: i * 0.03 }}
+              className="flex items-center gap-2 text-sm"
+            >
+              {isDone && <span className="text-emerald-400">✓</span>}
+              {isCurrent && currentStep !== "live" && <span className="animate-pulse">●</span>}
               {!isDone && !isCurrent && (
                 <span className="text-muted-foreground">○</span>
               )}
               <span className={isCurrent ? "font-medium" : "text-muted-foreground"}>
                 {step.label}
               </span>
-            </div>
+            </motion.div>
           );
         })}
 
@@ -68,7 +72,7 @@ export function DeployStatus({
             href={repoUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="block text-sm text-blue-400 underline"
+            className="block text-sm text-blue-300 underline"
           >
             View Repository
           </a>
