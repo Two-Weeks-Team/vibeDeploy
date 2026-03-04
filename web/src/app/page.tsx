@@ -1,79 +1,55 @@
-"use client";
+import { Card, CardContent } from "@/components/ui/card";
+import { InputForm } from "@/components/input-form";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+const COUNCIL_AGENTS = [
+  { emoji: "🏗️", name: "Architect", role: "Technical Lead" },
+  { emoji: "🔭", name: "Scout", role: "Market Analyst" },
+  { emoji: "🛡️", name: "Guardian", role: "Risk Assessor" },
+  { emoji: "⚡", name: "Catalyst", role: "Innovation Officer" },
+  { emoji: "🎯", name: "Advocate", role: "UX Champion" },
+  { emoji: "🧭", name: "Strategist", role: "Session Lead" },
+];
+
+const STEPS = [
+  { num: "1", title: "Describe", desc: "Enter your idea or paste a YouTube URL" },
+  { num: "2", title: "Council", desc: "6 AI agents debate feasibility live" },
+  { num: "3", title: "Build", desc: "PRD, code, and assets generated" },
+  { num: "4", title: "Deploy", desc: "Live app on DigitalOcean in minutes" },
+];
 
 export default function LandingPage() {
-  const [input, setInput] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const router = useRouter();
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!input.trim()) return;
-    setIsLoading(true);
-
-    // TODO: POST to agent API, get meeting ID, redirect
-    // const { meetingId } = await startMeeting(input);
-    // router.push(`/meeting/${meetingId}`);
-
-    // Placeholder: simulate redirect
-    const mockId = crypto.randomUUID();
-    router.push(`/meeting/${mockId}`);
-  }
-
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center px-4">
-      <div className="w-full max-w-2xl space-y-8">
-        {/* Hero */}
+    <div className="flex min-h-screen flex-col items-center justify-center px-4 py-16">
+      <div className="w-full max-w-2xl space-y-12">
         <div className="space-y-4 text-center">
-          <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">
+          <h1 className="text-5xl font-bold tracking-tight sm:text-6xl bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
             vibeDeploy
           </h1>
-          <p className="text-lg text-muted-foreground">
-            One sentence. One meeting. One live app.
+          <p className="text-xl text-muted-foreground">
+            From idea to live app — one sentence, one meeting.
+          </p>
+          <p className="text-sm text-muted-foreground/70">
+            Describe your app idea. The Vibe Council debates feasibility, then builds and deploys it.
           </p>
         </div>
 
-        {/* Input Form */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Describe your app idea</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <Textarea
-                placeholder="I want a restaurant queue management app with QR codes... or paste a YouTube URL"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                rows={4}
-                className="resize-none"
-              />
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={!input.trim() || isLoading}
-              >
-                {isLoading ? "Convening The Vibe Council..." : "Start Meeting"}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
+        <InputForm />
 
-        {/* Council Preview */}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {STEPS.map((step) => (
+            <div key={step.num} className="text-center space-y-1">
+              <div className="mx-auto flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
+                {step.num}
+              </div>
+              <p className="text-sm font-medium">{step.title}</p>
+              <p className="text-xs text-muted-foreground">{step.desc}</p>
+            </div>
+          ))}
+        </div>
+
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          {[
-            { emoji: "🏗️", name: "Architect", role: "Technical Lead" },
-            { emoji: "🔭", name: "Scout", role: "Market Analyst" },
-            { emoji: "🛡️", name: "Guardian", role: "Risk Assessor" },
-            { emoji: "⚡", name: "Catalyst", role: "Innovation Officer" },
-            { emoji: "🎯", name: "Advocate", role: "UX Champion" },
-            { emoji: "🧭", name: "Strategist", role: "Session Lead" },
-          ].map((agent) => (
-            <Card key={agent.name} className="text-center">
+          {COUNCIL_AGENTS.map((agent) => (
+            <Card key={agent.name} className="text-center transition-shadow hover:shadow-lg border-border/50">
               <CardContent className="pt-4">
                 <div className="text-2xl">{agent.emoji}</div>
                 <p className="mt-1 text-sm font-medium">{agent.name}</p>
