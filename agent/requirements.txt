@@ -1,0 +1,9 @@
+gradient-adk>=0.0.8
+gradient>=0.1.0
+langchain-gradient>=0.1.0
+langgraph>=1.0.0
+yt-dlp>=2024.1.0
+httpx>=0.27.0
+python-dotenv>=1.0.0
+pydo>=0.3.0
+PyGithub>=2.0.0

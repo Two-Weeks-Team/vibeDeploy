@@ -1,0 +1,16 @@
+name: vibedeploy-web
+region: nyc
+static_sites:
+  - name: web
+    github:
+      repo: Two-Weeks-Team/vibeDeploy
+      branch: main
+      deploy_on_push: true
+    source_dir: web
+    build_command: npm install && npm run build
+    output_dir: web/.next
+    environment_slug: node-js
+    envs:
+      - key: NEXT_PUBLIC_AGENT_URL
+        scope: BUILD_TIME
+        value: "${AGENT_URL}"
