@@ -1,4 +1,5 @@
-from typing import TypedDict, Optional, Literal, List, Dict, Annotated
+from typing import Annotated, Dict, List, Literal, Optional, TypedDict
+
 from langgraph.graph import add_messages
 
 
@@ -53,9 +54,7 @@ class VibeDeployState(TypedDict):
     raw_input: str  # 사용자 원본 입력
     input_type: Literal["text", "youtube"]  # 입력 유형
     transcript: Optional[str]  # YouTube 트랜스크립트 (있을 경우)
-    key_frames: Optional[
-        List[Dict]
-    ]  # 추출된 키프레임 [{ timestamp, image_url, analysis }]
+    key_frames: Optional[List[Dict]]  # 추출된 키프레임 [{ timestamp, image_url, analysis }]
     visual_context: Optional[str]  # GPT-4o vision 분석 결과 종합
 
     # Structured idea

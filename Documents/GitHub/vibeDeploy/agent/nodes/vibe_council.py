@@ -76,18 +76,10 @@ async def strategist_verdict(state: VibeDeployState) -> dict:
             "technical_feasibility",
             {"score": 0, "reasoning": "stub", "key_findings": []},
         ),
-        "market_viability": existing.get(
-            "market_viability", {"score": 0, "reasoning": "stub", "key_findings": []}
-        ),
-        "innovation_score": existing.get(
-            "innovation_score", {"score": 0, "reasoning": "stub", "key_findings": []}
-        ),
-        "risk_profile": existing.get(
-            "risk_profile", {"score": 100, "reasoning": "stub", "key_findings": []}
-        ),
-        "user_impact": existing.get(
-            "user_impact", {"score": 0, "reasoning": "stub", "key_findings": []}
-        ),
+        "market_viability": existing.get("market_viability", {"score": 0, "reasoning": "stub", "key_findings": []}),
+        "innovation_score": existing.get("innovation_score", {"score": 0, "reasoning": "stub", "key_findings": []}),
+        "risk_profile": existing.get("risk_profile", {"score": 100, "reasoning": "stub", "key_findings": []}),
+        "user_impact": existing.get("user_impact", {"score": 0, "reasoning": "stub", "key_findings": []}),
         "final_score": float(existing.get("final_score", 0.0)),
         "decision": existing.get("decision", "NO_GO"),
     }
