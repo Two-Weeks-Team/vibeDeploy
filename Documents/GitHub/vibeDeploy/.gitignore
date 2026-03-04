@@ -25,6 +25,16 @@ dist/
 build/
 *.egg-info/
 
+# Experimental
+agent_v2/
+agent/tools_v2/
+
+# Ruff
+.ruff_cache/
+
+# Sisyphus
+.sisyphus/
+
 # Misc
 *.log
 .cursor/
