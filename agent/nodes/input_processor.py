@@ -1,8 +1,7 @@
 import json
 import re
 
-from langchain_gradient import ChatGradient
-
+from ..llm import get_llm
 from ..state import VibeDeployState
 from ..tools.youtube import extract_youtube_transcript, is_youtube_url
 
@@ -41,7 +40,7 @@ async def input_processor(state: VibeDeployState) -> dict:
         else:
             idea_context = f"YouTube URL (transcript unavailable): {raw_input}"
 
-    llm = ChatGradient(
+    llm = get_llm(
         model="openai-gpt-5-mini",
         temperature=0.4,
         max_tokens=2000,

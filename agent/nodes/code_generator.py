@@ -1,8 +1,7 @@
 import json
 import re
 
-from langchain_gradient import ChatGradient
-
+from ..llm import get_llm
 from ..prompts.code_templates import (
     BACKEND_SYSTEM_PROMPT,
     CODE_GENERATION_BASE_SYSTEM_PROMPT,
@@ -15,7 +14,7 @@ async def code_generator(state: VibeDeployState) -> dict:
     generated_docs = state.get("generated_docs", {})
     idea = state.get("idea", {})
 
-    llm = ChatGradient(
+    llm = get_llm(
         model="anthropic-claude-4.6-sonnet",
         temperature=0.3,
         max_tokens=4000,
@@ -40,7 +39,7 @@ async def code_generator(state: VibeDeployState) -> dict:
     }
 
 
-async def _generate_frontend_files(llm: ChatGradient, context: str) -> dict[str, str]:
+async def _generate_frontend_files(llm, context: str) -> dict[str, str]:
     response = await llm.ainvoke(
         [
             {
@@ -63,7 +62,7 @@ async def _generate_frontend_files(llm: ChatGradient, context: str) -> dict[str,
     return _normalize_files_dict(files)
 
 
-async def _generate_backend_files(llm: ChatGradient, context: str) -> dict[str, str]:
+async def _generate_backend_files(llm, context: str) -> dict[str, str]:
     response = await llm.ainvoke(
         [
             {

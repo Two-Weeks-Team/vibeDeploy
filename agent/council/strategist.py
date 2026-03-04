@@ -25,10 +25,10 @@ MODEL = "openai-gpt-5.3-codex"
 
 async def analyze(idea: dict, llm=None) -> dict:
     """Run analysis for this council member."""
-    from langchain_gradient import ChatGradient
+    from ..llm import get_llm
 
     if llm is None:
-        llm = ChatGradient(model=MODEL, temperature=0.4, max_tokens=3000)
+        llm = get_llm(model=MODEL, temperature=0.4, max_tokens=3000)
 
     idea_text = json.dumps(idea, indent=2, ensure_ascii=False)
     response = await llm.ainvoke(

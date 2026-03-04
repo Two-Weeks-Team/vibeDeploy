@@ -1,8 +1,7 @@
 import json
 import re
 
-from langchain_gradient import ChatGradient
-
+from ..llm import get_llm
 from ..prompts.doc_templates import (
     API_SPEC_SYSTEM_PROMPT,
     APP_SPEC_SYSTEM_PROMPT,
@@ -20,7 +19,7 @@ async def doc_generator(state: VibeDeployState) -> dict:
     council_analysis = state.get("council_analysis", {})
     scoring = state.get("scoring", {})
 
-    llm = ChatGradient(
+    llm = get_llm(
         model="anthropic-claude-4.6-sonnet",
         temperature=0.3,
         max_tokens=4000,
@@ -58,7 +57,7 @@ def _build_context(idea: dict, council_analysis: dict, scoring: dict) -> str:
     )
 
 
-async def _generate_markdown_doc(llm: ChatGradient, doc_system_prompt: str, context: str) -> str:
+async def _generate_markdown_doc(llm, doc_system_prompt: str, context: str) -> str:
     response = await llm.ainvoke(
         [
             {
@@ -81,7 +80,7 @@ async def _generate_markdown_doc(llm: ChatGradient, doc_system_prompt: str, cont
     return content if isinstance(content, str) else ""
 
 
-async def _generate_app_spec_yaml_doc(llm: ChatGradient, context: str, idea: dict) -> str:
+async def _generate_app_spec_yaml_doc(llm, context: str, idea: dict) -> str:
     app_name = _slugify(idea.get("name") or idea.get("tagline") or "vibedeploy-app")
     repo_placeholder = f"https://github.com/example/{app_name}.git"
     baseline_spec = build_app_spec(app_name, repo_placeholder)

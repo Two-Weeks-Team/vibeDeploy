@@ -59,14 +59,14 @@ async def feedback_generator(state: VibeDeployState) -> dict:
     import json
     import re
 
-    from langchain_gradient import ChatGradient
+    from ..llm import get_llm
 
     scoring = state.get("scoring", {})
     idea = state.get("idea", {})
     analyses = state.get("council_analysis", {})
     cross_exam = state.get("cross_examination", {})
 
-    llm = ChatGradient(model="openai-gpt-5-mini", temperature=0.5, max_tokens=3000)
+    llm = get_llm(model="openai-gpt-5-mini", temperature=0.5, max_tokens=3000)
     context = json.dumps(
         {
             "idea": idea,
