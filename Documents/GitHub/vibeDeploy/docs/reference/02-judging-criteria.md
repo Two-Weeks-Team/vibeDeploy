@@ -1,102 +1,32 @@
-# Judging Criteria & Winning Strategy
+# Judges & Criteria - Official Rules Section (Original Source)
 
-> Source: https://digitalocean.devpost.com/rules (Section 6)
+Source URL: https://digitalocean.devpost.com/rules
+Fetched: 2026-03-04 (Asia/Seoul)
+Section: "6. Judges & Criteria"
 
-## Two-Stage Judging Process
+Eligible submissions will be evaluated by a panel of judges selected by the Sponsor (the “Judges”). Judges may be employees of the sponsor or third parties, may or may not be listed individually on the Hackathon Website, and may change before or during the Judging Period.
 
-### Stage 1: Pass/Fail Gate
-- Does the project **reasonably fit the theme**?
-- Does it **reasonably apply the required APIs/SDKs** (DigitalOcean Gradient AI)?
-- **Action**: Must clearly demonstrate Gradient AI usage or instant disqualification
+Judging may take place in one or more rounds with one or more panels of Judges, at the discretion of the sponsor.
 
-### Stage 2: Scoring (All criteria EQUALLY weighted - 25% each)
+Stage One
+The first stage will determine via pass/fail whether the ideas meet a baseline level of viability, in that the Project reasonably fits the theme and reasonably applies the required APIs/SDKs featured in the Hackathon.
 
-## 1. Technological Implementation (25%)
+Stage Two
+All Submissions that pass Stage One will be evaluated in Stage Two based on the following equally weighted criteria (the “Judging Criteria”):
+- Technological Implementation
+  Does the project demonstrate quality software development? Does the project thoroughly leverage the required tool?
+- Design
+  Is the user experience and design of the project well thought out?
+- Potential Impact
+  How big of an impact could the project have on the target community?
+- Quality of the Idea
+  How creative and unique is the project?
 
-> "Does the project demonstrate quality software development? Does the project thoroughly leverage the required tool?"
+The scores from the Judges will determine the potential winners of the applicable prizes.
 
-**What judges look for:**
-- Clean, well-structured code architecture
-- Proper error handling, logging, security
-- **DEEP integration with DigitalOcean Gradient AI** (not just surface-level)
-- Use of multiple Gradient AI features (GPU compute, model inference, training, etc.)
-- Production-quality patterns (CI/CD, testing, monitoring)
+Tie Breaking
+For each Prize listed below, if two or more Submissions are tied, the tied Submission with the highest score in the first applicable criterion listed above will be considered the higher scoring Submission.
 
-**How to maximize:**
-- Use Gradient AI as the CORE of the application, not an afterthought
-- Demonstrate multiple DO services working together (Gradient + App Platform + DB + Spaces)
-- Show understanding of ML ops best practices
-- Clean code with proper documentation
+In the event any ties remain, this process will be repeated, as needed, by comparing the tied Submissions’ scores on the next applicable criterion.
 
-## 2. Design (25%)
-
-> "Is the user experience and design of the project well thought out?"
-
-**What judges look for:**
-- Intuitive UI/UX flow
-- Visual polish and consistency
-- Responsive design
-- Accessibility considerations
-- Clear user journey from start to finish
-
-**How to maximize:**
-- Use a modern UI framework with consistent design system
-- Mobile-responsive by default
-- Loading states, error states, empty states all handled
-- Professional typography and spacing
-- Demo video should showcase smooth UX flow
-
-## 3. Potential Impact (25%)
-
-> "How big of an impact could the project have on the target community?"
-
-**What judges look for:**
-- Clear target audience/community
-- Real-world problem being solved
-- Scalability potential
-- Measurable impact metrics
-- Market viability
-
-**How to maximize:**
-- Identify a specific community/industry pain point
-- Show data or research backing the problem
-- Demonstrate how AI makes the solution significantly better
-- Include metrics or projections
-- Show potential for growth beyond hackathon
-
-## 4. Quality of the Idea (25%)
-
-> "How creative and unique is the project?"
-
-**What judges look for:**
-- Novel approach or application of AI
-- Creative use of DigitalOcean's platform
-- Innovation beyond existing solutions
-- "Wow factor"
-- Original thinking
-
-**How to maximize:**
-- Research existing projects in the gallery to avoid duplicates
-- Combine AI with an unexpected domain
-- Show creative use of Gradient AI features
-- Have a compelling narrative/story
-
-## Tie-Breaking
-
-1. First criterion listed above (Technological Implementation) breaks first tie
-2. Then Design, then Potential Impact, then Quality of Idea
-3. If still tied: panel vote
-
-## Key Takeaway for Winning
-
-```
-Score = Tech Implementation + Design + Impact + Creativity
-       (each EQUALLY weighted at 25%)
-```
-
-**The winning formula:**
-1. **Use Gradient AI deeply** (not just API calls - show GPU workloads, model training, inference pipelines)
-2. **Polish the UI/UX** to professional level
-3. **Target a real community need** with measurable impact
-4. **Be creative** in how you apply AI to the problem
-5. **Video is CRITICAL** - judges may not test, so the video IS your product demo
+If two or more Submissions are tied on all applicable criteria, the panel of Judges will vote on the tied Submissions.
