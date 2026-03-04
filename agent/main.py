@@ -1,5 +1,6 @@
-from gradient_adk import entrypoint, RequestContext
 import json
+
+from gradient_adk import RequestContext, entrypoint
 
 
 @entrypoint
