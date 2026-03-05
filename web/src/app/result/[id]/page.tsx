@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { animate } from "framer-motion";
+import { motion } from "framer-motion";
 import confetti from "canvas-confetti";
 import { CodePreview } from "@/components/code-preview";
 import { DeployStatus } from "@/components/deploy-status";
@@ -14,6 +16,24 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getMeetingResult, type MeetingResult } from "@/lib/api";
+
+function useAnimatedCounter(target: number, duration = 1.5) {
+  const [display, setDisplay] = useState(0);
+  const prevTarget = useRef(0);
+
+  useEffect(() => {
+    if (target === prevTarget.current) return;
+    const controls = animate(prevTarget.current, target, {
+      duration,
+      ease: "easeOut" as const,
+      onUpdate: (v) => setDisplay(Math.round(v)),
+    });
+    prevTarget.current = target;
+    return () => controls.stop();
+  }, [target, duration]);
+
+  return display;
+}
 
 type Verdict = "GO" | "CONDITIONAL" | "NO-GO";
 
@@ -85,66 +105,83 @@ export default function ResultPage() {
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(16,185,129,0.18),transparent_40%),radial-gradient(circle_at_bottom_left,rgba(59,130,246,0.14),transparent_45%)] px-4 py-8 md:px-6">
-      <div className="mx-auto w-full max-w-[1440px] space-y-6">
-        <div className="space-y-2">
+      <motion.div
+        className="mx-auto w-full max-w-[1440px] space-y-6"
+        initial="hidden"
+        animate="visible"
+        variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.12 } } }}
+      >
+        <motion.div
+          className="space-y-2"
+          variants={{ hidden: { opacity: 0, y: 16 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: "easeOut" as const } } }}
+        >
           <h1 className="text-3xl font-bold tracking-tight md:text-4xl">Council Result Dashboard</h1>
           <p className="text-sm text-muted-foreground md:text-base">Session {params.id}</p>
-        </div>
+        </motion.div>
 
-        <VerdictBanner verdict={verdict} score={score} />
+        <motion.div variants={{ hidden: { opacity: 0, y: 16 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: "easeOut" as const } } }}>
+          <VerdictBanner verdict={verdict} score={score} />
+        </motion.div>
 
         {verdict === "GO" && (
-          <VibeScore
-            score={score}
-            breakdown={{
-              tech: analysisMap.architect,
-              market: analysisMap.scout,
-              innovation: analysisMap.catalyst,
-              risk: analysisMap.guardian,
-              userImpact: analysisMap.advocate,
-            }}
-          />
+          <motion.div variants={{ hidden: { opacity: 0, y: 16 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: "easeOut" as const } } }}>
+            <VibeScore
+              score={score}
+              breakdown={{
+                tech: analysisMap.architect,
+                market: analysisMap.scout,
+                innovation: analysisMap.catalyst,
+                risk: analysisMap.guardian,
+                userImpact: analysisMap.advocate,
+              }}
+            />
+          </motion.div>
         )}
 
         {verdict === "CONDITIONAL" && (
-          <Card className="border-amber-400/20 bg-amber-500/10">
-            <CardHeader>
-              <CardTitle>Scope Adjustments</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <p className="text-sm text-amber-100">The council recommends a reduced first release scope.</p>
-              <ul className="space-y-2 text-sm text-amber-50/90">
-                {suggestions.map((item) => (
-                  <li key={item} className="rounded-lg border border-amber-300/20 bg-black/10 px-3 py-2">
-                    {item}
-                  </li>
-                ))}
-              </ul>
-              <Button onClick={() => router.push(`/meeting/${params.id}`)}>Retry Meeting</Button>
-            </CardContent>
-          </Card>
+          <motion.div variants={{ hidden: { opacity: 0, y: 16 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: "easeOut" as const } } }}>
+            <Card className="border-amber-400/20 bg-amber-500/10">
+              <CardHeader>
+                <CardTitle>Scope Adjustments</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-sm text-amber-100">The council recommends a reduced first release scope.</p>
+                <ul className="space-y-2 text-sm text-amber-50/90">
+                  {suggestions.map((item) => (
+                    <li key={item} className="rounded-lg border border-amber-300/20 bg-black/10 px-3 py-2">
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+                <Button onClick={() => router.push(`/meeting/${params.id}`)}>Retry Meeting</Button>
+              </CardContent>
+            </Card>
+          </motion.div>
         )}
 
         {verdict === "NO-GO" && (
-          <Card className="border-red-400/20 bg-red-500/10">
-            <CardHeader>
-              <CardTitle>Failure Reasons & Alternatives</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <ul className="space-y-2 text-sm text-red-50/90">
-                {noGoReasons.map((item) => (
-                  <li key={item} className="rounded-lg border border-red-300/20 bg-black/10 px-3 py-2">
-                    {item}
-                  </li>
-                ))}
-              </ul>
-              <Button asChild variant="secondary">
-                <Link href="/">Try Another</Link>
-              </Button>
-            </CardContent>
-          </Card>
+          <motion.div variants={{ hidden: { opacity: 0, y: 16 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: "easeOut" as const } } }}>
+            <Card className="border-red-400/20 bg-red-500/10">
+              <CardHeader>
+                <CardTitle>Failure Reasons & Alternatives</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <ul className="space-y-2 text-sm text-red-50/90">
+                  {noGoReasons.map((item) => (
+                    <li key={item} className="rounded-lg border border-red-300/20 bg-black/10 px-3 py-2">
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+                <Button asChild variant="secondary">
+                  <Link href="/">Try Another</Link>
+                </Button>
+              </CardContent>
+            </Card>
+          </motion.div>
         )}
 
+        <motion.div variants={{ hidden: { opacity: 0, y: 16 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: "easeOut" as const } } }}>
         <Tabs defaultValue="documents" className="space-y-4">
           <TabsList className="h-auto flex-wrap justify-start gap-2 bg-muted/20 p-1">
             <TabsTrigger value="documents">Documents</TabsTrigger>
@@ -168,7 +205,8 @@ export default function ResultPage() {
             />
           </TabsContent>
         </Tabs>
-      </div>
+        </motion.div>
+      </motion.div>
     </div>
   );
 }
@@ -190,35 +228,37 @@ function LoadingState({ meetingId }: { meetingId: string }) {
 }
 
 function VerdictBanner({ verdict, score }: { verdict: Verdict; score: number }) {
-  if (verdict === "GO") {
-    return (
-      <Card className="border-emerald-400/25 bg-emerald-500/10">
-        <CardHeader>
-          <CardTitle>GO — Build Approved</CardTitle>
-        </CardHeader>
-        <CardContent className="text-sm text-emerald-100">Vibe Score {score}. The council approves full execution and deployment.</CardContent>
-      </Card>
-    );
-  }
+  const animatedScore = useAnimatedCounter(score);
 
-  if (verdict === "CONDITIONAL") {
-    return (
-      <Card className="border-amber-400/25 bg-amber-500/10">
-        <CardHeader>
-          <CardTitle>CONDITIONAL — Proceed with Scope Reduction</CardTitle>
-        </CardHeader>
-        <CardContent className="text-sm text-amber-100">Vibe Score {score}. Move forward after tightening MVP boundaries.</CardContent>
-      </Card>
-    );
-  }
+  const glowMap: Record<Verdict, string> = {
+    GO: "shadow-[0_0_30px_rgba(16,185,129,0.2)]",
+    CONDITIONAL: "shadow-[0_0_30px_rgba(245,158,11,0.2)]",
+    "NO-GO": "shadow-[0_0_30px_rgba(239,68,68,0.2)]",
+  };
+
+  const config: Record<Verdict, { border: string; bg: string; title: string; text: string; color: string }> = {
+    GO: { border: "border-emerald-400/25", bg: "bg-emerald-500/10", title: "GO — Build Approved", text: "The council approves full execution and deployment.", color: "text-emerald-100" },
+    CONDITIONAL: { border: "border-amber-400/25", bg: "bg-amber-500/10", title: "CONDITIONAL — Proceed with Scope Reduction", text: "Move forward after tightening MVP boundaries.", color: "text-amber-100" },
+    "NO-GO": { border: "border-red-400/25", bg: "bg-red-500/10", title: "NO-GO — Pivot Recommended", text: "Core risks currently outweigh launch readiness.", color: "text-red-100" },
+  };
+
+  const c = config[verdict];
 
   return (
-    <Card className="border-red-400/25 bg-red-500/10">
-      <CardHeader>
-        <CardTitle>NO-GO — Pivot Recommended</CardTitle>
-      </CardHeader>
-      <CardContent className="text-sm text-red-100">Vibe Score {score}. Core risks currently outweigh launch readiness.</CardContent>
-    </Card>
+    <motion.div
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.5, ease: "easeOut" as const }}
+    >
+      <Card className={`${c.border} ${c.bg} ${glowMap[verdict]}`}>
+        <CardHeader>
+          <CardTitle>{c.title}</CardTitle>
+        </CardHeader>
+        <CardContent className={`text-sm ${c.color}`}>
+          Vibe Score <span className="font-bold tabular-nums">{animatedScore}</span>. {c.text}
+        </CardContent>
+      </Card>
+    </motion.div>
   );
 }
 

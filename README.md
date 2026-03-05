@@ -192,14 +192,16 @@ Vibe Score™ = (Tech × 0.25) + (Market × 0.20) + (Innovation × 0.20) + ((100
 
 | Role | Model | Cost (per 1M tokens) |
 |------|-------|---------------------|
-| Strategist | `openai-gpt-5.3-codex` | $1.75 / $14.00 |
+| Strategist | `openai-gpt-5.2` | $1.75 / $14.00 |
 | Architect, Scout, Catalyst, Advocate | `openai-gpt-5-mini` | $0.25 / $2.00 |
-| Guardian + Cross-Examination | `openai-gpt-5` | $1.25 / $10.00 |
-| Code & Doc Generation | `anthropic-claude-4.6-sonnet` | $3.00 / $15.00 |
+| Guardian | `openai-gpt-5-mini` | $0.25 / $2.00 |
+| Cross-Examination | `openai-gpt-5` | $1.25 / $10.00 |
+| Doc Generation | `openai-gpt-5.2` | $1.75 / $14.00 |
+| Code Generation | `openai-gpt-5.3-codex` | $1.75 / $14.00 |
 | Video Frame Analysis | `openai-gpt-4o` | $2.50 / $10.00 |
 | Image Generation | `openai-gpt-image-1` | $5.00 / $40.00 |
 
-**Cost per full deployment: ~$1.04** | $200 credits = ~192 deployments
+**Cost per full deployment: ~$0.65** | $200 credits = ~307 deployments
 
 ---
 

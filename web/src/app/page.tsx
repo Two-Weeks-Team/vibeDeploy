@@ -1,3 +1,6 @@
+"use client";
+
+import { motion } from "framer-motion";
 import { Card, CardContent } from "@/components/ui/card";
 import { InputForm } from "@/components/input-form";
 
@@ -17,47 +20,84 @@ const STEPS = [
   { num: "4", title: "Deploy", desc: "Live app on DigitalOcean in minutes" },
 ];
 
+const containerVariants = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.08 } },
+};
+
+const fadeUp = {
+  hidden: { opacity: 0, y: 20 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" as const } },
+};
+
+const cardItem = {
+  hidden: { opacity: 0, y: 16, scale: 0.95 },
+  visible: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.35, ease: "easeOut" as const } },
+};
+
 export default function LandingPage() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center px-4 py-16">
       <div className="w-full max-w-2xl space-y-12">
-        <div className="space-y-4 text-center">
-          <h1 className="text-5xl font-bold tracking-tight sm:text-6xl bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+        <motion.div
+          className="space-y-4 text-center"
+          initial="hidden"
+          animate="visible"
+          variants={containerVariants}
+        >
+          <motion.h1
+            variants={fadeUp}
+            className="text-5xl font-bold tracking-tight sm:text-6xl bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent"
+          >
             vibeDeploy
-          </h1>
-          <p className="text-xl text-muted-foreground">
+          </motion.h1>
+          <motion.p variants={fadeUp} className="text-xl text-muted-foreground">
             From idea to live app — one sentence, one meeting.
-          </p>
-          <p className="text-sm text-muted-foreground/70">
+          </motion.p>
+          <motion.p variants={fadeUp} className="text-sm text-muted-foreground/70">
             Describe your app idea. The Vibe Council debates feasibility, then builds and deploys it.
-          </p>
-        </div>
+          </motion.p>
+        </motion.div>
 
-        <InputForm />
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3, duration: 0.5 }}>
+          <InputForm />
+        </motion.div>
 
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <motion.div
+          className="grid grid-cols-2 gap-3 sm:grid-cols-4"
+          initial="hidden"
+          animate="visible"
+          variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.1, delayChildren: 0.45 } } }}
+        >
           {STEPS.map((step) => (
-            <div key={step.num} className="text-center space-y-1">
+            <motion.div key={step.num} variants={fadeUp} className="text-center space-y-1">
               <div className="mx-auto flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
                 {step.num}
               </div>
               <p className="text-sm font-medium">{step.title}</p>
               <p className="text-xs text-muted-foreground">{step.desc}</p>
-            </div>
+            </motion.div>
           ))}
-        </div>
+        </motion.div>
 
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <motion.div
+          className="grid grid-cols-2 gap-3 sm:grid-cols-3"
+          initial="hidden"
+          animate="visible"
+          variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.08, delayChildren: 0.6 } } }}
+        >
           {COUNCIL_AGENTS.map((agent) => (
-            <Card key={agent.name} className="text-center transition-shadow hover:shadow-lg border-border/50">
-              <CardContent className="pt-4">
-                <div className="text-2xl">{agent.emoji}</div>
-                <p className="mt-1 text-sm font-medium">{agent.name}</p>
-                <p className="text-xs text-muted-foreground">{agent.role}</p>
-              </CardContent>
-            </Card>
+            <motion.div key={agent.name} variants={cardItem} whileHover={{ scale: 1.05, y: -2 }} transition={{ type: "spring", stiffness: 400, damping: 20 }}>
+              <Card className="text-center transition-shadow hover:shadow-lg hover:shadow-primary/5 border-border/50">
+                <CardContent className="pt-4">
+                  <div className="text-2xl">{agent.emoji}</div>
+                  <p className="mt-1 text-sm font-medium">{agent.name}</p>
+                  <p className="text-xs text-muted-foreground">{agent.role}</p>
+                </CardContent>
+              </Card>
+            </motion.div>
           ))}
-        </div>
+        </motion.div>
       </div>
     </div>
   );

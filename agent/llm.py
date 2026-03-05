@@ -1,26 +1,19 @@
-"""LLM factory — abstracts provider selection for local dev vs DigitalOcean production.
-
-Usage:
-    from ..llm import get_llm
-
-    llm = get_llm(model="openai-gpt-5-mini", temperature=0.5, max_tokens=3000)
-
-Environment variables:
-    LLM_PROVIDER: "openai" (default, local) or "gradient" (DO production)
-    OPENAI_API_KEY: Required when LLM_PROVIDER=openai
-    DIGITALOCEAN_INFERENCE_KEY: Required when LLM_PROVIDER=gradient
-"""
+"""LLM factory — strips 'openai-' prefix from DO Gradient model names for local OpenAI API use."""
 
 import os
 
-# DO Gradient model names → OpenAI equivalents
-_OPENAI_MODEL_MAP: dict[str, str] = {
-    "openai-gpt-5-mini": "gpt-4o-mini",
-    "openai-gpt-5": "gpt-4o",
-    "openai-gpt-5.3-codex": "gpt-4o",
-    "anthropic-claude-4.6-sonnet": "gpt-4o",
-    "openai-gpt-4o": "gpt-4o",
-}
+
+def _gradient_to_openai(model: str) -> str:
+    if model.startswith("openai-"):
+        return model[len("openai-") :]
+    return model
+
+
+def content_to_str(content) -> str:
+    """Normalize LLM response content — some models return list of content blocks."""
+    if isinstance(content, list):
+        return "".join(block.get("text", "") if isinstance(block, dict) else str(block) for block in content)
+    return str(content) if not isinstance(content, str) else content
 
 
 def get_llm(model: str, temperature: float = 0.5, max_tokens: int = 3000):
@@ -33,5 +26,8 @@ def get_llm(model: str, temperature: float = 0.5, max_tokens: int = 3000):
 
     from langchain_openai import ChatOpenAI
 
-    mapped_model = _OPENAI_MODEL_MAP.get(model, "gpt-4o-mini")
-    return ChatOpenAI(model=mapped_model, temperature=temperature, max_tokens=max_tokens)
+    return ChatOpenAI(
+        model=_gradient_to_openai(model),
+        temperature=temperature,
+        max_tokens=max_tokens,
+    )

@@ -20,9 +20,9 @@ async def doc_generator(state: VibeDeployState) -> dict:
     scoring = state.get("scoring", {})
 
     llm = get_llm(
-        model="anthropic-claude-4.6-sonnet",
+        model="openai-gpt-5.2",
         temperature=0.3,
-        max_tokens=4000,
+        max_tokens=16000,
     )
 
     context = _build_context(idea, council_analysis, scoring)
@@ -119,8 +119,10 @@ def _slugify(value: str) -> str:
     return clean or "vibedeploy-app"
 
 
-def _parse_json_response(content: str, default: dict) -> dict:
-    content = content.strip()
+def _parse_json_response(content, default: dict) -> dict:
+    from ..llm import content_to_str
+
+    content = content_to_str(content).strip()
     if content.startswith("```"):
         content = re.sub(r"^```(?:json)?\n?", "", content)
         content = re.sub(r"\n?```$", "", content)

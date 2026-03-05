@@ -26,6 +26,23 @@ export async function startMeeting(input: string): Promise<{
   };
 }
 
+export async function resumeMeeting(
+  meetingId: string,
+  action: string = "proceed",
+): Promise<Response> {
+  const response = await fetch(`${AGENT_URL}/resume`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ thread_id: meetingId, action }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Resume returned ${response.status}`);
+  }
+
+  return response;
+}
+
 export async function checkHealth(): Promise<boolean> {
   try {
     const response = await fetch(`${AGENT_URL}/health`);

@@ -205,7 +205,15 @@ export function MeetingView({ meetingId }: { meetingId: string }) {
         <PhaseStepper phaseIndex={phaseIndex} />
         <Card className="border-white/10 bg-card/50">
           <CardContent className="flex items-center justify-between gap-3 p-4">
-            <p className="text-sm text-muted-foreground">{liveHeadline}</p>
+            <div className="flex items-center gap-2">
+              {!streamCompleted && (
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/75" />
+                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-primary" />
+                </span>
+              )}
+              <p className="text-sm text-muted-foreground">{liveHeadline}</p>
+            </div>
             <Badge variant="secondary" className="text-xs">
               {streamCompleted ? "Complete" : "Live"}
             </Badge>
@@ -234,10 +242,10 @@ export function MeetingView({ meetingId }: { meetingId: string }) {
           <AnimatePresence mode="wait">
             <motion.div
               key={phaseIndex}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.28 }}
+              initial={{ opacity: 0, y: 16, filter: "blur(4px)" }}
+              animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+              exit={{ opacity: 0, y: -12, filter: "blur(4px)" }}
+              transition={{ duration: 0.35, ease: "easeOut" as const }}
               className="space-y-4"
             >
               {phaseIndex <= 1 && (
@@ -248,7 +256,19 @@ export function MeetingView({ meetingId }: { meetingId: string }) {
                   <CardContent>
                     <div className="grid gap-3 md:grid-cols-2">
                       {analyses.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">Waiting for first agent analysis...</p>
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <span className="flex gap-0.5">
+                            {[0, 1, 2].map((i) => (
+                              <motion.span
+                                key={i}
+                                className="h-1.5 w-1.5 rounded-full bg-primary/60"
+                                animate={{ opacity: [0.3, 1, 0.3] }}
+                                transition={{ duration: 1.2, repeat: Infinity, delay: i * 0.2 }}
+                              />
+                            ))}
+                          </span>
+                          Agents are analyzing the idea...
+                        </div>
                       ) : (
                         analyses.map((item, index) => (
                           <motion.div
@@ -365,17 +385,22 @@ function PhaseStepper({ phaseIndex }: { phaseIndex: number }) {
         return (
           <motion.div
             key={phase}
-            className={`rounded-lg border px-3 py-2 text-center text-xs ${
+            layout
+            className={`rounded-lg border px-3 py-2 text-center text-xs font-medium ${
               active
-                ? "border-primary/40 bg-primary/15 text-primary"
+                ? "border-primary/40 bg-primary/15 text-primary shadow-[0_0_12px_rgba(99,102,241,0.15)]"
                 : done
-                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
+                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
                   : "border-white/10 bg-card/40 text-muted-foreground"
             }`}
-            animate={active ? { y: [0, -2, 0] } : { y: 0 }}
-            transition={{ repeat: active ? Infinity : 0, duration: 1.4 }}
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={active ? { opacity: 1, scale: 1, y: [0, -2, 0] } : { opacity: 1, scale: 1, y: 0 }}
+            transition={active ? { y: { repeat: Infinity, duration: 1.4 }, opacity: { duration: 0.3 } } : { duration: 0.3 }}
           >
-            {phase}
+            <span className="flex items-center justify-center gap-1">
+              {done && <span className="text-emerald-400">✓</span>}
+              {phase}
+            </span>
           </motion.div>
         );
       })}

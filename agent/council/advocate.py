@@ -26,7 +26,7 @@ async def analyze(idea: dict, llm=None) -> dict:
     from ..llm import get_llm
 
     if llm is None:
-        llm = get_llm(model=MODEL, temperature=0.5, max_tokens=3000)
+        llm = get_llm(model=MODEL, temperature=0.5, max_tokens=16000)
 
     idea_text = json.dumps(idea, indent=2, ensure_ascii=False)
     response = await llm.ainvoke(
@@ -49,8 +49,10 @@ async def analyze(idea: dict, llm=None) -> dict:
     return _parse_analysis(response.content)
 
 
-def _parse_analysis(content: str) -> dict:
-    content = content.strip()
+def _parse_analysis(content) -> dict:
+    from ..llm import content_to_str
+
+    content = content_to_str(content).strip()
     if content.startswith("```"):
         content = re.sub(r"^```(?:json)?\n?", "", content)
         content = re.sub(r"\n?```$", "", content)

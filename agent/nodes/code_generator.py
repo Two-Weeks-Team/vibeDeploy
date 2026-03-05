@@ -1,3 +1,4 @@
+import asyncio
 import json
 import re
 
@@ -15,9 +16,9 @@ async def code_generator(state: VibeDeployState) -> dict:
     idea = state.get("idea", {})
 
     llm = get_llm(
-        model="anthropic-claude-4.6-sonnet",
+        model="openai-gpt-5.3-codex",
         temperature=0.3,
-        max_tokens=4000,
+        max_tokens=8000,
     )
 
     context = json.dumps(
@@ -29,8 +30,11 @@ async def code_generator(state: VibeDeployState) -> dict:
         ensure_ascii=False,
     )
 
-    frontend_code = await _generate_frontend_files(llm, context)
-    backend_code = await _generate_backend_files(llm, context)
+    # Generate frontend and backend in parallel for 2x speed
+    frontend_code, backend_code = await asyncio.gather(
+        _generate_frontend_files(llm, context),
+        _generate_backend_files(llm, context),
+    )
 
     return {
         "frontend_code": frontend_code,
@@ -100,8 +104,10 @@ def _normalize_files_dict(files: object) -> dict[str, str]:
     return normalized
 
 
-def _parse_json_response(content: str, default: dict) -> dict:
-    content = content.strip()
+def _parse_json_response(content, default: dict) -> dict:
+    from ..llm import content_to_str
+
+    content = content_to_str(content).strip()
     if content.startswith("```"):
         content = re.sub(r"^```(?:json)?\n?", "", content)
         content = re.sub(r"\n?```$", "", content)

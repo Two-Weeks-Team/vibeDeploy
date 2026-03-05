@@ -221,6 +221,116 @@ async def run_pipeline(request: RunRequest):
     )
 
 
+class ResumeRequest(BaseModel):
+    thread_id: str
+    action: str = "proceed"
+
+
+async def _stream_resume(thread_id: str, action: str) -> AsyncGenerator[str, None]:
+    from langgraph.types import Command
+
+    from .graph import app as graph_app
+
+    yield _sse(
+        "council.phase.start",
+        {
+            "type": "council.phase.start",
+            "phase": "resuming",
+            "message": f"Resuming pipeline ({action})...",
+        },
+    )
+
+    final_state = {}
+
+    try:
+        config = {"configurable": {"thread_id": thread_id}}
+        async for event in graph_app.astream_events(
+            Command(resume=action),
+            config=config,
+            version="v2",
+        ):
+            kind = event.get("event", "")
+            name = event.get("name", "")
+            data = event.get("data", {})
+
+            if kind == "on_chain_start" and name in _NODE_EVENTS:
+                node_event = _NODE_EVENTS[name]
+                yield _sse(
+                    "council.node.start",
+                    {
+                        "type": "council.node.start",
+                        "node": name,
+                        "phase": node_event["phase"],
+                        "message": node_event["message"],
+                    },
+                )
+                continue
+
+            if kind != "on_chain_end" or name not in _NODE_EVENTS:
+                continue
+
+            output = data.get("output", {})
+            phase = output.get("phase", _NODE_EVENTS[name]["phase"])
+            yield _sse(
+                "council.node.complete",
+                {
+                    "type": "council.node.complete",
+                    "node": name,
+                    "phase": phase,
+                    "message": f"{name} complete",
+                },
+            )
+
+            if name == "deployer":
+                deploy = output.get("deploy_result", {}) or {}
+                final_state["deploy_result"] = deploy
+                yield _sse(
+                    "deploy.complete",
+                    {
+                        "type": "deploy.complete",
+                        "live_url": deploy.get("live_url", ""),
+                        "github_repo": deploy.get("github_repo", ""),
+                        "status": deploy.get("status", ""),
+                    },
+                )
+
+            final_state.update(output)
+
+        yield _sse(
+            "council.phase.complete",
+            {
+                "type": "council.phase.complete",
+                "phase": "complete",
+                "message": "Pipeline complete",
+            },
+        )
+
+        _store_result(thread_id, final_state)
+
+    except Exception as exc:
+        yield _sse(
+            "council.error",
+            {
+                "type": "council.error",
+                "error": str(exc)[:500],
+                "traceback": traceback.format_exc()[:1000],
+            },
+        )
+
+
+@app.post("/resume")
+async def resume_pipeline(request: ResumeRequest):
+    return StreamingResponse(
+        _stream_resume(request.thread_id, request.action),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
 @app.get("/result/{meeting_id}")
 async def get_result(meeting_id: str):
     result = _results.get(meeting_id)

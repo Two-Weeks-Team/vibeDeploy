@@ -66,7 +66,7 @@ async def feedback_generator(state: VibeDeployState) -> dict:
     analyses = state.get("council_analysis", {})
     cross_exam = state.get("cross_examination", {})
 
-    llm = get_llm(model="openai-gpt-5-mini", temperature=0.5, max_tokens=3000)
+    llm = get_llm(model="openai-gpt-5-mini", temperature=0.5, max_tokens=16000)
     context = json.dumps(
         {
             "idea": idea,
@@ -96,7 +96,9 @@ async def feedback_generator(state: VibeDeployState) -> dict:
         ]
     )
 
-    content = response.content.strip()
+    from ..llm import content_to_str
+
+    content = content_to_str(response.content).strip()
     if content.startswith("```"):
         content = re.sub(r"^```(?:json)?\n?", "", content)
         content = re.sub(r"\n?```$", "", content)
