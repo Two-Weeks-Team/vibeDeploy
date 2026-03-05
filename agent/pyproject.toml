@@ -18,3 +18,8 @@ quote-style = "double"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+asyncio_mode = "auto"
+markers = [
+    "unit: unit tests (no I/O)",
+    "e2e: end-to-end tests (mocked LangGraph, real FastAPI)",
+]

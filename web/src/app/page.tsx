@@ -1,8 +1,10 @@
 "use client";
 
 import { motion } from "framer-motion";
+import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { InputForm } from "@/components/input-form";
+import { Button } from "@/components/ui/button";
 
 const COUNCIL_AGENTS = [
   { emoji: "🏗️", name: "Architect", role: "Technical Lead" },
@@ -37,7 +39,15 @@ const cardItem = {
 
 export default function LandingPage() {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center px-4 py-16">
+    <div className="flex min-h-screen flex-col items-center justify-center px-4 py-16 relative">
+      <div className="absolute top-4 right-4">
+        <Link href="/dashboard">
+          <Button variant="outline" size="sm" className="gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><title>Dashboard</title><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
+            Dashboard
+          </Button>
+        </Link>
+      </div>
       <div className="w-full max-w-2xl space-y-12">
         <motion.div
           className="space-y-4 text-center"

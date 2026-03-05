@@ -1,30 +1,106 @@
 """Local FastAPI server — replaces gradient_adk @entrypoint for local testing.
 
 Exposes the same HTTP interface the frontend expects:
-  POST /run   → SSE stream of council events
-  GET  /result/{id} → meeting result JSON
-  GET  /health → liveness check
+  POST /run          → SSE stream of council events
+  POST /brainstorm   → SSE stream of brainstorm events
+  POST /resume       → SSE stream of resume events
+  GET  /result/{id}  → meeting result JSON
+  GET  /brainstorm/result/{id} → brainstorm result JSON
+  GET  /health       → liveness check
 
 Run: python -m agent.server
 """
 
 import asyncio
 import json
+import os
+import time
 import traceback
 from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import uvicorn
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from starlette.responses import StreamingResponse
 
+from .db.store import ResultStore
+from .sse import NODE_EVENTS, format_sse
+
 _AGENT_DIR = Path(__file__).resolve().parent
 load_dotenv(_AGENT_DIR / ".env.test")
 
-app = FastAPI(title="vibeDeploy Agent (local)")
+_store: ResultStore | None = None
+
+# ── Dashboard live tracking ──────────────────────────────────────────
+_active_pipelines: dict[str, dict] = {}
+_dashboard_queues: list[asyncio.Queue] = []
+
+
+def _register_pipeline(thread_id: str, pipeline_type: str, prompt: str):
+    _active_pipelines[thread_id] = {
+        "thread_id": thread_id,
+        "type": pipeline_type,
+        "phase": "starting",
+        "started_at": time.time(),
+        "prompt_preview": prompt[:120],
+    }
+
+
+def _deregister_pipeline(thread_id: str):
+    _active_pipelines.pop(thread_id, None)
+
+
+async def _broadcast_event(event_data: dict):
+    dead: list[asyncio.Queue] = []
+    for q in _dashboard_queues:
+        try:
+            q.put_nowait(event_data)
+        except asyncio.QueueFull:
+            dead.append(q)
+    for q in dead:
+        _dashboard_queues.remove(q)
+
+
+async def _with_tracking(
+    thread_id: str,
+    pipeline_type: str,
+    prompt: str,
+    stream: AsyncGenerator[str, None],
+) -> AsyncGenerator[str, None]:
+    """Wrap pipeline stream — tracks active state + broadcasts events to dashboard."""
+    _register_pipeline(thread_id, pipeline_type, prompt)
+    try:
+        async for chunk in stream:
+            for line in chunk.strip().split("\n"):
+                if line.startswith("data: "):
+                    try:
+                        data = json.loads(line[6:])
+                        if thread_id in _active_pipelines and "phase" in data:
+                            _active_pipelines[thread_id]["phase"] = data["phase"]
+                        await _broadcast_event({**data, "thread_id": thread_id})
+                    except (json.JSONDecodeError, ValueError):
+                        pass
+            yield chunk
+    finally:
+        _deregister_pipeline(thread_id)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global _store
+    db_path = os.environ.get("DB_PATH", str(_AGENT_DIR / "vibedeploy.db"))
+    _store = ResultStore(db_path)
+    await _store.init()
+    yield
+    await _store.close()
+    _store = None
+
+
+app = FastAPI(title="vibeDeploy Agent (local)", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -33,29 +109,42 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-_results: dict[str, dict] = {}
-
-_NODE_EVENTS = {
-    "input_processor": {"phase": "input_processing", "message": "Analyzing your idea..."},
-    "run_council_agent": {"phase": "individual_analysis", "message": "Council members analyzing..."},
-    "cross_examination": {"phase": "cross_examination", "message": "Council members debating..."},
-    "score_axis": {"phase": "scoring", "message": "Scoring axes..."},
-    "strategist_verdict": {"phase": "verdict", "message": "Strategist delivering verdict..."},
-    "decision_gate": {"phase": "decision", "message": "Making decision..."},
-    "doc_generator": {"phase": "doc_generation", "message": "Generating documentation..."},
-    "code_generator": {"phase": "code_generation", "message": "Generating code..."},
-    "deployer": {"phase": "deployment", "message": "Deploying to DigitalOcean..."},
-    "feedback_generator": {"phase": "feedback", "message": "Generating feedback..."},
-    "conditional_review": {"phase": "conditional_review", "message": "Waiting for your decision..."},
-    "run_brainstorm_agent": {"phase": "brainstorming", "message": "Agents brainstorming ideas..."},
-    "synthesize_brainstorm": {"phase": "synthesis", "message": "Synthesizing insights..."},
-}
-
-_brainstorm_results: dict[str, dict] = {}
+_NODE_EVENTS = NODE_EVENTS
+_sse = format_sse
 
 
-def _sse(event_type: str, data: dict) -> str:
-    return f"event: {event_type}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+async def _store_result(thread_id: str, state: dict):
+    scoring = state.get("scoring", {})
+    decision_raw = scoring.get("decision", "NO_GO")
+    verdict_map = {"GO": "GO", "CONDITIONAL": "CONDITIONAL", "NO_GO": "NO-GO"}
+
+    analyses = state.get("council_analysis", {})
+    analyses_list = [{"agent": k, **v} for k, v in analyses.items()] if isinstance(analyses, dict) else []
+
+    cross_exam = state.get("cross_examination", {})
+    debates_list = [{"topic": k, **v} for k, v in cross_exam.items()] if isinstance(cross_exam, dict) else []
+
+    docs = state.get("generated_docs", {})
+    documents_list = [{"type": k, "content": v} for k, v in docs.items()] if isinstance(docs, dict) else []
+
+    deploy = state.get("deploy_result", {})
+    deployment = None
+    if deploy and deploy.get("live_url"):
+        deployment = {
+            "repoUrl": deploy.get("github_repo", ""),
+            "liveUrl": deploy.get("live_url", ""),
+        }
+
+    result = {
+        "score": scoring.get("final_score", 0),
+        "verdict": verdict_map.get(decision_raw, "NO-GO"),
+        "analyses": analyses_list,
+        "debates": debates_list,
+        "documents": documents_list,
+        "scoring": scoring,
+        "deployment": deployment,
+    }
+    await _store.save_meeting(thread_id, result)
 
 
 class RunRequest(BaseModel):
@@ -163,7 +252,7 @@ async def _stream_pipeline(prompt: str, thread_id: str) -> AsyncGenerator[str, N
             },
         )
 
-        _store_result(thread_id, final_state)
+        await _store_result(thread_id, final_state)
 
     except Exception as exc:
         yield _sse(
@@ -176,46 +265,13 @@ async def _stream_pipeline(prompt: str, thread_id: str) -> AsyncGenerator[str, N
         )
 
 
-def _store_result(thread_id: str, state: dict):
-    scoring = state.get("scoring", {})
-    decision_raw = scoring.get("decision", "NO_GO")
-    verdict_map = {"GO": "GO", "CONDITIONAL": "CONDITIONAL", "NO_GO": "NO-GO"}
-
-    analyses = state.get("council_analysis", {})
-    analyses_list = [{"agent": k, **v} for k, v in analyses.items()] if isinstance(analyses, dict) else []
-
-    cross_exam = state.get("cross_examination", {})
-    debates_list = [{"topic": k, **v} for k, v in cross_exam.items()] if isinstance(cross_exam, dict) else []
-
-    docs = state.get("generated_docs", {})
-    documents_list = [{"type": k, "content": v} for k, v in docs.items()] if isinstance(docs, dict) else []
-
-    deploy = state.get("deploy_result", {})
-    deployment = None
-    if deploy and deploy.get("live_url"):
-        deployment = {
-            "repoUrl": deploy.get("github_repo", ""),
-            "liveUrl": deploy.get("live_url", ""),
-        }
-
-    _results[thread_id] = {
-        "score": scoring.get("final_score", 0),
-        "verdict": verdict_map.get(decision_raw, "NO-GO"),
-        "analyses": analyses_list,
-        "debates": debates_list,
-        "documents": documents_list,
-        "scoring": scoring,
-        "deployment": deployment,
-    }
-
-
 @app.post("/run")
 async def run_pipeline(request: RunRequest):
     config = request.config or {}
     thread_id = config.get("configurable", {}).get("thread_id", "default")
 
     return StreamingResponse(
-        _stream_pipeline(request.prompt, thread_id),
+        _with_tracking(thread_id, "evaluation", request.prompt, _stream_pipeline(request.prompt, thread_id)),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -309,7 +365,7 @@ async def _stream_resume(thread_id: str, action: str) -> AsyncGenerator[str, Non
             },
         )
 
-        _store_result(thread_id, final_state)
+        await _store_result(thread_id, final_state)
 
     except Exception as exc:
         yield _sse(
@@ -325,7 +381,12 @@ async def _stream_resume(thread_id: str, action: str) -> AsyncGenerator[str, Non
 @app.post("/resume")
 async def resume_pipeline(request: ResumeRequest):
     return StreamingResponse(
-        _stream_resume(request.thread_id, request.action),
+        _with_tracking(
+            request.thread_id,
+            "evaluation",
+            f"resume:{request.action}",
+            _stream_resume(request.thread_id, request.action),
+        ),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -419,7 +480,7 @@ async def _stream_brainstorm(prompt: str, thread_id: str) -> AsyncGenerator[str,
             },
         )
 
-        _store_brainstorm_result(thread_id, final_state)
+        await _store_brainstorm_result(thread_id, final_state)
 
     except Exception as exc:
         yield _sse(
@@ -432,7 +493,7 @@ async def _stream_brainstorm(prompt: str, thread_id: str) -> AsyncGenerator[str,
         )
 
 
-def _store_brainstorm_result(thread_id: str, state: dict):
+async def _store_brainstorm_result(thread_id: str, state: dict):
     insights = state.get("brainstorm_insights", {})
     synthesis = state.get("synthesis", {})
 
@@ -440,12 +501,13 @@ def _store_brainstorm_result(thread_id: str, state: dict):
     for agent_name, insight in insights.items():
         insights_list.append({"agent": agent_name, **insight})
 
-    _brainstorm_results[thread_id] = {
+    result = {
         "insights": insights_list,
         "synthesis": synthesis,
         "idea": state.get("idea", {}),
         "idea_summary": state.get("idea_summary", ""),
     }
+    await _store.save_brainstorm(thread_id, result)
 
 
 @app.post("/brainstorm")
@@ -454,7 +516,7 @@ async def brainstorm_pipeline(request: RunRequest):
     thread_id = config.get("configurable", {}).get("thread_id", "default")
 
     return StreamingResponse(
-        _stream_brainstorm(request.prompt, thread_id),
+        _with_tracking(thread_id, "brainstorm", request.prompt, _stream_brainstorm(request.prompt, thread_id)),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -466,29 +528,80 @@ async def brainstorm_pipeline(request: RunRequest):
 
 @app.get("/brainstorm/result/{session_id}")
 async def get_brainstorm_result(session_id: str):
-    result = _brainstorm_results.get(session_id)
+    result = await _store.get_brainstorm(session_id)
     if result is None:
-        return {"error": "not_found"}, 404
+        raise HTTPException(status_code=404, detail="not_found")
     return result
 
 
 @app.get("/result/{meeting_id}")
 async def get_result(meeting_id: str):
-    result = _results.get(meeting_id)
+    result = await _store.get_meeting(meeting_id)
     if result is None:
-        return {"error": "not_found"}, 404
+        raise HTTPException(status_code=404, detail="not_found")
     return result
 
 
 @app.put("/test/result/{meeting_id}")
 async def put_test_result(meeting_id: str, body: dict):
-    _results[meeting_id] = body
+    await _store.save_meeting(meeting_id, body)
     return {"stored": meeting_id}
 
 
 @app.get("/health")
 async def health():
     return {"status": "ok", "provider": "local-fastapi"}
+
+
+@app.get("/dashboard/stats")
+async def dashboard_stats():
+    stats = await _store.get_stats()
+    return stats
+
+
+@app.get("/dashboard/results")
+async def dashboard_results():
+    return await _store.list_meetings(limit=50)
+
+
+@app.get("/dashboard/brainstorms")
+async def dashboard_brainstorms():
+    return await _store.list_brainstorms(limit=50)
+
+
+@app.get("/dashboard/active")
+async def dashboard_active():
+    return list(_active_pipelines.values())
+
+
+@app.get("/dashboard/events")
+async def dashboard_events():
+    queue: asyncio.Queue = asyncio.Queue(maxsize=256)
+    _dashboard_queues.append(queue)
+
+    async def event_stream() -> AsyncGenerator[str, None]:
+        try:
+            while True:
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=30)
+                    yield _sse(event.get("type", "update"), event)
+                except asyncio.TimeoutError:
+                    yield _sse("heartbeat", {"type": "heartbeat"})
+        except asyncio.CancelledError:
+            pass
+        finally:
+            if queue in _dashboard_queues:
+                _dashboard_queues.remove(queue)
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 if __name__ == "__main__":

@@ -1,9 +1,9 @@
-import json
 import traceback
 
 from gradient_adk import RequestContext, entrypoint
 
 from .graph import app
+from .sse import NODE_EVENTS, format_sse
 
 
 @entrypoint
@@ -15,7 +15,7 @@ async def main(input: dict, context: RequestContext):
     _ = context
 
     async def stream():
-        yield _sse(
+        yield format_sse(
             "council.phase.start",
             {
                 "type": "council.phase.start",
@@ -34,9 +34,9 @@ async def main(input: dict, context: RequestContext):
                 name = event.get("name", "")
                 data = event.get("data", {})
 
-                if kind == "on_chain_start" and name in _NODE_EVENTS:
-                    node_event = _NODE_EVENTS[name]
-                    yield _sse(
+                if kind == "on_chain_start" and name in NODE_EVENTS:
+                    node_event = NODE_EVENTS[name]
+                    yield format_sse(
                         "council.node.start",
                         {
                             "type": "council.node.start",
@@ -47,12 +47,12 @@ async def main(input: dict, context: RequestContext):
                     )
                     continue
 
-                if kind != "on_chain_end" or name not in _NODE_EVENTS:
+                if kind != "on_chain_end" or name not in NODE_EVENTS:
                     continue
 
                 output = data.get("output", {})
-                phase = output.get("phase", _NODE_EVENTS[name]["phase"])
-                yield _sse(
+                phase = output.get("phase", NODE_EVENTS[name]["phase"])
+                yield format_sse(
                     "council.node.complete",
                     {
                         "type": "council.node.complete",
@@ -65,7 +65,7 @@ async def main(input: dict, context: RequestContext):
                 if name == "run_council_agent":
                     analyses = output.get("council_analysis", {}) or {}
                     for agent_name, analysis in analyses.items():
-                        yield _sse(
+                        yield format_sse(
                             "council.agent.analysis",
                             {
                                 "type": "council.agent.analysis",
@@ -76,7 +76,7 @@ async def main(input: dict, context: RequestContext):
                         )
                 elif name == "strategist_verdict":
                     scoring = output.get("scoring", {}) or {}
-                    yield _sse(
+                    yield format_sse(
                         "council.verdict",
                         {
                             "type": "council.verdict",
@@ -86,7 +86,7 @@ async def main(input: dict, context: RequestContext):
                     )
                 elif name == "deployer":
                     deploy = output.get("deploy_result", {}) or {}
-                    yield _sse(
+                    yield format_sse(
                         "deploy.complete",
                         {
                             "type": "deploy.complete",
@@ -96,7 +96,7 @@ async def main(input: dict, context: RequestContext):
                         },
                     )
 
-            yield _sse(
+            yield format_sse(
                 "council.phase.complete",
                 {
                     "type": "council.phase.complete",
@@ -105,7 +105,7 @@ async def main(input: dict, context: RequestContext):
                 },
             )
         except Exception as exc:
-            yield _sse(
+            yield format_sse(
                 "council.error",
                 {
                     "type": "council.error",
@@ -115,55 +115,3 @@ async def main(input: dict, context: RequestContext):
             )
 
     return stream()
-
-
-def _sse(event_type: str, data: dict) -> str:
-    return f"event: {event_type}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
-
-
-_NODE_EVENTS = {
-    "input_processor": {
-        "phase": "input_processing",
-        "message": "Analyzing your idea...",
-    },
-    "run_council_agent": {
-        "phase": "individual_analysis",
-        "message": "Council members analyzing...",
-    },
-    "cross_examination": {
-        "phase": "cross_examination",
-        "message": "Council members debating...",
-    },
-    "score_axis": {
-        "phase": "scoring",
-        "message": "Scoring axes...",
-    },
-    "strategist_verdict": {
-        "phase": "verdict",
-        "message": "Strategist delivering verdict...",
-    },
-    "decision_gate": {
-        "phase": "decision",
-        "message": "Making decision...",
-    },
-    "doc_generator": {
-        "phase": "doc_generation",
-        "message": "Generating documentation...",
-    },
-    "code_generator": {
-        "phase": "code_generation",
-        "message": "Generating code...",
-    },
-    "deployer": {
-        "phase": "deployment",
-        "message": "Deploying to DigitalOcean...",
-    },
-    "feedback_generator": {
-        "phase": "feedback",
-        "message": "Generating feedback...",
-    },
-    "conditional_review": {
-        "phase": "conditional_review",
-        "message": "Waiting for your decision...",
-    },
-}

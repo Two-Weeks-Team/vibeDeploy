@@ -8,7 +8,7 @@ static_sites:
       deploy_on_push: true
     source_dir: web
     build_command: npm install && npm run build
-    output_dir: web/.next
+    output_dir: .next
     environment_slug: node-js
     envs:
       - key: NEXT_PUBLIC_AGENT_URL

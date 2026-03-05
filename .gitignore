@@ -35,6 +35,15 @@ agent/tools_v2/
 # Sisyphus
 .sisyphus/
 
+# SQLite
+*.db
+*.db-shm
+*.db-wal
+
+# Test artifacts
+.hypothesis/
+.pytest_cache/
+
 # Misc
 *.log
 .cursor/

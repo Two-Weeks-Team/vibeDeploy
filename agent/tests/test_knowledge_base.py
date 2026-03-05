@@ -12,6 +12,6 @@ async def test_query_do_kb_returns_error_without_env():
 
 @pytest.mark.asyncio
 async def test_query_framework_patterns_returns_error_without_env():
-    result = await query_framework_patterns("test query")
+    result = await query_framework_patterns("test query", "patterns")
     assert "error" in result
     assert result["matches"] == []
