@@ -63,5 +63,8 @@ async def test_brainstorm_insight_format(app_client, mock_brainstorm_graph):
     assert len(insight_events) >= 1
     for ie in insight_events:
         assert "agent" in ie["data"]
-        assert "ideas_count" in ie["data"]
-        assert isinstance(ie["data"]["ideas_count"], int)
+        assert "ideas" in ie["data"]
+        assert isinstance(ie["data"]["ideas"], list)
+        assert "opportunities" in ie["data"]
+        assert "wild_card" in ie["data"]
+        assert "action_items" in ie["data"]

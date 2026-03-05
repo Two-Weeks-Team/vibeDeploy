@@ -194,14 +194,15 @@ export default function ResultPage() {
           </TabsContent>
 
           <TabsContent value="code">
-            <CodePreview files={extractCodeFiles(result.documents)} />
+            <CodePreview files={extractCodeFiles(result.code_files)} />
           </TabsContent>
 
           <TabsContent value="deploy">
             <DeployStatus
-              currentStep={result.deployment?.liveUrl ? "live" : "deploy"}
+              currentStep={result.deployment?.status === "github_only" ? "push" : result.deployment?.liveUrl ? "live" : "deploy"}
               repoUrl={result.deployment?.repoUrl}
               liveUrl={result.deployment?.liveUrl}
+              status={result.deployment?.status}
             />
           </TabsContent>
         </Tabs>
@@ -301,28 +302,20 @@ function extractDocuments(input: Record<string, unknown>[]) {
         type !== "prd" &&
         type !== "tech-spec" &&
         type !== "api-spec" &&
-        type !== "db-schema"
+        type !== "db-schema" &&
+        type !== "app-spec"
       ) {
         return null;
       }
 
       return { type, title, content };
     })
-    .filter((value): value is { type: "prd" | "tech-spec" | "api-spec" | "db-schema"; title: string; content: string } => value !== null);
+    .filter((value): value is { type: "prd" | "tech-spec" | "api-spec" | "db-schema" | "app-spec"; title: string; content: string } => value !== null);
 
   return result;
 }
 
-function extractCodeFiles(input: Record<string, unknown>[]) {
-  return input
-    .map((doc) => {
-      const path = typeof doc.path === "string" ? doc.path : null;
-      const content = typeof doc.code === "string" ? doc.code : typeof doc.content === "string" ? doc.content : null;
-      const language = typeof doc.language === "string" ? doc.language : "typescript";
-
-      if (!path || !content) return null;
-
-      return { path, content, language };
-    })
-    .filter((value): value is { path: string; content: string; language: string } => value !== null);
+function extractCodeFiles(codeFiles?: Array<{ path: string; content: string; language: string; source: string }>): Array<{ path: string; content: string; language: string }> {
+  if (!codeFiles || codeFiles.length === 0) return [];
+  return codeFiles.map(f => ({ path: f.path, content: f.content, language: f.language }));
 }

@@ -1,3 +1,4 @@
+import asyncio
 import json
 import re
 
@@ -27,11 +28,13 @@ async def doc_generator(state: VibeDeployState) -> dict:
 
     context = _build_context(idea, council_analysis, scoring)
 
-    prd = await _generate_markdown_doc(llm, PRD_SYSTEM_PROMPT, context)
-    tech_spec = await _generate_markdown_doc(llm, TECH_SPEC_SYSTEM_PROMPT, context)
-    api_spec = await _generate_markdown_doc(llm, API_SPEC_SYSTEM_PROMPT, context)
-    db_schema = await _generate_markdown_doc(llm, DB_SCHEMA_SYSTEM_PROMPT, context)
-    app_spec_yaml = await _generate_app_spec_yaml_doc(llm, context, idea)
+    prd, tech_spec, api_spec, db_schema, app_spec_yaml = await asyncio.gather(
+        _generate_markdown_doc(llm, PRD_SYSTEM_PROMPT, context),
+        _generate_markdown_doc(llm, TECH_SPEC_SYSTEM_PROMPT, context),
+        _generate_markdown_doc(llm, API_SPEC_SYSTEM_PROMPT, context),
+        _generate_markdown_doc(llm, DB_SCHEMA_SYSTEM_PROMPT, context),
+        _generate_app_spec_yaml_doc(llm, context, idea),
+    )
 
     return {
         "generated_docs": {

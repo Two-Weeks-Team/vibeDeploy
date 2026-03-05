@@ -7,6 +7,40 @@ const AGENT_URL = process.env.NEXT_PUBLIC_AGENT_URL ?? "http://localhost:8080";
 const ACTIVE_POLL_MS = 2_000;
 const MAX_EVENTS = 200;
 
+// SSE node name (LangGraph fn) → pipeline-viz node ID
+const NODE_NAME_TO_VIZ_ID: Record<string, string> = {
+  input_processor: "input",
+  cross_examination: "cross_exam",
+  strategist_verdict: "verdict",
+  decision_gate: "decision",
+  doc_generator: "doc_gen",
+  code_generator: "code_gen",
+  deployer: "deployer",
+  feedback_generator: "feedback",
+  conditional_review: "review",
+};
+
+const AGENT_TO_VIZ_ID: Record<string, string> = {
+  architect: "architect",
+  scout: "scout",
+  catalyst: "catalyst",
+  guardian: "guardian",
+  advocate: "advocate",
+};
+
+// Backend scoring axis → pipeline-viz score node ID
+const SCORE_AXIS_TO_VIZ_ID: Record<string, string> = {
+  technical_feasibility: "score_tech",
+  market_viability: "score_market",
+  innovation_score: "score_innovation",
+  risk_profile: "score_risk",
+  user_impact: "score_user",
+};
+
+function resolveVizNodeId(nodeName: string): string | null {
+  return NODE_NAME_TO_VIZ_ID[nodeName] ?? null;
+}
+
 export function usePipelineMonitor() {
   const [activePipelines, setActivePipelines] = useState<ActivePipeline[]>([]);
   const [events, setEvents] = useState<DashboardEvent[]>([]);
@@ -14,6 +48,10 @@ export function usePipelineMonitor() {
   const [connected, setConnected] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const updateNode = useCallback((vizId: string, status: PipelineNodeStatus) => {
+    setNodeStatuses((prev) => ({ ...prev, [vizId]: status }));
+  }, []);
 
   const connectSSE = useCallback(() => {
     abortRef.current?.abort();
@@ -52,12 +90,59 @@ export function usePipelineMonitor() {
               setEvents((prev) => [data, ...prev].slice(0, MAX_EVENTS));
 
               if (data.node) {
+                const vizId = resolveVizNodeId(data.node);
+                if (vizId) {
+                  if (data.type.includes(".node.start")) {
+                    updateNode(vizId, "active");
+                  } else if (data.type.includes(".node.complete")) {
+                    updateNode(vizId, "complete");
+                  } else if (data.type.includes(".error")) {
+                    updateNode(vizId, "error");
+                  }
+                }
+
+                if (data.node === "run_council_agent") {
+                  const status: PipelineNodeStatus = data.type.includes(".node.start") ? "active" : "complete";
+                  for (const agentVizId of Object.values(AGENT_TO_VIZ_ID)) {
+                    updateNode(agentVizId, status);
+                  }
+                }
+
+                if (data.node === "score_axis") {
+                  const status: PipelineNodeStatus = data.type.includes(".node.start") ? "active" : "complete";
+                  for (const scoreVizId of Object.values(SCORE_AXIS_TO_VIZ_ID)) {
+                    updateNode(scoreVizId, status);
+                  }
+                }
+              }
+
+              if (data.type === "council.agent.analysis" && data.agent) {
+                const agentVizId = AGENT_TO_VIZ_ID[data.agent];
+                if (agentVizId) {
+                  updateNode(agentVizId, "complete");
+                }
+              }
+
+              if (data.type === "council.verdict") {
+                updateNode("verdict", "complete");
+              }
+
+              if (data.type === "deploy.complete") {
+                updateNode("deployer", "complete");
+              }
+
+              if (data.type === "brainstorm.agent.insight" && data.agent) {
+                const agentVizId = AGENT_TO_VIZ_ID[data.agent];
+                if (agentVizId) {
+                  updateNode(agentVizId, "complete");
+                }
+              }
+
+              if (data.node === "synthesize_brainstorm") {
                 if (data.type.includes(".node.start")) {
-                  setNodeStatuses((prev) => ({ ...prev, [data.node!]: "active" }));
+                  updateNode("synthesize", "active");
                 } else if (data.type.includes(".node.complete")) {
-                  setNodeStatuses((prev) => ({ ...prev, [data.node!]: "complete" }));
-                } else if (data.type.includes(".error")) {
-                  setNodeStatuses((prev) => ({ ...prev, [data.node!]: "error" }));
+                  updateNode("synthesize", "complete");
                 }
               }
 
@@ -73,7 +158,7 @@ export function usePipelineMonitor() {
         reconnectTimer.current = setTimeout(connectSSE, 3_000);
       }
     })();
-  }, []);
+  }, [updateNode]);
 
   const fetchActive = useCallback(async () => {
     try {

@@ -58,9 +58,11 @@ export type MeetingResult = {
   analyses: Record<string, unknown>[];
   debates: Record<string, unknown>[];
   documents: Record<string, unknown>[];
+  code_files?: Array<{ path: string; content: string; language: string; source: string }>;
   deployment?: {
     repoUrl: string;
     liveUrl: string;
+    status?: string;
   };
 };
 

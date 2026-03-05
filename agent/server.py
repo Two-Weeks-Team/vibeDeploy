@@ -124,15 +124,71 @@ async def _store_result(thread_id: str, state: dict):
     cross_exam = state.get("cross_examination", {})
     debates_list = [{"topic": k, **v} for k, v in cross_exam.items()] if isinstance(cross_exam, dict) else []
 
+    _DOC_TYPE_MAP = {
+        "prd": "prd",
+        "tech_spec": "tech-spec",
+        "api_spec": "api-spec",
+        "db_schema": "db-schema",
+        "app_spec_yaml": "app-spec",
+    }
+    _DOC_TITLE_MAP = {
+        "prd": "Product Requirements",
+        "tech-spec": "Technical Specification",
+        "api-spec": "API Specification",
+        "db-schema": "Database Schema",
+        "app-spec": "App Platform Spec",
+    }
     docs = state.get("generated_docs", {})
-    documents_list = [{"type": k, "content": v} for k, v in docs.items()] if isinstance(docs, dict) else []
+    documents_list = []
+    if isinstance(docs, dict):
+        for k, v in docs.items():
+            doc_type = _DOC_TYPE_MAP.get(k, k)
+            documents_list.append(
+                {
+                    "type": doc_type,
+                    "title": _DOC_TITLE_MAP.get(doc_type, doc_type),
+                    "content": v,
+                }
+            )
+
+    _EXT_LANG = {
+        ".ts": "typescript",
+        ".tsx": "tsx",
+        ".js": "javascript",
+        ".jsx": "jsx",
+        ".py": "python",
+        ".css": "css",
+        ".html": "html",
+        ".json": "json",
+        ".yaml": "yaml",
+        ".yml": "yaml",
+        ".md": "markdown",
+        ".sql": "sql",
+        ".sh": "bash",
+        ".toml": "toml",
+        ".txt": "text",
+    }
+    code_files = []
+    for label, code_dict in [("backend", state.get("backend_code", {})), ("frontend", state.get("frontend_code", {}))]:
+        if isinstance(code_dict, dict):
+            for path, content in code_dict.items():
+                ext = "." + path.rsplit(".", 1)[-1] if "." in path else ""
+                code_files.append(
+                    {
+                        "path": path,
+                        "content": content,
+                        "language": _EXT_LANG.get(ext, "text"),
+                        "source": label,
+                    }
+                )
 
     deploy = state.get("deploy_result", {})
     deployment = None
-    if deploy and deploy.get("live_url"):
+    if deploy and (deploy.get("github_repo") or deploy.get("live_url")):
         deployment = {
             "repoUrl": deploy.get("github_repo", ""),
             "liveUrl": deploy.get("live_url", ""),
+            "status": deploy.get("status", ""),
         }
 
     result = {
@@ -141,6 +197,7 @@ async def _store_result(thread_id: str, state: dict):
         "analyses": analyses_list,
         "debates": debates_list,
         "documents": documents_list,
+        "code_files": code_files,
         "scoring": scoring,
         "deployment": deployment,
     }
@@ -452,14 +509,15 @@ async def _stream_brainstorm(prompt: str, thread_id: str) -> AsyncGenerator[str,
             if name == "run_brainstorm_agent":
                 insights = output.get("brainstorm_insights", {}) or {}
                 for agent_name, insight in insights.items():
-                    ideas_count = len(insight.get("ideas", []))
                     yield _sse(
                         "brainstorm.agent.insight",
                         {
                             "type": "brainstorm.agent.insight",
                             "agent": agent_name,
-                            "ideas_count": ideas_count,
+                            "ideas": insight.get("ideas", []),
+                            "opportunities": insight.get("opportunities", []),
                             "wild_card": insight.get("wild_card", ""),
+                            "action_items": insight.get("action_items", []),
                         },
                     )
 

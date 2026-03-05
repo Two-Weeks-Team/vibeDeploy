@@ -13,6 +13,7 @@ interface DeployStatusProps {
   repoUrl?: string;
   liveUrl?: string;
   error?: string;
+  status?: string;
 }
 
 const STEPS: { key: DeployStep; label: string }[] = [
@@ -27,10 +28,29 @@ export function DeployStatus({
   repoUrl,
   liveUrl,
   error,
+  status,
 }: DeployStatusProps) {
-  const currentIndex = STEPS.findIndex((s) => s.key === currentStep);
+  const isGithubOnly = status === "github_only";
+  
+  const effectiveSteps = isGithubOnly 
+    ? [
+        { key: "repo", label: "Creating GitHub repo" },
+        { key: "push", label: "Pushing code" },
+        { key: "deploy", label: "DigitalOcean (Skipped)" },
+      ] as const
+    : STEPS;
+
+  const currentIndex = effectiveSteps.findIndex((s) => s.key === currentStep);
   const clampedIndex = currentIndex < 0 ? 0 : currentIndex;
-  const percent = Math.round((clampedIndex / (STEPS.length - 1)) * 100);
+  
+  let percent = 0;
+  if (currentStep === "live") {
+    percent = 100;
+  } else if (isGithubOnly && currentStep === "push") {
+    percent = 66;
+  } else {
+    percent = Math.round((clampedIndex / (effectiveSteps.length - 1)) * 100);
+  }
 
   return (
     <Card className="border-white/10 bg-card/60">
@@ -38,10 +58,11 @@ export function DeployStatus({
         <CardTitle>Deployment</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <Progress value={currentStep === "live" ? 100 : percent} />
-        {STEPS.map((step, i) => {
-          const isDone = i < clampedIndex || currentStep === "live";
-          const isCurrent = step.key === currentStep;
+        <Progress value={percent} />
+        {effectiveSteps.map((step, i) => {
+          const isDone = i < clampedIndex || currentStep === "live" || (isGithubOnly && currentStep === "push" && i <= 1);
+          const isCurrent = step.key === currentStep && !isGithubOnly;
+          const isSkipped = isGithubOnly && step.key === "deploy";
 
           return (
             <motion.div
@@ -51,9 +72,10 @@ export function DeployStatus({
               transition={{ duration: 0.2, delay: i * 0.03 }}
               className="flex items-center gap-2 text-sm"
             >
-              {isDone && <span className="text-emerald-400">✓</span>}
-              {isCurrent && currentStep !== "live" && <span className="animate-pulse">●</span>}
-              {!isDone && !isCurrent && (
+              {isDone && !isSkipped && <span className="text-emerald-400">✓</span>}
+              {isCurrent && currentStep !== "live" && !isSkipped && <span className="animate-pulse">●</span>}
+              {isSkipped && <span className="text-muted-foreground">⏭</span>}
+              {!isDone && !isCurrent && !isSkipped && (
                 <span className="text-muted-foreground">○</span>
               )}
               <span className={isCurrent ? "font-medium" : "text-muted-foreground"}>
@@ -62,6 +84,12 @@ export function DeployStatus({
             </motion.div>
           );
         })}
+
+        {isGithubOnly && currentStep === "push" && (
+          <div className="text-sm text-muted-foreground italic mt-2">
+            Local mode — DO deployment skipped
+          </div>
+        )}
 
         {currentStep === "failed" && error && (
           <Badge variant="destructive">{error}</Badge>
@@ -78,7 +106,7 @@ export function DeployStatus({
           </a>
         )}
 
-        {liveUrl && (
+        {liveUrl && !isGithubOnly && (
           <Button asChild className="w-full">
             <a href={liveUrl} target="_blank" rel="noopener noreferrer">
               Visit Live App →

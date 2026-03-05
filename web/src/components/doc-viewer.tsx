@@ -7,7 +7,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface DocViewerProps {
   documents: {
-    type: "prd" | "tech-spec" | "api-spec" | "db-schema";
+    type: "prd" | "tech-spec" | "api-spec" | "db-schema" | "app-spec";
     title: string;
     content: string;
   }[];

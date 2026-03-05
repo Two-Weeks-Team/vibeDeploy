@@ -39,6 +39,18 @@ async def deployer(state: VibeDeployState) -> dict:
             "phase": "deployed",
         }
 
+    do_token = os.getenv("DIGITALOCEAN_API_TOKEN")
+    if not do_token:
+        return {
+            "deploy_result": {
+                "app_id": "",
+                "live_url": "",
+                "github_repo": github_repo_url,
+                "status": "github_only",
+            },
+            "phase": "deployed",
+        }
+
     app_spec = build_app_spec(app_name, github_clone_url)
     deploy_result = await deploy_to_digitalocean(github_clone_url, app_spec)
 
