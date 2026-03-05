@@ -21,6 +21,7 @@
 <p align="center">
   <a href="#what-is-vibedeploy">What</a> &bull;
   <a href="#the-vibe-council">Council</a> &bull;
+  <a href="#brainstorm-mode">Brainstorm</a> &bull;
   <a href="#how-it-works">How</a> &bull;
   <a href="#architecture">Architecture</a> &bull;
   <a href="#tech-stack">Stack</a> &bull;
@@ -59,6 +60,7 @@ Between your idea and the deployed app, **The Vibe Council** — a panel of 6 sp
 | You judge quality | AI team **self-validates feasibility** |
 | Deployment is separate | **Auto-deploy + live URL** |
 | Text input only | **YouTube URL** also works |
+| One mode fits all | **Evaluate** or **Brainstorm** — you choose |
 
 ---
 
@@ -93,6 +95,30 @@ Vibe Score™ = (Tech × 0.25) + (Market × 0.20) + (Innovation × 0.20) + ((100
 50-74 → 🟡 CONDITIONAL  Propose scope reduction, user decides
 < 50  → 🔴 NO-GO        Detailed failure report + alternatives
 ```
+
+---
+
+## Brainstorm Mode
+
+Not ready to evaluate? **Brainstorm first.** The same 5 council agents switch from judge mode to **creative ideation mode** — generating possibilities instead of scores.
+
+```
+Your idea → 💡 Brainstorm Mode
+                    ↓
+  🏗️ Architect: "3 innovative tech stack combos..."
+  🔭 Scout:     "3 untapped market segments..."
+  ⚡ Catalyst:  "3 ways to make this 10x more disruptive..."
+  🛡️ Guardian:  "3 risks turned into competitive advantages..."
+  🎯 Advocate:  "3 delightful UX micro-interactions..."
+                    ↓
+  🧭 Strategist synthesizes all insights into:
+     • Top 5 ranked ideas across agents
+     • Recurring themes & synergies
+     • 3 quick wins to implement first
+     • Strategic direction recommendation
+```
+
+Each agent generates **ideas, opportunities, wild cards, and action items** from their unique perspective. The Strategist then synthesizes everything into a coherent creative brief — no scoring, no judgment, pure creative fuel.
 
 ---
 
@@ -198,7 +224,8 @@ Vibe Score™ = (Tech × 0.25) + (Market × 0.20) + (Innovation × 0.20) + ((100
 | Cross-Examination | `openai-gpt-5` | $1.25 / $10.00 |
 | Doc Generation | `openai-gpt-5.2` | $1.75 / $14.00 |
 | Code Generation | `openai-gpt-5.3-codex` | $1.75 / $14.00 |
-| Video Frame Analysis | `openai-gpt-4o` | $2.50 / $10.00 |
+| Brainstorm Agents | `openai-gpt-5-mini` | $0.25 / $2.00 |
+| Brainstorm Synthesis | `openai-gpt-5.2` | $1.75 / $14.00 |
 | Image Generation | `openai-gpt-image-1` | $5.00 / $40.00 |
 
 **Cost per full deployment: ~$0.65** | $200 credits = ~307 deployments
@@ -264,21 +291,22 @@ doctl apps create --spec .do/app.yaml
 
 ```
 vibeDeploy/
-├── web/                     # Next.js Frontend → App Platform
-│   ├── src/app/             # Pages (landing, meeting, result)
-│   ├── src/components/      # UI components (council, scores, deploy)
-│   └── src/lib/             # SSE client, API helpers
-├── agent/                   # Python Agent → Gradient ADK
-│   ├── main.py              # @entrypoint
-│   ├── graph.py             # LangGraph StateGraph
-│   ├── nodes/               # Pipeline nodes
-│   ├── council/             # 6 Vibe Council agent definitions
-│   ├── tools/               # YouTube, GitHub, DO, search tools
-│   ├── prompts/             # System prompts + templates
-│   └── .gradient/agent.yml  # ADK config (3 lines)
-├── .do/app.yaml             # App Platform spec (frontend only)
-├── docs/reference/          # 10 planning documents
-└── LICENSE                  # MIT
+├── web/                          # Next.js Frontend → App Platform
+│   ├── src/app/                  # Pages (landing, meeting, brainstorm, result)
+│   ├── src/components/           # UI components (council, brainstorm, scores, deploy)
+│   └── src/lib/                  # SSE client, API helpers
+├── agent/                        # Python Agent → Gradient ADK
+│   ├── main.py                   # @entrypoint (Gradient ADK)
+│   ├── server.py                 # Local FastAPI server (dev)
+│   ├── graph.py                  # Evaluation pipeline (LangGraph StateGraph)
+│   ├── graph_brainstorm.py       # Brainstorm pipeline (LangGraph StateGraph)
+│   ├── nodes/                    # Pipeline nodes (input, council, brainstorm, build)
+│   ├── council/                  # 6 Vibe Council agent definitions
+│   ├── tools/                    # YouTube (yt-dlp), GitHub, DO, search tools
+│   └── .gradient/agent.yml       # ADK config (3 lines)
+├── .do/app.yaml                  # App Platform spec (frontend only)
+├── docs/reference/               # 10 planning documents
+└── LICENSE                       # MIT
 ```
 
 ---
