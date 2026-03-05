@@ -1,4 +1,4 @@
-from typing import Annotated, Dict, List, Literal, Optional, TypedDict
+from typing import Annotated, Dict, List, Literal, NotRequired, Optional, TypedDict
 
 from langgraph.graph import add_messages
 
@@ -47,6 +47,10 @@ class DeployResult(TypedDict):
     live_url: str
     github_repo: str
     status: str
+    local_reason: NotRequired[str]
+    local_url: NotRequired[str]
+    local_backend_url: NotRequired[str]
+    local_frontend_url: NotRequired[str]
 
 
 class VibeDeployState(TypedDict):

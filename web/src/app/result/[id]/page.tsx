@@ -200,7 +200,8 @@ export default function ResultPage() {
           <TabsContent value="deploy">
             <DeployStatus
               currentStep={
-                result.deployment?.status === "github_only" ? "push"
+                result.deployment?.status === "local_running" ? "live"
+                : result.deployment?.status === "github_only" ? "push"
                 : result.deployment?.liveUrl ? "live"
                 : result.deployment?.status?.startsWith("deployment_error") ? "failed"
                 : "deploy"
@@ -209,6 +210,9 @@ export default function ResultPage() {
               liveUrl={result.deployment?.liveUrl}
               error={result.deployment?.status?.startsWith("deployment_error") ? result.deployment.status : undefined}
               status={result.deployment?.status}
+              localUrl={result.deployment?.localUrl}
+              localBackendUrl={result.deployment?.localBackendUrl}
+              localFrontendUrl={result.deployment?.localFrontendUrl}
             />
           </TabsContent>
         </Tabs>

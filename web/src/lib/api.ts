@@ -63,6 +63,9 @@ export type MeetingResult = {
     repoUrl: string;
     liveUrl: string;
     status?: string;
+    localUrl?: string;
+    localBackendUrl?: string;
+    localFrontendUrl?: string;
   };
 };
 

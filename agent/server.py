@@ -184,12 +184,18 @@ async def _store_result(thread_id: str, state: dict):
 
     deploy = state.get("deploy_result", {})
     deployment = None
-    if deploy and (deploy.get("github_repo") or deploy.get("live_url")):
+    if deploy and (deploy.get("github_repo") or deploy.get("live_url") or deploy.get("local_url")):
         deployment = {
             "repoUrl": deploy.get("github_repo", ""),
             "liveUrl": deploy.get("live_url", ""),
             "status": deploy.get("status", ""),
         }
+        if deploy.get("local_url"):
+            deployment["localUrl"] = deploy["local_url"]
+        if deploy.get("local_backend_url"):
+            deployment["localBackendUrl"] = deploy["local_backend_url"]
+        if deploy.get("local_frontend_url"):
+            deployment["localFrontendUrl"] = deploy["local_frontend_url"]
 
     result = {
         "score": scoring.get("final_score", 0),

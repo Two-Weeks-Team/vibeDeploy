@@ -14,6 +14,9 @@ interface DeployStatusProps {
   liveUrl?: string;
   error?: string;
   status?: string;
+  localUrl?: string;
+  localBackendUrl?: string;
+  localFrontendUrl?: string;
 }
 
 const STEPS: { key: DeployStep; label: string }[] = [
@@ -29,15 +32,20 @@ export function DeployStatus({
   liveUrl,
   error,
   status,
+  localUrl,
+  localBackendUrl,
+  localFrontendUrl,
 }: DeployStatusProps) {
   const isGithubOnly = status === "github_only";
+  const isLocalRunning = status === "local_running";
   
-  const effectiveSteps = isGithubOnly 
+  const effectiveSteps = isGithubOnly || isLocalRunning
     ? [
-        { key: "repo", label: "Creating GitHub repo" },
-        { key: "push", label: "Pushing code" },
-        { key: "deploy", label: "DigitalOcean (Skipped)" },
-      ] as const
+        { key: "repo" as DeployStep, label: "Creating GitHub repo" },
+        { key: "push" as DeployStep, label: "Pushing code" },
+        { key: "deploy" as DeployStep, label: isLocalRunning ? "Local server started" : "DigitalOcean (Skipped)" },
+        ...(isLocalRunning ? [{ key: "live" as DeployStep, label: "Running locally" }] : []),
+      ]
     : STEPS;
 
   const isFailed = currentStep === "failed";
@@ -95,6 +103,28 @@ export function DeployStatus({
           </div>
         )}
 
+        {isLocalRunning && (
+          <div className="mt-3 space-y-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3">
+            <div className="flex items-center gap-2 text-sm font-medium text-emerald-400">
+              <span className="inline-block h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+              Running locally
+            </div>
+            {localFrontendUrl && (
+              <a href={localFrontendUrl} target="_blank" rel="noopener noreferrer" className="block text-sm text-blue-300 underline">
+                Frontend → {localFrontendUrl}
+              </a>
+            )}
+            {localBackendUrl && (
+              <a href={localBackendUrl} target="_blank" rel="noopener noreferrer" className="block text-sm text-blue-300 underline">
+                Backend → {localBackendUrl}
+              </a>
+            )}
+            <p className="text-xs text-muted-foreground">
+              To deploy to DigitalOcean, see the README in your GitHub repo.
+            </p>
+          </div>
+        )}
+
         {currentStep === "failed" && error && (
           <Badge variant="destructive">{error}</Badge>
         )}
@@ -110,10 +140,18 @@ export function DeployStatus({
           </a>
         )}
 
-        {liveUrl && !isGithubOnly && (
+        {liveUrl && !isGithubOnly && !isLocalRunning && (
           <Button asChild className="w-full">
             <a href={liveUrl} target="_blank" rel="noopener noreferrer">
               Visit Live App →
+            </a>
+          </Button>
+        )}
+
+        {isLocalRunning && localUrl && (
+          <Button asChild className="w-full bg-emerald-600 hover:bg-emerald-700">
+            <a href={localUrl} target="_blank" rel="noopener noreferrer">
+              Open Local App →
             </a>
           </Button>
         )}
