@@ -47,7 +47,11 @@ _NODE_EVENTS = {
     "deployer": {"phase": "deployment", "message": "Deploying to DigitalOcean..."},
     "feedback_generator": {"phase": "feedback", "message": "Generating feedback..."},
     "conditional_review": {"phase": "conditional_review", "message": "Waiting for your decision..."},
+    "run_brainstorm_agent": {"phase": "brainstorming", "message": "Agents brainstorming ideas..."},
+    "synthesize_brainstorm": {"phase": "synthesis", "message": "Synthesizing insights..."},
 }
+
+_brainstorm_results: dict[str, dict] = {}
 
 
 def _sse(event_type: str, data: dict) -> str:
@@ -329,6 +333,143 @@ async def resume_pipeline(request: ResumeRequest):
             "X-Accel-Buffering": "no",
         },
     )
+
+
+async def _stream_brainstorm(prompt: str, thread_id: str) -> AsyncGenerator[str, None]:
+    from .graph_brainstorm import brainstorm_app
+
+    yield _sse(
+        "brainstorm.phase.start",
+        {
+            "type": "brainstorm.phase.start",
+            "phase": "input_processing",
+            "message": "Processing your idea for brainstorming...",
+        },
+    )
+
+    final_state = {}
+
+    try:
+        config = {"configurable": {"thread_id": thread_id}}
+        async for event in brainstorm_app.astream_events(
+            {"raw_input": prompt},
+            config=config,
+            version="v2",
+        ):
+            kind = event.get("event", "")
+            name = event.get("name", "")
+            data = event.get("data", {})
+
+            if kind == "on_chain_start" and name in _NODE_EVENTS:
+                node_event = _NODE_EVENTS[name]
+                yield _sse(
+                    "brainstorm.node.start",
+                    {
+                        "type": "brainstorm.node.start",
+                        "node": name,
+                        "phase": node_event["phase"],
+                        "message": node_event["message"],
+                    },
+                )
+                continue
+
+            if kind != "on_chain_end" or name not in _NODE_EVENTS:
+                continue
+
+            output = data.get("output", {})
+            phase = output.get("phase", _NODE_EVENTS[name]["phase"])
+            yield _sse(
+                "brainstorm.node.complete",
+                {
+                    "type": "brainstorm.node.complete",
+                    "node": name,
+                    "phase": phase,
+                    "message": f"{name} complete",
+                },
+            )
+
+            if name == "run_brainstorm_agent":
+                insights = output.get("brainstorm_insights", {}) or {}
+                for agent_name, insight in insights.items():
+                    ideas_count = len(insight.get("ideas", []))
+                    yield _sse(
+                        "brainstorm.agent.insight",
+                        {
+                            "type": "brainstorm.agent.insight",
+                            "agent": agent_name,
+                            "ideas_count": ideas_count,
+                            "wild_card": insight.get("wild_card", ""),
+                        },
+                    )
+
+            for key, val in output.items():
+                if key == "brainstorm_insights" and isinstance(val, dict):
+                    existing = final_state.get("brainstorm_insights", {}) or {}
+                    existing.update(val)
+                    final_state["brainstorm_insights"] = existing
+                else:
+                    final_state[key] = val
+
+        yield _sse(
+            "brainstorm.phase.complete",
+            {
+                "type": "brainstorm.phase.complete",
+                "phase": "complete",
+                "message": "Brainstorming complete",
+            },
+        )
+
+        _store_brainstorm_result(thread_id, final_state)
+
+    except Exception as exc:
+        yield _sse(
+            "brainstorm.error",
+            {
+                "type": "brainstorm.error",
+                "error": str(exc)[:500],
+                "traceback": traceback.format_exc()[:1000],
+            },
+        )
+
+
+def _store_brainstorm_result(thread_id: str, state: dict):
+    insights = state.get("brainstorm_insights", {})
+    synthesis = state.get("synthesis", {})
+
+    insights_list = []
+    for agent_name, insight in insights.items():
+        insights_list.append({"agent": agent_name, **insight})
+
+    _brainstorm_results[thread_id] = {
+        "insights": insights_list,
+        "synthesis": synthesis,
+        "idea": state.get("idea", {}),
+        "idea_summary": state.get("idea_summary", ""),
+    }
+
+
+@app.post("/brainstorm")
+async def brainstorm_pipeline(request: RunRequest):
+    config = request.config or {}
+    thread_id = config.get("configurable", {}).get("thread_id", "default")
+
+    return StreamingResponse(
+        _stream_brainstorm(request.prompt, thread_id),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@app.get("/brainstorm/result/{session_id}")
+async def get_brainstorm_result(session_id: str):
+    result = _brainstorm_results.get(session_id)
+    if result is None:
+        return {"error": "not_found"}, 404
+    return result
 
 
 @app.get("/result/{meeting_id}")
