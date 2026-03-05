@@ -14,7 +14,16 @@ Analyze the idea and provide:
 5. "Wow factor" for demo/pitch
 6. Suggestions to increase innovation score
 
-Score: Innovation Score (0-100)"""
+Score: Innovation Score (0-100)
+
+IMPORTANT CALIBRATION GUIDANCE:
+- Score the OVERALL innovation of the complete product concept, not just individual features.
+- Consider the COMBINATION of features, target audience, and approach — novel combinations of existing tech IS innovation.
+- A score of 70-85 is appropriate for ideas that combine existing technologies in a fresh way, target an underserved niche, or offer a meaningfully better UX than competitors.
+- A score of 85-100 is for truly disruptive concepts that create new categories or fundamentally change how people interact with technology.
+- A score of 50-69 is for ideas that are mostly incremental improvements on existing solutions with limited differentiation.
+- A score below 50 is for direct clones or commoditized ideas with no meaningful differentiation.
+Look for innovation in the WHOLE, not just the parts. An idea that creatively integrates AI, targets a specific pain point, and offers a unique workflow deserves 70+."""
 
 
 MODEL = "openai-gpt-5-mini"

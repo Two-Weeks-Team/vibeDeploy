@@ -91,8 +91,8 @@ Phase 4: VERDICT                 → Strategist calculates Vibe Score™ → GO 
 ```
 Vibe Score™ = (Tech × 0.25) + (Market × 0.20) + (Innovation × 0.20) + ((100 - Risk) × 0.20) + (UserImpact × 0.15)
 
-≥ 75 → 🟢 GO          Build and deploy immediately
-50-74 → 🟡 CONDITIONAL  Propose scope reduction, user decides
+≥ 70 → 🟢 GO          Build and deploy immediately
+50-69 → 🟡 CONDITIONAL  Propose scope reduction, user decides
 < 50  → 🔴 NO-GO        Detailed failure report + alternatives
 ```
 

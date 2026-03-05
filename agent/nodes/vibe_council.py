@@ -194,6 +194,8 @@ async def score_axis(input: dict) -> dict:
             if isinstance(score_adjustments, dict):
                 adjustment += score_adjustments.get(agent_name, 0)
 
+    # Cap negative adjustments to prevent cross-examination from destroying scores
+    adjustment = max(-10, adjustment)
     final_score = max(0, min(100, base_score + adjustment))
     axis_name = SCORE_AXIS_MAP.get(agent_name, agent_name)
 
@@ -219,7 +221,7 @@ async def strategist_verdict(state: VibeDeployState) -> dict:
 
     final_score = tech * 0.25 + market * 0.20 + innovation * 0.20 + (100 - risk) * 0.20 + user_impact * 0.15
 
-    if final_score >= 75:
+    if final_score >= 70:
         decision = "GO"
     elif final_score >= 50:
         decision = "CONDITIONAL"

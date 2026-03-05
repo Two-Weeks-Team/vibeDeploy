@@ -20,7 +20,15 @@ Provide:
 5. Mitigation strategies for each risk
 
 Score: Risk Profile (0-100) where 100 = maximum risk, 0 = no risk at all.
-NOTE: This score is INVERTED in the Vibe Score™ formula: (100 - Risk) is used."""
+NOTE: This score is INVERTED in the Vibe Score™ formula: (100 - Risk) is used.
+
+IMPORTANT CALIBRATION GUIDANCE:
+- A score of 0-20 means the idea uses well-established technology with no regulatory concerns and minimal failure modes. Most standard web/mobile apps with proven stacks fall here.
+- A score of 21-40 means minor risks exist but are easily mitigated with standard practices (e.g., basic auth, common APIs, standard deployment).
+- A score of 41-60 means moderate risks requiring careful planning (e.g., handling sensitive data, complex integrations, regulatory requirements).
+- A score of 61-80 means significant risks with potential blockers (e.g., novel unproven technology, heavy regulatory burden, critical security surface).
+- A score of 81-100 is reserved for ideas with fundamental feasibility concerns or severe legal/safety risks.
+Do NOT default to the 50-70 range. Most well-scoped app ideas using proven technology should score 15-35."""
 
 
 MODEL = "openai-gpt-5-mini"
