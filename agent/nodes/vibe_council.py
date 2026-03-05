@@ -56,17 +56,16 @@ async def run_council_agent(input: dict) -> dict:
     analysis = await agent_module.analyze(idea)
     return {
         "council_analysis": {agent_name: analysis},
-        "phase": "individual_analysis",
     }
 
 
 async def cross_examination(state: VibeDeployState) -> dict:
-    from langchain_gradient import ChatGradient
+    from ..llm import get_llm
 
     analyses = state.get("council_analysis", {})
     idea = state.get("idea", {})
 
-    llm = ChatGradient(model="openai-gpt-5", temperature=0.6, max_tokens=3000)
+    llm = get_llm(model="openai-gpt-5", temperature=0.6, max_tokens=16000)
     debates = {}
 
     debates["architect_vs_guardian"] = await _run_debate(
@@ -256,8 +255,10 @@ async def strategist_verdict(state: VibeDeployState) -> dict:
     }
 
 
-def _parse_json_response(content: str, default: dict) -> dict:
-    content = content.strip()
+def _parse_json_response(content, default: dict) -> dict:
+    from ..llm import content_to_str
+
+    content = content_to_str(content).strip()
     if content.startswith("```"):
         content = re.sub(r"^```(?:json)?\n?", "", content)
         content = re.sub(r"\n?```$", "", content)

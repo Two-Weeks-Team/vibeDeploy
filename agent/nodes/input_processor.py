@@ -1,8 +1,7 @@
 import json
 import re
 
-from langchain_gradient import ChatGradient
-
+from ..llm import get_llm
 from ..state import VibeDeployState
 from ..tools.youtube import extract_youtube_transcript, is_youtube_url
 
@@ -36,12 +35,12 @@ async def input_processor(state: VibeDeployState) -> dict:
 
     if input_type == "youtube":
         transcript = await extract_youtube_transcript(raw_input)
-        if transcript and not transcript.startswith("["):
-            idea_context = f"YouTube video transcript:\n{transcript[:4000]}\n\nOriginal URL: {raw_input}"
+        if transcript and not transcript.startswith("[Error"):
+            idea_context = f"YouTube video content:\n{transcript[:4000]}\n\nOriginal URL: {raw_input}"
         else:
-            idea_context = f"YouTube URL (transcript unavailable): {raw_input}"
+            idea_context = f"YouTube URL (content unavailable): {raw_input}"
 
-    llm = ChatGradient(
+    llm = get_llm(
         model="openai-gpt-5-mini",
         temperature=0.4,
         max_tokens=2000,
@@ -66,8 +65,10 @@ async def input_processor(state: VibeDeployState) -> dict:
     }
 
 
-def _parse_idea_json(content: str) -> dict:
-    content = content.strip()
+def _parse_idea_json(content) -> dict:
+    from ..llm import content_to_str
+
+    content = content_to_str(content).strip()
     if content.startswith("```"):
         content = re.sub(r"^```(?:json)?\n?", "", content)
         content = re.sub(r"\n?```$", "", content)

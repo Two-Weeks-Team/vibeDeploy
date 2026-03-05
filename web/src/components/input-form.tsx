@@ -6,13 +6,14 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { startMeeting } from "@/lib/api";
+import { startMeeting, startBrainstorm } from "@/lib/api";
 
 const YOUTUBE_RE = /(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]+)/;
 
 export function InputForm() {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isBrainstorming, setIsBrainstorming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
@@ -34,6 +35,24 @@ export function InputForm() {
     } catch {
       setError("Failed to start meeting. Please try again.");
       setIsLoading(false);
+    }
+  }
+
+  async function handleBrainstorm() {
+    setError(null);
+
+    if (!input.trim()) {
+      setError("Please describe your app idea or paste a YouTube URL.");
+      return;
+    }
+
+    setIsBrainstorming(true);
+    try {
+      const { sessionId } = await startBrainstorm(input);
+      router.push(`/brainstorm/${sessionId}`);
+    } catch {
+      setError("Failed to start brainstorm. Please try again.");
+      setIsBrainstorming(false);
     }
   }
 
@@ -64,20 +83,38 @@ export function InputForm() {
           {error && (
             <p className="text-sm text-destructive">{error}</p>
           )}
-          <Button
-            type="submit"
-            className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-medium"
-            disabled={!input.trim() || isLoading}
-          >
-            {isLoading ? (
-              <span className="flex items-center gap-2">
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                Convening The Vibe Council...
-              </span>
-            ) : (
-              "Start Meeting"
-            )}
-          </Button>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <Button
+              type="submit"
+              className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white font-medium"
+              disabled={!input.trim() || isLoading || isBrainstorming}
+            >
+              {isLoading ? (
+                <span className="flex items-center gap-2">
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                  Convening The Vibe Council...
+                </span>
+              ) : (
+                "Start Meeting"
+              )}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="flex-1 border-purple-500/40 bg-gradient-to-r from-purple-500/10 to-amber-500/10 hover:from-purple-500/20 hover:to-amber-500/20 font-medium"
+              disabled={!input.trim() || isLoading || isBrainstorming}
+              onClick={handleBrainstorm}
+            >
+              {isBrainstorming ? (
+                <span className="flex items-center gap-2">
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-purple-400 border-t-transparent" />
+                  Council brainstorming...
+                </span>
+              ) : (
+                "Brainstorm Ideas"
+              )}
+            </Button>
+          </div>
         </form>
       </CardContent>
     </Card>

@@ -26,6 +26,23 @@ export async function startMeeting(input: string): Promise<{
   };
 }
 
+export async function resumeMeeting(
+  meetingId: string,
+  action: string = "proceed",
+): Promise<Response> {
+  const response = await fetch(`${AGENT_URL}/resume`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ thread_id: meetingId, action }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Resume returned ${response.status}`);
+  }
+
+  return response;
+}
+
 export async function checkHealth(): Promise<boolean> {
   try {
     const response = await fetch(`${AGENT_URL}/health`);
@@ -52,6 +69,60 @@ export async function getMeetingResult(
 ): Promise<MeetingResult | null> {
   try {
     const response = await fetch(`${AGENT_URL}/result/${meetingId}`);
+    if (!response.ok) return null;
+    return response.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function startBrainstorm(input: string): Promise<{
+  sessionId: string;
+  streamUrl: string;
+}> {
+  const sessionId = crypto.randomUUID();
+  const response = await fetch(`${AGENT_URL}/brainstorm`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      prompt: input,
+      config: { configurable: { thread_id: sessionId } },
+    }),
+  });
+  if (!response.ok) throw new Error(`Agent returned ${response.status}`);
+  return { sessionId, streamUrl: `${AGENT_URL}/brainstorm` };
+}
+
+export type BrainstormResult = {
+  insights: Array<{
+    agent: string;
+    ideas: Array<{ title: string; description: string }>;
+    opportunities: string[];
+    wild_card: string;
+    action_items: string[];
+  }>;
+  synthesis: {
+    themes: string[];
+    top_ideas: Array<{
+      title: string;
+      description: string;
+      source_agent: string;
+    }>;
+    synergies: string[];
+    recommended_direction: string;
+    quick_wins: string[];
+  };
+  idea: Record<string, unknown>;
+  idea_summary: string;
+};
+
+export async function getBrainstormResult(
+  sessionId: string,
+): Promise<BrainstormResult | null> {
+  try {
+    const response = await fetch(
+      `${AGENT_URL}/brainstorm/result/${sessionId}`,
+    );
     if (!response.ok) return null;
     return response.json();
   } catch {

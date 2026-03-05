@@ -1,12 +1,9 @@
 "use client";
 
+import { motion } from "framer-motion";
+import ReactMarkdown from "react-markdown";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-
-/**
- * DocViewer — Displays generated documents (PRD, Tech Spec, API Spec, DB Schema).
- * Uses tabs to switch between document types. Renders markdown content.
- * TODO (Wave 7): Markdown rendering, copy-to-clipboard, download as PDF.
- */
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface DocViewerProps {
   documents: {
@@ -26,19 +23,23 @@ export function DocViewer({ documents }: DocViewerProps) {
   }
 
   return (
-    <Tabs defaultValue={documents[0].type}>
-      <TabsList>
+    <Tabs defaultValue={documents[0].type} className="space-y-4">
+      <TabsList className="h-auto w-full flex-wrap justify-start gap-2 bg-muted/20 p-1">
         {documents.map((doc) => (
-          <TabsTrigger key={doc.type} value={doc.type}>
+          <TabsTrigger key={doc.type} value={doc.type} className="text-xs">
             {doc.title}
           </TabsTrigger>
         ))}
       </TabsList>
       {documents.map((doc) => (
         <TabsContent key={doc.type} value={doc.type}>
-          <pre className="whitespace-pre-wrap rounded-lg bg-muted p-4 text-sm">
-            {doc.content}
-          </pre>
+          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+            <ScrollArea className="h-[28rem] rounded-xl border border-white/10 bg-card/60 p-5">
+              <article className="prose prose-invert max-w-none prose-headings:tracking-tight prose-p:text-sm prose-li:text-sm">
+                <ReactMarkdown>{doc.content}</ReactMarkdown>
+              </article>
+            </ScrollArea>
+          </motion.div>
         </TabsContent>
       ))}
     </Tabs>
