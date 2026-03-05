@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo } from "react";
+import { useMemo } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,7 +14,7 @@ import { PipelineViz } from "@/components/dashboard/pipeline-viz";
 import { DashboardCharts } from "@/components/dashboard/dashboard-charts";
 import { HistoryList } from "@/components/dashboard/history-list";
 import { LiveMonitor } from "@/components/dashboard/live-monitor";
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
+import { PieChart, Pie, ResponsiveContainer, Tooltip } from "recharts";
 import type { VerdictType } from "@/types/dashboard";
 
 const containerVariants = {
@@ -64,6 +64,7 @@ export default function DashboardPage() {
   const verdictData = Object.entries(verdictBreakdown).map(([name, value]) => ({
     name,
     value,
+    fill: VERDICT_COLORS[name as VerdictType],
   }));
 
   if (loading) {
@@ -283,11 +284,7 @@ export default function DashboardPage() {
                                 paddingAngle={2}
                                 dataKey="value"
                                 stroke="none"
-                              >
-                                {verdictData.map((entry) => (
-                                  <Cell key={`cell-${entry.name}`} fill={VERDICT_COLORS[entry.name as VerdictType]} />
-                                ))}
-                              </Pie>
+                              />
                               <Tooltip
                                 contentStyle={{ backgroundColor: "hsl(var(--card))", borderColor: "hsl(var(--border))" }}
                                 itemStyle={{ color: "hsl(var(--foreground))" }}

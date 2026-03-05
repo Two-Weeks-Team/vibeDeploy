@@ -1,11 +1,11 @@
 "use client";
 
-import React from "react";
+
 import { motion } from "framer-motion";
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+
 import { cn } from "@/lib/utils";
-import { CheckCircle, XCircle, AlertCircle, Play, Clock, Activity } from "lucide-react";
+import { CheckCircle, XCircle, Clock, Activity } from "lucide-react";
 
 export type PipelineType = "evaluation" | "brainstorm";
 export type NodeStatus = "idle" | "active" | "complete" | "error";
@@ -155,11 +155,6 @@ export function PipelineViz({ activeNodes = {}, pipeline = "evaluation", classNa
           } else if (sourceStatus === "complete") {
             strokeClass = "stroke-emerald-500/30";
           }
-
-          const x1 = `${sourceNode.x}%`;
-          const y1 = `${sourceNode.y}%`;
-          const x2 = `${targetNode.x}%`;
-          const y2 = `${targetNode.y}%`;
 
           const path = `M ${sourceNode.x} ${sourceNode.y} C ${sourceNode.x} ${(sourceNode.y + targetNode.y) / 2}, ${targetNode.x} ${(sourceNode.y + targetNode.y) / 2}, ${targetNode.x} ${targetNode.y}`;
 

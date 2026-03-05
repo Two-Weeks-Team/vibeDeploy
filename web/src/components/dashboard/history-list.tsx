@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -15,7 +15,7 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { ExternalLink, FileText, Code, Rocket, Brain, Target, Clock } from "lucide-react";
+import { FileText, Code, Rocket, Brain, Target, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { MeetingResultFull, BrainstormResultFull, VerdictType } from "@/types/dashboard";
 

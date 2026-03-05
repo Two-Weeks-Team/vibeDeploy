@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import confetti from "canvas-confetti";
 import { CouncilMember } from "@/components/council-member";
@@ -53,8 +53,11 @@ const phaseToIndex: Record<string, number> = {
   complete: 6,
 };
 
+type SSEEventWithId = SSEEvent & { _uid: string };
+
 export function MeetingView({ meetingId }: { meetingId: string }) {
-  const [events, setEvents] = useState<SSEEvent[]>([]);
+  const [events, setEvents] = useState<SSEEventWithId[]>([]);
+  const eventSeq = useRef(0);
   const [phaseIndex, setPhaseIndex] = useState(0);
   const [agentStatus, setAgentStatus] = useState<Record<AgentKey, AgentStatus>>({
     architect: "idle",
@@ -171,7 +174,8 @@ export function MeetingView({ meetingId }: { meetingId: string }) {
         config: { configurable: { thread_id: meetingId } },
       },
       onEvent: (event) => {
-        setEvents((prev) => [...prev, event]);
+        const tagged = { ...event, _uid: `mev-${++eventSeq.current}` };
+        setEvents((prev) => [...prev, tagged]);
         handleEvent(event);
       },
       onComplete: () => {
@@ -354,10 +358,8 @@ export function MeetingView({ meetingId }: { meetingId: string }) {
                   <ScrollArea className="h-40 pr-4">
                     <div className="space-y-2 text-xs">
                       {events.slice(-20).map((event) => {
-                        const key = `${event.type}-${asString(event.data.message) ?? ""}-${asString(event.data.node) ?? ""}-${asString(event.data.phase) ?? ""}-${asNumber(event.data.final_score) ?? 0}`;
-
                         return (
-                        <div key={key} className="rounded-md border border-white/10 px-2 py-1">
+                        <div key={event._uid} className="rounded-md border border-white/10 px-2 py-1">
                           <span className="font-medium">{event.type}</span>
                           <span className="ml-2 text-muted-foreground">{asString(event.data.message) ?? "event"}</span>
                         </div>

@@ -1,13 +1,12 @@
 "use client";
 
-import React from "react";
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   BarChart,
   Bar,
   PieChart,
   Pie,
-  Cell,
   AreaChart,
   Area,
   RadarChart,
@@ -51,6 +50,7 @@ export function DashboardCharts({
   const verdictData = Object.entries(verdictBreakdown).map(([name, value]) => ({
     name,
     value,
+    fill: VERDICT_COLORS[name as VerdictType],
   }));
 
   const totalVerdicts = verdictData.reduce((acc, curr) => acc + curr.value, 0);
@@ -63,12 +63,8 @@ export function DashboardCharts({
         ) : (
           <>
             <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={verdictData} cx="50%" cy="50%" innerRadius={60} outerRadius={85} paddingAngle={2} dataKey="value" stroke="none">
-                  {verdictData.map((entry) => (
-                    <Cell key={`sv-${entry.name}`} fill={VERDICT_COLORS[entry.name as VerdictType]} />
-                  ))}
-                </Pie>
+                <PieChart>
+                <Pie data={verdictData} cx="50%" cy="50%" innerRadius={60} outerRadius={85} paddingAngle={2} dataKey="value" stroke="none" />
                 <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", borderColor: "hsl(var(--border))" }} itemStyle={{ color: "hsl(var(--foreground))" }} />
               </PieChart>
             </ResponsiveContainer>
@@ -101,11 +97,7 @@ export function DashboardCharts({
                   cursor={{ fill: "hsl(var(--muted)/0.5)" }}
                   contentStyle={{ backgroundColor: "hsl(var(--card))", borderColor: "hsl(var(--border))" }}
                 />
-                <Bar dataKey="count" radius={[4, 4, 0, 0]}>
-                  {scoreDistribution.map((entry) => (
-                    <Cell key={`cell-${entry.range}`} fill={entry.color} />
-                  ))}
-                </Bar>
+                <Bar dataKey="count" fill="#3b82f6" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -132,11 +124,7 @@ export function DashboardCharts({
                     paddingAngle={2}
                     dataKey="value"
                     stroke="none"
-                  >
-                    {verdictData.map((entry) => (
-                      <Cell key={`cell-${entry.name}`} fill={VERDICT_COLORS[entry.name as VerdictType]} />
-                    ))}
-                  </Pie>
+                  />
                   <Tooltip
                     contentStyle={{ backgroundColor: "hsl(var(--card))", borderColor: "hsl(var(--border))" }}
                     itemStyle={{ color: "hsl(var(--foreground))" }}

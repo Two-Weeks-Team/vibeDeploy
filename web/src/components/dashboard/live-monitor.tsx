@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -162,7 +162,7 @@ export function LiveMonitor({ activePipelines, events, nodeStatuses, connected }
                     <AnimatePresence initial={false}>
                       {events.map((event, i) => (
                         <motion.div
-                          key={`${event.thread_id}-${event.type}-${event.node || 'none'}-${event.message?.substring(0, 10) || i}`}
+                          key={String(event._uid ?? `fallback-${event.thread_id}-${event.type}-${i}`)}
                           initial={{ opacity: 0, x: -20 }}
                           animate={{ opacity: 1, x: 0 }}
                           className="flex flex-col gap-1 text-sm border-l-2 border-border/50 pl-3 py-1"

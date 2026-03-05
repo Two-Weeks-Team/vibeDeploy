@@ -41,6 +41,8 @@ function resolveVizNodeId(nodeName: string): string | null {
   return NODE_NAME_TO_VIZ_ID[nodeName] ?? null;
 }
 
+let _eventSeq = 0;
+
 export function usePipelineMonitor() {
   const [activePipelines, setActivePipelines] = useState<ActivePipeline[]>([]);
   const [events, setEvents] = useState<DashboardEvent[]>([]);
@@ -87,6 +89,7 @@ export function usePipelineMonitor() {
               const data: DashboardEvent = JSON.parse(trimmed.slice(6));
               if (data.type === "heartbeat") continue;
 
+              data._uid = `evt-${++_eventSeq}`;
               setEvents((prev) => [data, ...prev].slice(0, MAX_EVENTS));
 
               if (data.node) {
