@@ -27,6 +27,19 @@ const fadeUp = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: "easeOut" as const } },
 };
 
+function Elapsed({ ts }: { ts?: number }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  if (!ts) return null;
+  const secs = Math.max(0, Math.round((now - ts) / 1000));
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  return <span className="text-xs text-muted-foreground tabular-nums">{m > 0 ? `${m}m ${s.toString().padStart(2, '0')}s` : `${s}s`}</span>;
+}
+
 function ElapsedTime({ startedAt }: { startedAt: number }) {
   const [elapsed, setElapsed] = useState(0);
 
@@ -167,15 +180,18 @@ export function LiveMonitor({ activePipelines, events, nodeStatuses, connected }
                           animate={{ opacity: 1, x: 0 }}
                           className="flex flex-col gap-1 text-sm border-l-2 border-border/50 pl-3 py-1"
                         >
-                          <div className="flex items-center justify-between">
-                            <span className={cn("font-mono text-xs", getEventColor(event.type))}>
+                          <div className="flex items-center justify-between gap-1">
+                            <span className={cn("font-mono text-xs truncate", getEventColor(event.type))}>
                               {event.type}
                             </span>
-                            {event.node && (
-                              <Badge variant="outline" className="text-[10px] h-4 px-1">
-                                {event.node}
-                              </Badge>
-                            )}
+                            <div className="flex items-center gap-1 shrink-0">
+                              {event.node && (
+                                <Badge variant="outline" className="text-[10px] h-4 px-1">
+                                  {event.node}
+                                </Badge>
+                              )}
+                              <Elapsed ts={event._timestamp as number | undefined} />
+                            </div>
                           </div>
                           {event.message && (
                             <span className="text-muted-foreground text-xs line-clamp-2">

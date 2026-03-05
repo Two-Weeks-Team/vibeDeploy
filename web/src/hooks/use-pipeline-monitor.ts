@@ -90,6 +90,7 @@ export function usePipelineMonitor() {
               if (data.type === "heartbeat") continue;
 
               data._uid = `evt-${++_eventSeq}`;
+              data._timestamp = Date.now();
               setEvents((prev) => [data, ...prev].slice(0, MAX_EVENTS));
 
               if (data.node) {

@@ -179,12 +179,16 @@ export function PipelineViz({ activeNodes = {}, pipeline = "evaluation", classNa
           const status = getNodeStatus(node.id);
           
           if (pipeline === "evaluation") {
+            const bottomNodes = ["doc_gen", "code_gen", "deployer", "review", "feedback"];
             const decisionStatus = getNodeStatus("decision");
-            if (decisionStatus === "complete") {
+
+            if (decisionStatus !== "complete") {
+              if (bottomNodes.includes(node.id)) return null;
+            } else {
               const isGo = getNodeStatus("doc_gen") !== "idle" || getNodeStatus("code_gen") !== "idle" || getNodeStatus("deployer") !== "idle";
               const isConditional = getNodeStatus("review") !== "idle";
               const isNoGo = getNodeStatus("feedback") !== "idle";
-              
+
               if (isGo && (node.id === "review" || node.id === "feedback")) return null;
               if (isConditional && (node.id === "doc_gen" || node.id === "code_gen" || node.id === "deployer" || node.id === "feedback")) return null;
               if (isNoGo && (node.id === "doc_gen" || node.id === "code_gen" || node.id === "deployer" || node.id === "review")) return null;
