@@ -413,6 +413,12 @@ async def _stream_resume(thread_id: str, action: str) -> AsyncGenerator[str, Non
 
             final_state.update(output)
 
+        full_state = graph_app.get_state(config)
+        if full_state and full_state.values:
+            merged = {**full_state.values, **final_state}
+        else:
+            merged = final_state
+
         yield _sse(
             "council.phase.complete",
             {
@@ -422,7 +428,7 @@ async def _stream_resume(thread_id: str, action: str) -> AsyncGenerator[str, Non
             },
         )
 
-        await _store_result(thread_id, final_state)
+        await _store_result(thread_id, merged)
 
     except Exception as exc:
         yield _sse(

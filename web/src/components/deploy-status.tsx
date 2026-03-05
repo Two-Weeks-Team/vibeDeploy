@@ -40,7 +40,9 @@ export function DeployStatus({
       ] as const
     : STEPS;
 
-  const currentIndex = effectiveSteps.findIndex((s) => s.key === currentStep);
+  const isFailed = currentStep === "failed";
+  const lookupStep = isFailed ? "deploy" : currentStep;
+  const currentIndex = effectiveSteps.findIndex((s) => s.key === lookupStep);
   const clampedIndex = currentIndex < 0 ? 0 : currentIndex;
   
   let percent = 0;
@@ -61,8 +63,9 @@ export function DeployStatus({
         <Progress value={percent} />
         {effectiveSteps.map((step, i) => {
           const isDone = i < clampedIndex || currentStep === "live" || (isGithubOnly && currentStep === "push" && i <= 1);
-          const isCurrent = step.key === currentStep && !isGithubOnly;
+          const isCurrentStep = step.key === lookupStep && !isGithubOnly;
           const isSkipped = isGithubOnly && step.key === "deploy";
+          const isErrorStep = isFailed && step.key === "deploy";
 
           return (
             <motion.div
@@ -72,13 +75,14 @@ export function DeployStatus({
               transition={{ duration: 0.2, delay: i * 0.03 }}
               className="flex items-center gap-2 text-sm"
             >
-              {isDone && !isSkipped && <span className="text-emerald-400">✓</span>}
-              {isCurrent && currentStep !== "live" && !isSkipped && <span className="animate-pulse">●</span>}
+              {isDone && !isSkipped && !isErrorStep && <span className="text-emerald-400">✓</span>}
+              {isErrorStep && <span className="text-red-400">✗</span>}
+              {isCurrentStep && !isFailed && currentStep !== "live" && !isSkipped && <span className="animate-pulse">●</span>}
               {isSkipped && <span className="text-muted-foreground">⏭</span>}
-              {!isDone && !isCurrent && !isSkipped && (
+              {!isDone && !isCurrentStep && !isSkipped && !isErrorStep && (
                 <span className="text-muted-foreground">○</span>
               )}
-              <span className={isCurrent ? "font-medium" : "text-muted-foreground"}>
+              <span className={isErrorStep ? "font-medium text-red-400" : isCurrentStep ? "font-medium" : "text-muted-foreground"}>
                 {step.label}
               </span>
             </motion.div>

@@ -199,9 +199,15 @@ export default function ResultPage() {
 
           <TabsContent value="deploy">
             <DeployStatus
-              currentStep={result.deployment?.status === "github_only" ? "push" : result.deployment?.liveUrl ? "live" : "deploy"}
+              currentStep={
+                result.deployment?.status === "github_only" ? "push"
+                : result.deployment?.liveUrl ? "live"
+                : result.deployment?.status?.startsWith("deployment_error") ? "failed"
+                : "deploy"
+              }
               repoUrl={result.deployment?.repoUrl}
               liveUrl={result.deployment?.liveUrl}
+              error={result.deployment?.status?.startsWith("deployment_error") ? result.deployment.status : undefined}
               status={result.deployment?.status}
             />
           </TabsContent>
