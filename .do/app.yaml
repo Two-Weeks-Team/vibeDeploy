@@ -7,6 +7,7 @@ alerts:
 
 ingress:
   rules:
+    # API endpoints → backend
     - component:
         name: api
       match:
@@ -21,27 +22,13 @@ ingress:
         name: api
       match:
         path:
-          prefix: /brainstorm
-    - component:
-        name: api
-      match:
-        path:
           prefix: /resume
     - component:
         name: api
       match:
         path:
-          prefix: /result
-    - component:
-        name: api
-      match:
-        path:
           prefix: /health
-    - component:
-        name: api
-      match:
-        path:
-          prefix: /dashboard
+    # Everything else → frontend (Next.js handles its own routing)
     - component:
         name: web
       match:
@@ -85,7 +72,6 @@ services:
         scope: RUN_TIME
         value: REPLACE_WITH_KB_ID
 
-static_sites:
   - name: web
     environment_slug: node-js
     github:
@@ -93,10 +79,18 @@ static_sites:
       branch: main
       deploy_on_push: true
     source_dir: web
+    http_port: 3000
+    instance_count: 1
+    instance_size_slug: basic-xxs
     build_command: npm install && npm run build
-    output_dir: .next
-    catchall_document: index.html
+    run_command: node .next/standalone/server.js
     envs:
       - key: NEXT_PUBLIC_AGENT_URL
         scope: BUILD_TIME
         value: ${APP_URL}
+      - key: PORT
+        scope: RUN_TIME
+        value: "3000"
+      - key: HOSTNAME
+        scope: RUN_TIME
+        value: "0.0.0.0"
