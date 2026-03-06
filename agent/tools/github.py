@@ -1,5 +1,8 @@
+import asyncio
+import json
 import os
 from typing import Optional
+from urllib import error, request
 
 
 def _get_client():
@@ -9,6 +12,57 @@ def _get_client():
     if not token:
         raise ValueError("GITHUB_TOKEN not set")
     return Github(token)
+
+
+async def wait_for_ci(full_name: str, commit_sha: str, timeout: int = 120) -> dict:
+    token = os.getenv("GITHUB_TOKEN")
+    if not token:
+        return {"status": "skipped", "reason": "no_token"}
+
+    poll_interval = 10
+    elapsed = 0
+
+    while elapsed < timeout:
+        try:
+            req = request.Request(
+                url=f"https://api.github.com/repos/{full_name}/commits/{commit_sha}/check-runs",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Accept": "application/vnd.github+json",
+                    "X-GitHub-Api-Version": "2022-11-28",
+                },
+            )
+            with request.urlopen(req, timeout=10) as resp:
+                data = json.loads(resp.read().decode())
+
+            check_runs = data.get("check_runs", [])
+            if not check_runs:
+                await asyncio.sleep(poll_interval)
+                elapsed += poll_interval
+                continue
+
+            all_complete = all(cr.get("status") == "completed" for cr in check_runs)
+            if not all_complete:
+                await asyncio.sleep(poll_interval)
+                elapsed += poll_interval
+                continue
+
+            all_passed = all(cr.get("conclusion") in ("success", "skipped", "neutral") for cr in check_runs)
+            failed = [cr["name"] for cr in check_runs if cr.get("conclusion") not in ("success", "skipped", "neutral")]
+            run_url = check_runs[0].get("details_url", "") if check_runs else ""
+
+            return {
+                "status": "passed" if all_passed else "failed",
+                "url": run_url,
+                "total": len(check_runs),
+                "failed_jobs": failed,
+            }
+
+        except (error.HTTPError, error.URLError, json.JSONDecodeError):
+            await asyncio.sleep(poll_interval)
+            elapsed += poll_interval
+
+    return {"status": "timeout", "reason": f"CI not complete within {timeout}s"}
 
 
 async def create_github_repo(

@@ -37,11 +37,13 @@ async def query_do_knowledge_base(
 
             matches = []
             for result in data.get("results", []):
-                matches.append({
-                    "content": result.get("content", ""),
-                    "score": result.get("score", 0),
-                    "metadata": result.get("metadata", {}),
-                })
+                matches.append(
+                    {
+                        "content": result.get("content", ""),
+                        "score": result.get("score", 0),
+                        "metadata": result.get("metadata", {}),
+                    }
+                )
 
             return {"matches": matches}
 

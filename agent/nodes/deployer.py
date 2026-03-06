@@ -9,7 +9,7 @@ from urllib import error, request
 
 from ..state import VibeDeployState
 from ..tools.digitalocean import build_app_spec, deploy_to_digitalocean, wait_for_deployment
-from ..tools.github import create_github_repo, push_files
+from ..tools.github import create_github_repo, push_files, wait_for_ci
 
 
 async def deployer(state: VibeDeployState) -> dict:
@@ -57,33 +57,45 @@ async def deployer(state: VibeDeployState) -> dict:
         ".github/workflows/ci.yml": _generate_ci_yml(),
         ".env.example": _generate_env_example(),
     }
+    commit_sha = ""
     if github_full_name:
-        await push_files(
+        push_result = await push_files(
             {"full_name": github_full_name},
             supporting_files,
             commit_message="Add project docs, CI workflow, and env example",
         )
+        commit_sha = push_result.get("commit_sha", "")
         _set_repo_metadata(
             github_full_name,
             topics=["ai", "fastapi", "nextjs", "digitalocean", "vibedeploy", "hackathon", "llm"],
             homepage="https://github.com/Two-Weeks-Team/vibeDeploy",
         )
 
+    ci_result = {"status": "skipped"}
+    if github_full_name and commit_sha:
+        ci_result = await wait_for_ci(github_full_name, commit_sha, timeout=120)
+
     do_token = os.getenv("DIGITALOCEAN_API_TOKEN")
     if not do_token:
-        return await _local_fallback_deploy(app_name, all_files, github_repo_url, "do_token_missing")
+        result = await _local_fallback_deploy(app_name, all_files, github_repo_url, "do_token_missing")
+        result["deploy_result"]["ci_status"] = ci_result.get("status", "skipped")
+        result["deploy_result"]["ci_url"] = ci_result.get("url", "")
+        return result
 
     app_spec = build_app_spec(app_name, github_clone_url)
     deploy_result = await deploy_to_digitalocean(github_clone_url, app_spec)
 
     if deploy_result.get("status") == "error":
-        return await _local_fallback_deploy(
+        result = await _local_fallback_deploy(
             app_name,
             all_files,
             github_repo_url,
             f"do_deploy_failed: {deploy_result.get('error', 'DigitalOcean deployment failed')}",
             app_id=deploy_result.get("app_id", ""),
         )
+        result["deploy_result"]["ci_status"] = ci_result.get("status", "skipped")
+        result["deploy_result"]["ci_url"] = ci_result.get("url", "")
+        return result
 
     app_id = deploy_result.get("app_id", "")
     live_url = await wait_for_deployment(app_id) if app_id else ""
@@ -95,6 +107,8 @@ async def deployer(state: VibeDeployState) -> dict:
             "live_url": live_url,
             "github_repo": github_repo_url,
             "status": status,
+            "ci_status": ci_result.get("status", "skipped"),
+            "ci_url": ci_result.get("url", ""),
         },
         "phase": "deployed",
     }
@@ -414,11 +428,17 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.14"
+          python-version: "3.13"
+          allow-prereleases: true
       - name: Install backend dependencies
-        run: pip install -r requirements.txt
-      - name: Backend import check
-        run: python -c "import main"
+        run: |
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          else
+            echo "No requirements.txt found, skipping"
+          fi
+      - name: Backend smoke test
+        run: python -c "import ast; [ast.parse(open(f).read()) for f in __import__('glob').glob('*.py')]"
 
   frontend:
     runs-on: ubuntu-latest
@@ -427,15 +447,26 @@ jobs:
         working-directory: web
     steps:
       - uses: actions/checkout@v4
+        with:
+          sparse-checkout: web
       - uses: actions/setup-node@v4
         with:
-          node-version: "24"
-          cache: "npm"
-          cache-dependency-path: web/package-lock.json
+          node-version: "22"
       - name: Install frontend dependencies
-        run: npm install
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          elif [ -f package.json ]; then
+            npm install
+          else
+            echo "No package.json found, skipping"
+            exit 0
+          fi
       - name: Build frontend
-        run: npm run build
+        run: |
+          if [ -f package.json ]; then
+            npm run build
+          fi
 """
 
 

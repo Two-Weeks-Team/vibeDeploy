@@ -28,13 +28,15 @@ const fadeUp = {
 };
 
 function Elapsed({ ts }: { ts?: number }) {
-  const [now, setNow] = useState(Date.now());
+  const [secs, setSecs] = useState(0);
   useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 1000);
+    if (!ts) return;
+    const update = () => setSecs(Math.max(0, Math.round((Date.now() - ts) / 1000)));
+    update();
+    const id = setInterval(update, 1000);
     return () => clearInterval(id);
-  }, []);
+  }, [ts]);
   if (!ts) return null;
-  const secs = Math.max(0, Math.round((now - ts) / 1000));
   const m = Math.floor(secs / 60);
   const s = secs % 60;
   return <span className="text-xs text-muted-foreground tabular-nums">{m > 0 ? `${m}m ${s.toString().padStart(2, '0')}s` : `${s}s`}</span>;

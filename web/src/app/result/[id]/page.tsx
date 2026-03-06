@@ -210,6 +210,8 @@ export default function ResultPage() {
               liveUrl={result.deployment?.liveUrl}
               error={result.deployment?.status?.startsWith("deployment_error") ? result.deployment.status : undefined}
               status={result.deployment?.status}
+              ciStatus={result.deployment?.ciStatus}
+              ciUrl={result.deployment?.ciUrl}
               localUrl={result.deployment?.localUrl}
               localBackendUrl={result.deployment?.localBackendUrl}
               localFrontendUrl={result.deployment?.localFrontendUrl}

@@ -102,9 +102,12 @@ export function useDashboard() {
   }, []);
 
   useEffect(() => {
-    refresh();
+    const t = setTimeout(refresh, 0);
     const id = setInterval(refresh, POLL_MS);
-    return () => clearInterval(id);
+    return () => {
+      clearTimeout(t);
+      clearInterval(id);
+    };
   }, [refresh]);
 
   return {

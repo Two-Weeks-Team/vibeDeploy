@@ -47,6 +47,8 @@ class DeployResult(TypedDict):
     live_url: str
     github_repo: str
     status: str
+    ci_status: NotRequired[str]  # "pending", "running", "passed", "failed", "timeout"
+    ci_url: NotRequired[str]  # Link to GitHub Actions run
     local_reason: NotRequired[str]
     local_url: NotRequired[str]
     local_backend_url: NotRequired[str]

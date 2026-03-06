@@ -35,9 +35,7 @@ async def web_search(
                         {
                             "role": "user",
                             "content": (
-                                f"Search query: {query}\n"
-                                f"Type: {search_type}\n"
-                                f"Return top {num_results} results as JSON."
+                                f"Search query: {query}\nType: {search_type}\nReturn top {num_results} results as JSON."
                             ),
                         },
                     ],

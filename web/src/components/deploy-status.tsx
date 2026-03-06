@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 
-type DeployStep = "repo" | "push" | "deploy" | "live" | "failed";
+type DeployStep = "repo" | "push" | "ci" | "deploy" | "live" | "failed";
 
 interface DeployStatusProps {
   currentStep: DeployStep;
@@ -14,6 +14,8 @@ interface DeployStatusProps {
   liveUrl?: string;
   error?: string;
   status?: string;
+  ciStatus?: string;
+  ciUrl?: string;
   localUrl?: string;
   localBackendUrl?: string;
   localFrontendUrl?: string;
@@ -22,6 +24,7 @@ interface DeployStatusProps {
 const STEPS: { key: DeployStep; label: string }[] = [
   { key: "repo", label: "Creating GitHub repo" },
   { key: "push", label: "Pushing code" },
+  { key: "ci", label: "CI checks" },
   { key: "deploy", label: "Deploying to DigitalOcean" },
   { key: "live", label: "Live!" },
 ];
@@ -32,17 +35,22 @@ export function DeployStatus({
   liveUrl,
   error,
   status,
+  ciStatus,
+  ciUrl,
   localUrl,
   localBackendUrl,
   localFrontendUrl,
 }: DeployStatusProps) {
   const isGithubOnly = status === "github_only";
   const isLocalRunning = status === "local_running";
-  
+
+  const ciLabel = ciStatus === "passed" ? "CI passed" : ciStatus === "failed" ? "CI failed" : ciStatus === "timeout" ? "CI timeout" : "CI checks";
+
   const effectiveSteps = isGithubOnly || isLocalRunning
     ? [
         { key: "repo" as DeployStep, label: "Creating GitHub repo" },
         { key: "push" as DeployStep, label: "Pushing code" },
+        { key: "ci" as DeployStep, label: ciLabel },
         { key: "deploy" as DeployStep, label: isLocalRunning ? "Local server started" : "DigitalOcean (Skipped)" },
         ...(isLocalRunning ? [{ key: "live" as DeployStep, label: "Running locally" }] : []),
       ]
@@ -74,6 +82,9 @@ export function DeployStatus({
           const isCurrentStep = step.key === lookupStep && !isGithubOnly;
           const isSkipped = isGithubOnly && step.key === "deploy";
           const isErrorStep = isFailed && step.key === "deploy";
+          const isCiFailed = step.key === "ci" && ciStatus === "failed";
+          const isCiPassed = step.key === "ci" && ciStatus === "passed";
+          const isCiSkipped = step.key === "ci" && ciStatus === "skipped";
 
           return (
             <motion.div
@@ -83,15 +94,28 @@ export function DeployStatus({
               transition={{ duration: 0.2, delay: i * 0.03 }}
               className="flex items-center gap-2 text-sm"
             >
-              {isDone && !isSkipped && !isErrorStep && <span className="text-emerald-400">✓</span>}
+              {isCiPassed && <span className="text-emerald-400">✓</span>}
+              {isCiFailed && <span className="text-amber-400">⚠</span>}
+              {isCiSkipped && <span className="text-muted-foreground">⏭</span>}
+              {!isCiPassed && !isCiFailed && !isCiSkipped && isDone && !isSkipped && !isErrorStep && <span className="text-emerald-400">✓</span>}
               {isErrorStep && <span className="text-red-400">✗</span>}
-              {isCurrentStep && !isFailed && currentStep !== "live" && !isSkipped && <span className="animate-pulse">●</span>}
+              {isCurrentStep && !isFailed && currentStep !== "live" && !isSkipped && step.key !== "ci" && <span className="animate-pulse">●</span>}
               {isSkipped && <span className="text-muted-foreground">⏭</span>}
-              {!isDone && !isCurrentStep && !isSkipped && !isErrorStep && (
+              {!isDone && !isCurrentStep && !isSkipped && !isErrorStep && !isCiPassed && !isCiFailed && !isCiSkipped && (
                 <span className="text-muted-foreground">○</span>
               )}
-              <span className={isErrorStep ? "font-medium text-red-400" : isCurrentStep ? "font-medium" : "text-muted-foreground"}>
+              <span className={
+                isCiFailed ? "font-medium text-amber-400" :
+                isErrorStep ? "font-medium text-red-400" :
+                isCurrentStep ? "font-medium" :
+                "text-muted-foreground"
+              }>
                 {step.label}
+                {step.key === "ci" && ciUrl && (
+                  <a href={ciUrl} target="_blank" rel="noopener noreferrer" className="ml-1 text-blue-300 underline text-xs">
+                    (view)
+                  </a>
+                )}
               </span>
             </motion.div>
           );
