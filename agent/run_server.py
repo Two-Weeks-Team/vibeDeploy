@@ -1,3 +1,4 @@
+import multiprocessing
 import os
 import sys
 from pathlib import Path
@@ -10,10 +11,12 @@ os.chdir(_PROJECT_ROOT)
 
 import uvicorn  # noqa: E402
 
-uvicorn.run(
-    "agent.server:app",
-    host="0.0.0.0",
-    port=8080,
-    workers=2,
-    timeout_keep_alive=300,
-)
+if __name__ == "__main__":
+    multiprocessing.freeze_support()
+    uvicorn.run(
+        "agent.server:app",
+        host="0.0.0.0",
+        port=8080,
+        workers=2,
+        timeout_keep_alive=300,
+    )
