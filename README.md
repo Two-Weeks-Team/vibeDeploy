@@ -233,7 +233,7 @@ Each agent generates **ideas, opportunities, wild cards, and action items** from
 | Brainstorm Agents | `openai-gpt-oss-120b` | Open-Source (120B) | $0.10 / $0.70 |
 | Brainstorm Synthesis | `deepseek-r1-distill-llama-70b` | Open-Source (70B) | $0.99 / $0.99 |
 | Web Search | `mistral-nemo-instruct-2407` | Open-Source (12B) | $0.30 / $0.30 |
-| Image Generation | `openai-gpt-image-1` | Commercial | $5.00 / $40.00 |
+| Image Generation | `fal-ai/flux/schnell` | Open-Source (fal) | ~$0.003 / image |
 
 **Multi-model open-source AI: 4 model families via DO Serverless Inference**
 **Cost per full deployment: ~$0.12** | $200 credits = ~1,600+ deployments

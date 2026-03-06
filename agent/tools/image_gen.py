@@ -1,8 +1,19 @@
+import asyncio
 import os
 
 import httpx
 
 from ..llm import DO_INFERENCE_BASE_URL, MODEL_CONFIG
+
+FAL_INVOKE_URL = f"{DO_INFERENCE_BASE_URL}/async-invoke"
+FAL_POLL_INTERVAL = 2.0
+FAL_MAX_WAIT = 60.0
+
+FAL_SIZE_MAP = {
+    "1024x1024": "square",
+    "1792x1024": "landscape_16_9",
+    "1024x1792": "portrait_16_9",
+}
 
 
 async def generate_app_logo(name: str, description: str) -> dict:
@@ -46,34 +57,52 @@ async def _generate_image(
     if not api_key:
         return {"image_url": "", "error": "DIGITALOCEAN_INFERENCE_KEY not set"}
 
+    image_size = FAL_SIZE_MAP.get(size, "square")
+    model_id = MODEL_CONFIG["image"]
+
     try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            response = await client.post(
-                f"{DO_INFERENCE_BASE_URL}/images/generations",
+        async with httpx.AsyncClient(timeout=FAL_MAX_WAIT + 10) as client:
+            invoke_resp = await client.post(
+                FAL_INVOKE_URL,
                 headers={
                     "Authorization": f"Bearer {api_key}",
                     "Content-Type": "application/json",
                 },
                 json={
-                    "model": MODEL_CONFIG["image"],
-                    "prompt": prompt,
-                    "n": 1,
-                    "size": size,
+                    "model_id": model_id,
+                    "input": {"prompt": prompt, "image_size": image_size},
                 },
             )
-            response.raise_for_status()
-            data = response.json()
+            invoke_resp.raise_for_status()
+            invoke_data = invoke_resp.json()
+            request_id = invoke_data["request_id"]
 
-            image_data = data.get("data", [{}])[0]
-            image_url = image_data.get("url", "")
-            b64_data = image_data.get("b64_json", "")
+            elapsed = 0.0
+            while elapsed < FAL_MAX_WAIT:
+                await asyncio.sleep(FAL_POLL_INTERVAL)
+                elapsed += FAL_POLL_INTERVAL
 
-            return {
-                "image_url": image_url,
-                "has_b64": bool(b64_data),
-                "purpose": purpose,
-                "prompt_used": prompt[:200],
-            }
+                status_resp = await client.get(
+                    f"{FAL_INVOKE_URL}/{request_id}/status",
+                    headers={"Authorization": f"Bearer {api_key}"},
+                )
+                status_resp.raise_for_status()
+                status_data = status_resp.json()
+
+                if status_data.get("error"):
+                    return {"image_url": "", "error": status_data["error"]}
+
+                if status_data["status"] == "COMPLETED":
+                    images = status_data.get("output", {}).get("images", [])
+                    image_url = images[0]["url"] if images else ""
+                    return {
+                        "image_url": image_url,
+                        "purpose": purpose,
+                        "model": model_id,
+                        "prompt_used": prompt[:200],
+                    }
+
+            return {"image_url": "", "error": f"Timed out after {FAL_MAX_WAIT}s"}
 
     except httpx.HTTPStatusError as e:
         return {"image_url": "", "error": f"HTTP {e.response.status_code}"}

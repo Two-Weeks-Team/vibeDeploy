@@ -20,7 +20,7 @@ MODEL_CONFIG = {
     "code_gen": "openai-gpt-oss-120b",
     "ci_repair": "openai-gpt-oss-120b",
     "doc_gen": "alibaba-qwen3-32b",
-    "image": "openai-gpt-image-1",
+    "image": "fal-ai/flux/schnell",
     "brainstorm": "openai-gpt-oss-120b",
     "brainstorm_synthesis": "deepseek-r1-distill-llama-70b",
     "input": "openai-gpt-oss-120b",

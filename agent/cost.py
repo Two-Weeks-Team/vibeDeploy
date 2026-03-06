@@ -30,6 +30,8 @@ PRICING_PER_MILLION = {
     "anthropic-claude-4.6-sonnet": (3.00, 15.00),
     "openai-gpt-5.3-codex": (1.75, 14.00),
     "openai-gpt-image-1": (5.00, 40.00),
+    "fal-ai/flux/schnell": (3.00, 3.00),
+    "fal-ai/fast-sdxl": (1.00, 1.00),
 }
 
 DB_MONTHLY_COST = 15.15
@@ -92,7 +94,7 @@ def estimate_pipeline_cost() -> dict:
         ("deepseek-r1-distill-llama-70b", 10000, 5000, "strategist_verdict"),
         ("alibaba-qwen3-32b", 3000, 8000, "doc_generation"),
         ("openai-gpt-oss-120b", 5000, 12000, "code_generation"),
-        ("openai-gpt-image-1", 500, 500, "image_generation"),
+        ("fal-ai/flux/schnell", 500, 500, "image_generation"),
     ]
 
     tracker = CostTracker()
