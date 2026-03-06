@@ -60,12 +60,12 @@ async def run_council_agent(input: dict) -> dict:
 
 
 async def cross_examination(state: VibeDeployState) -> dict:
-    from ..llm import get_llm
+    from ..llm import MODEL_CONFIG, get_llm
 
     analyses = state.get("council_analysis", {})
     idea = state.get("idea", {})
 
-    llm = get_llm(model="openai-gpt-5", temperature=0.6, max_tokens=16000)
+    llm = get_llm(model=MODEL_CONFIG["cross_exam"], temperature=0.6, max_tokens=16000)
     debates = {}
 
     debates["architect_vs_guardian"] = await _run_debate(

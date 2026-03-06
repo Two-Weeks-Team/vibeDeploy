@@ -17,33 +17,42 @@ Analyze the idea and provide:
 Score: Technical Feasibility (0-100)"""
 
 
-MODEL = "openai-gpt-5-mini"
-
-
 async def analyze(idea: dict, llm=None) -> dict:
     """Run analysis for this council member."""
-    from ..llm import get_llm
+    from ..llm import MODEL_CONFIG, get_llm
+    from ..tools.function_tools import ARCHITECT_TOOLS
 
     if llm is None:
-        llm = get_llm(model=MODEL, temperature=0.5, max_tokens=16000)
+        llm = get_llm(model=MODEL_CONFIG["council"], temperature=0.5, max_tokens=16000)
 
+    llm_with_tools = llm.bind_tools(ARCHITECT_TOOLS)
     idea_text = json.dumps(idea, indent=2, ensure_ascii=False)
-    response = await llm.ainvoke(
-        [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {
-                "role": "user",
-                "content": (
-                    "Analyze this idea:\n\n"
-                    f"{idea_text}\n\n"
-                    "Return your analysis as a JSON object with keys: "
-                    "'findings' (list of key findings), 'score' (0-100 integer), "
-                    "'reasoning' (string explaining your score), "
-                    "'recommendations' (list of suggestions)."
-                ),
-            },
-        ]
-    )
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {
+            "role": "user",
+            "content": (
+                "Analyze this idea:\n\n"
+                f"{idea_text}\n\n"
+                "You have access to tools for tech research and DO docs. Use them if helpful.\n"
+                "Return your analysis as a JSON object with keys: "
+                "'findings' (list of key findings), 'score' (0-100 integer), "
+                "'reasoning' (string explaining your score), "
+                "'recommendations' (list of suggestions)."
+            ),
+        },
+    ]
+
+    response = await llm_with_tools.ainvoke(messages)
+
+    if response.tool_calls:
+        messages.append(response)
+        for tool_call in response.tool_calls:
+            tool_fn = {t.name: t for t in ARCHITECT_TOOLS}.get(tool_call["name"])
+            if tool_fn:
+                result = await tool_fn.ainvoke(tool_call["args"])
+                messages.append({"role": "tool", "tool_call_id": tool_call["id"], "content": str(result)})
+        response = await llm_with_tools.ainvoke(messages)
 
     return _parse_analysis(response.content)
 

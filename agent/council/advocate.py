@@ -18,15 +18,12 @@ Think in terms of MVP scope. Propose the simplest UI that delivers value.
 Score: User Impact (0-100)"""
 
 
-MODEL = "openai-gpt-5-mini"
-
-
 async def analyze(idea: dict, llm=None) -> dict:
     """Run analysis for this council member."""
-    from ..llm import get_llm
+    from ..llm import MODEL_CONFIG, get_llm
 
     if llm is None:
-        llm = get_llm(model=MODEL, temperature=0.5, max_tokens=16000)
+        llm = get_llm(model=MODEL_CONFIG["council"], temperature=0.5, max_tokens=16000)
 
     idea_text = json.dumps(idea, indent=2, ensure_ascii=False)
     response = await llm.ainvoke(

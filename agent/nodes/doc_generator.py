@@ -2,7 +2,7 @@ import asyncio
 import json
 import re
 
-from ..llm import get_llm
+from ..llm import MODEL_CONFIG, get_llm
 from ..prompts.doc_templates import (
     API_SPEC_SYSTEM_PROMPT,
     APP_SPEC_SYSTEM_PROMPT,
@@ -21,7 +21,7 @@ async def doc_generator(state: VibeDeployState) -> dict:
     scoring = state.get("scoring", {})
 
     llm = get_llm(
-        model="openai-gpt-5.2",
+        model=MODEL_CONFIG["doc_gen"],
         temperature=0.3,
         max_tokens=16000,
     )

@@ -2,7 +2,7 @@ import asyncio
 import json
 import re
 
-from ..llm import get_llm
+from ..llm import MODEL_CONFIG, get_llm
 from ..prompts.code_templates import (
     BACKEND_SYSTEM_PROMPT,
     CODE_GENERATION_BASE_SYSTEM_PROMPT,
@@ -16,7 +16,7 @@ async def code_generator(state: VibeDeployState) -> dict:
     idea = state.get("idea", {})
 
     llm = get_llm(
-        model="openai-gpt-5.3-codex",
+        model=MODEL_CONFIG["code_gen"],
         temperature=0.3,
         max_tokens=8000,
     )

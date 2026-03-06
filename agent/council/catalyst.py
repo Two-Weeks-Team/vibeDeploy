@@ -26,15 +26,12 @@ IMPORTANT CALIBRATION GUIDANCE:
 Look for innovation in the WHOLE, not just the parts. An idea that creatively integrates AI, targets a specific pain point, and offers a unique workflow deserves 70+."""
 
 
-MODEL = "openai-gpt-5-mini"
-
-
 async def analyze(idea: dict, llm=None) -> dict:
     """Run analysis for this council member."""
-    from ..llm import get_llm
+    from ..llm import MODEL_CONFIG, get_llm
 
     if llm is None:
-        llm = get_llm(model=MODEL, temperature=0.5, max_tokens=16000)
+        llm = get_llm(model=MODEL_CONFIG["council"], temperature=0.5, max_tokens=16000)
 
     idea_text = json.dumps(idea, indent=2, ensure_ascii=False)
     response = await llm.ainvoke(

@@ -74,7 +74,7 @@ def fan_out_brainstorm(state: dict) -> list[Send]:
 
 
 async def run_brainstorm_agent(input: dict) -> dict:
-    from ..llm import get_llm
+    from ..llm import MODEL_CONFIG, get_llm
 
     agent_name = input.get("agent_name", "unknown")
     idea = input.get("idea", {})
@@ -83,7 +83,7 @@ async def run_brainstorm_agent(input: dict) -> dict:
     if not prompt:
         return {"brainstorm_insights": {agent_name: {"ideas": [], "raw": f"Unknown agent: {agent_name}"}}}
 
-    llm = get_llm(model="openai-gpt-5-mini", temperature=0.8, max_tokens=16000)
+    llm = get_llm(model=MODEL_CONFIG["brainstorm"], temperature=0.8, max_tokens=16000)
     idea_text = json.dumps(idea, indent=2, ensure_ascii=False)
 
     response = await llm.ainvoke(
@@ -110,12 +110,12 @@ async def run_brainstorm_agent(input: dict) -> dict:
 
 
 async def synthesize_brainstorm(state: dict) -> dict:
-    from ..llm import get_llm
+    from ..llm import MODEL_CONFIG, get_llm
 
     insights = state.get("brainstorm_insights", {})
     idea = state.get("idea", {})
 
-    llm = get_llm(model="openai-gpt-5.2", temperature=0.6, max_tokens=16000)
+    llm = get_llm(model=MODEL_CONFIG["brainstorm_synthesis"], temperature=0.6, max_tokens=16000)
 
     insights_text = json.dumps(insights, indent=2, ensure_ascii=False)
     idea_text = json.dumps(idea, indent=2, ensure_ascii=False)

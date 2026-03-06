@@ -216,19 +216,23 @@ Each agent generates **ideas, opportunities, wild cards, and action items** from
 
 ### Model Assignment
 
-| Role | Model | Cost (per 1M tokens) |
-|------|-------|---------------------|
-| Strategist | `openai-gpt-5.2` | $1.75 / $14.00 |
-| Architect, Scout, Catalyst, Advocate | `openai-gpt-5-mini` | $0.25 / $2.00 |
-| Guardian | `openai-gpt-5-mini` | $0.25 / $2.00 |
-| Cross-Examination | `openai-gpt-5` | $1.25 / $10.00 |
-| Doc Generation | `openai-gpt-5.2` | $1.75 / $14.00 |
-| Code Generation | `openai-gpt-5.3-codex` | $1.75 / $14.00 |
-| Brainstorm Agents | `openai-gpt-5-mini` | $0.25 / $2.00 |
-| Brainstorm Synthesis | `openai-gpt-5.2` | $1.75 / $14.00 |
-| Image Generation | `openai-gpt-image-1` | $5.00 / $40.00 |
+| Role | Model | Vendor | Cost (per 1M tokens) |
+|------|-------|--------|---------------------|
+| Council (5 agents) | `anthropic-claude-4.6-sonnet` | Anthropic | $3.00 / $15.00 |
+| Strategist | `openai-gpt-5.2` | OpenAI | $1.75 / $14.00 |
+| Cross-Examination | `openai-gpt-5.2` | OpenAI | $1.75 / $14.00 |
+| Doc Generation | `anthropic-claude-4.6-sonnet` | Anthropic | $3.00 / $15.00 |
+| Code Generation | `anthropic-claude-opus-4.6` | Anthropic | $5.00 / $25.00 |
+| CI Repair | `anthropic-claude-opus-4.6` | Anthropic | $5.00 / $25.00 |
+| Input Processing | `anthropic-claude-4.6-sonnet` | Anthropic | $3.00 / $15.00 |
+| Decision Gate | `anthropic-claude-4.6-sonnet` | Anthropic | $3.00 / $15.00 |
+| Brainstorm Agents | `anthropic-claude-4.6-sonnet` | Anthropic | $3.00 / $15.00 |
+| Brainstorm Synthesis | `openai-gpt-5.2` | OpenAI | $1.75 / $14.00 |
+| Web Search | `openai-gpt-5-mini` | OpenAI | $0.25 / $2.00 |
+| Image Generation | `openai-gpt-image-1` | OpenAI | $5.00 / $40.00 |
 
-**Cost per full deployment: ~$0.65** | $200 credits = ~307 deployments
+**Multi-vendor AI: 6 Anthropic + 6 OpenAI models via DO Serverless Inference**
+**Cost per full deployment: ~$0.85** | $200 credits = ~235 deployments
 
 ---
 

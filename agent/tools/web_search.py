@@ -3,6 +3,8 @@ import os
 
 import httpx
 
+from ..llm import DO_INFERENCE_BASE_URL, MODEL_CONFIG
+
 
 async def web_search(
     query: str,
@@ -16,13 +18,13 @@ async def web_search(
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
             response = await client.post(
-                "https://api.digitalocean.com/v2/gen-ai/chat/completions",
+                f"{DO_INFERENCE_BASE_URL}/chat/completions",
                 headers={
                     "Authorization": f"Bearer {api_key}",
                     "Content-Type": "application/json",
                 },
                 json={
-                    "model": "openai-gpt-5-mini",
+                    "model": MODEL_CONFIG["web_search"],
                     "messages": [
                         {
                             "role": "system",

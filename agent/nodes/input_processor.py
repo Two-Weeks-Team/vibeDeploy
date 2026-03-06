@@ -1,7 +1,7 @@
 import json
 import re
 
-from ..llm import get_llm
+from ..llm import MODEL_CONFIG, get_llm
 from ..state import VibeDeployState
 from ..tools.youtube import extract_youtube_transcript, is_youtube_url
 
@@ -41,7 +41,7 @@ async def input_processor(state: VibeDeployState) -> dict:
             idea_context = f"YouTube URL (content unavailable): {raw_input}"
 
     llm = get_llm(
-        model="openai-gpt-5-mini",
+        model=MODEL_CONFIG["input"],
         temperature=0.4,
         max_tokens=2000,
     )

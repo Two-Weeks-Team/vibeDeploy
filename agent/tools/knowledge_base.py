@@ -3,7 +3,7 @@ from typing import Optional
 
 import httpx
 
-GRADIENT_KB_URL = "https://api.digitalocean.com/v2/gen-ai/knowledge-bases"
+GRADIENT_KB_URL = "https://kbaas.do-ai.run/v1"
 
 
 async def query_do_knowledge_base(
@@ -11,18 +11,18 @@ async def query_do_knowledge_base(
     kb_id: Optional[str] = None,
     top_k: int = 5,
 ) -> dict:
-    api_key = os.getenv("DIGITALOCEAN_INFERENCE_KEY")
+    api_key = os.getenv("DIGITALOCEAN_API_TOKEN")
     kb_id = kb_id or os.getenv("DO_KNOWLEDGE_BASE_ID")
 
     if not api_key:
-        return {"matches": [], "error": "DIGITALOCEAN_INFERENCE_KEY not set"}
+        return {"matches": [], "error": "DIGITALOCEAN_API_TOKEN not set"}
     if not kb_id:
         return {"matches": [], "error": "DO_KNOWLEDGE_BASE_ID not set"}
 
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
             response = await client.post(
-                f"{GRADIENT_KB_URL}/{kb_id}/query",
+                f"{GRADIENT_KB_URL}/{kb_id}/retrieve",
                 headers={
                     "Authorization": f"Bearer {api_key}",
                     "Content-Type": "application/json",

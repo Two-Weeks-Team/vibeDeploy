@@ -20,15 +20,12 @@ Personality: Balanced, decisive, impartial. You weight evidence over enthusiasm.
 When agents disagree, identify the root cause and seek resolution."""
 
 
-MODEL = "openai-gpt-5.2"
-
-
 async def analyze(idea: dict, llm=None) -> dict:
     """Run analysis for this council member."""
-    from ..llm import get_llm
+    from ..llm import MODEL_CONFIG, get_llm
 
     if llm is None:
-        llm = get_llm(model=MODEL, temperature=0.4, max_tokens=16000)
+        llm = get_llm(model=MODEL_CONFIG["strategist"], temperature=0.4, max_tokens=16000)
 
     idea_text = json.dumps(idea, indent=2, ensure_ascii=False)
     response = await llm.ainvoke(

@@ -2,6 +2,8 @@ import os
 
 import httpx
 
+from ..llm import DO_INFERENCE_BASE_URL, MODEL_CONFIG
+
 
 async def generate_app_logo(name: str, description: str) -> dict:
     return await _generate_image(
@@ -47,13 +49,13 @@ async def _generate_image(
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
             response = await client.post(
-                "https://api.digitalocean.com/v2/gen-ai/images/generations",
+                f"{DO_INFERENCE_BASE_URL}/images/generations",
                 headers={
                     "Authorization": f"Bearer {api_key}",
                     "Content-Type": "application/json",
                 },
                 json={
-                    "model": "openai-gpt-image-1",
+                    "model": MODEL_CONFIG["image"],
                     "prompt": prompt,
                     "n": 1,
                     "size": size,

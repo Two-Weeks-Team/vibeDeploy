@@ -170,9 +170,9 @@ async def _ci_repair_loop(
 
 
 async def _repair_code_from_errors(files: dict[str, str], error_logs: str) -> dict[str, str]:
-    from ..llm import content_to_str, get_llm
+    from ..llm import MODEL_CONFIG, content_to_str, get_llm
 
-    llm = get_llm(model="openai-gpt-5.3-codex", temperature=0.1, max_tokens=8000)
+    llm = get_llm(model=MODEL_CONFIG["ci_repair"], temperature=0.1, max_tokens=8000)
 
     file_listing = "\n\n".join(
         f"=== {path} ===\n{content}" for path, content in sorted(files.items()) if isinstance(content, str)
