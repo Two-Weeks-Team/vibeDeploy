@@ -1,0 +1,63 @@
+[
+  {
+    "input": "Build a recipe sharing community with AI-powered meal suggestions",
+    "expected_decision": "GO",
+    "min_score": 65,
+    "tags": ["web_app", "social", "ai"]
+  },
+  {
+    "input": "Create a quantum computing simulator for mobile phones",
+    "expected_decision": "NO_GO",
+    "max_score": 50,
+    "tags": ["mobile", "hardware", "complex"]
+  },
+  {
+    "input": "Build a simple todo list app with categories",
+    "expected_decision": "GO",
+    "min_score": 70,
+    "tags": ["web_app", "simple", "utility"]
+  },
+  {
+    "input": "Create a restaurant queue management system with QR codes",
+    "expected_decision": "GO",
+    "min_score": 65,
+    "tags": ["web_app", "business", "qr"]
+  },
+  {
+    "input": "Build a decentralized social network that replaces all existing platforms",
+    "expected_decision": "NO_GO",
+    "max_score": 50,
+    "tags": ["social", "blockchain", "ambitious"]
+  },
+  {
+    "input": "Create a personal finance tracker with bank API integration",
+    "expected_decision": "CONDITIONAL",
+    "min_score": 50,
+    "max_score": 75,
+    "tags": ["fintech", "api", "security"]
+  },
+  {
+    "input": "Build a pet adoption matching platform with AI photo analysis",
+    "expected_decision": "GO",
+    "min_score": 65,
+    "tags": ["web_app", "ai", "social_good"]
+  },
+  {
+    "input": "AI code review assistant that analyzes PRs and suggests improvements",
+    "expected_decision": "GO",
+    "min_score": 70,
+    "tags": ["developer_tools", "ai", "github"]
+  },
+  {
+    "input": "Build an OS kernel from scratch in JavaScript",
+    "expected_decision": "NO_GO",
+    "max_score": 40,
+    "tags": ["systems", "impossible", "javascript"]
+  },
+  {
+    "input": "Create a neighborhood event planning app with weather integration",
+    "expected_decision": "GO",
+    "min_score": 60,
+    "tags": ["web_app", "community", "api"]
+  }
+]
