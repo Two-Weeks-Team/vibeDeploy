@@ -1,0 +1,183 @@
+# App Platform – DigitalOcean Documentation
+
+> App Platform is a fully managed Platform-as-a-Service (PaaS) that deploys applications from Git repositories or container images. It automatically builds, deploys, and scales components while handling all underlying infrastructure.
+- [App Platform Support](https://docs.digitalocean.com/products/app-platform/support/index.html.md): Get help with technical support and answers to frequently asked questions.
+
+
+
+## Getting Started with App Platform
+
+Quickstarts and intermediate tutorials to get started.
+
+- [App Platform Quickstart](https://docs.digitalocean.com/products/app-platform/getting-started/quickstart/index.html.md): Get your source code live on App Platform in a few minutes.
+- [Deploy Sample Apps to App Platform](https://docs.digitalocean.com/products/app-platform/getting-started/deploy-sample-apps/index.html.md): Fork and launch sample applications for several popular programming languages.
+- [Migrate from Heroku to DigitalOcean App Platform](https://docs.digitalocean.com/products/app-platform/getting-started/migrate-from-heroku/index.html.md): Bring your Heroku apps, workers, and datastores to DigitalOcean’s fully managed PaaS.
+- [Sample App for .NET](https://docs.digitalocean.com/products/app-platform/getting-started/sample-apps/dotnet/index.html.md): Manage .NET apps in DigitalOcean App Platform.
+- [Sample App for Rust](https://docs.digitalocean.com/products/app-platform/getting-started/sample-apps/rust/index.html.md): Manage Rust apps in DigitalOcean App Platform.
+- [Sample App for Asp .Net using Docker](https://docs.digitalocean.com/products/app-platform/getting-started/sample-apps/aspnet/index.html.md): Manage Asp .Net apps in DigitalOcean App Platform.
+- [Sample App for Spring boot using Docker](https://docs.digitalocean.com/products/app-platform/getting-started/sample-apps/spring-boot/index.html.md): Manage Spring Boot apps in DigitalOcean App Platform.
+- [Sample App for Gin](https://docs.digitalocean.com/products/app-platform/getting-started/sample-apps/gin/index.html.md): Manage Gin apps in DigitalOcean App Platform.
+- [Deploy the Etherpad Collaborative Web Editor to App Platform](https://docs.digitalocean.com/products/app-platform/getting-started/deploy-etherpad/index.html.md): Learn how to deploy the official Etherpad Docker image to DigitalOcean's App Platform and connect it to a managed PostgreSQL database.
+- [Deploy a Sample RSS Reader to App Platform](https://docs.digitalocean.com/products/app-platform/getting-started/deploy-rss-reader/index.html.md): Build a multi-component sample RSS reader app and then deploy the app to App Platform.
+- [Sample App for Flask](https://docs.digitalocean.com/products/app-platform/getting-started/sample-apps/flask/index.html.md): Manage Flask apps in DigitalOcean App Platform.
+- [Sample App for Docker](https://docs.digitalocean.com/products/app-platform/getting-started/sample-apps/docker/index.html.md): Manage Docker apps in DigitalOcean App Platform.
+- [Sample App for Express.js](https://docs.digitalocean.com/products/app-platform/getting-started/sample-apps/express.js/index.html.md): Manage Express.js apps in DigitalOcean App Platform.
+- [Sample App for Go](https://docs.digitalocean.com/products/app-platform/getting-started/sample-apps/go/index.html.md): Manage Go apps in DigitalOcean App Platform.
+- [Sample App for Laravel](https://docs.digitalocean.com/products/app-platform/getting-started/sample-apps/laravel/index.html.md): Manage Laravel apps in DigitalOcean App Platform.
+- [Sample App for Next.js](https://docs.digitalocean.com/products/app-platform/getting-started/sample-apps/next.js/index.html.md): Manage Next.js apps in DigitalOcean App Platform.
+- [Sample App for Node.js](https://docs.digitalocean.com/products/app-platform/getting-started/sample-apps/node/index.html.md): Manage Node.js apps in DigitalOcean App Platform.
+- [Sample App for Nuxt.js](https://docs.digitalocean.com/products/app-platform/getting-started/sample-apps/nuxt.js/index.html.md): Manage Nuxt.js apps in DigitalOcean App Platform.
+- [Sample App for PHP](https://docs.digitalocean.com/products/app-platform/getting-started/sample-apps/php/index.html.md): Manage PHP apps in DigitalOcean App Platform.
+- [Sample App for Python](https://docs.digitalocean.com/products/app-platform/getting-started/sample-apps/python/index.html.md): Manage Python apps in DigitalOcean App Platform.
+- [Sample App for React](https://docs.digitalocean.com/products/app-platform/getting-started/sample-apps/react/index.html.md): Manage React apps in DigitalOcean App Platform.
+- [Sample App for Ruby](https://docs.digitalocean.com/products/app-platform/getting-started/sample-apps/ruby/index.html.md): Manage Ruby apps in DigitalOcean App Platform.
+- [Sample App for Static HTML Assets](https://docs.digitalocean.com/products/app-platform/getting-started/sample-apps/static-assets/index.html.md): Manage static assets in DigitalOcean App Platform.
+- [Sample App for Gatsby](https://docs.digitalocean.com/products/app-platform/getting-started/sample-apps/gatsby/index.html.md): Manage Gatsby apps in DigitalOcean App Platform.
+- [Sample App for Hugo](https://docs.digitalocean.com/products/app-platform/getting-started/sample-apps/hugo/index.html.md): Manage Hugo apps in DigitalOcean App Platform.
+
+## App Platform How-Tos
+
+How to accomplish specific tasks in detail, like creation/deletion, configuration, and management.
+
+- [How to Create Apps in App Platform](https://docs.digitalocean.com/products/app-platform/how-to/create-apps/index.html.md): Build and deploy apps on push in the cloud with App Platform.
+- [How to Clone Apps in App Platform](https://docs.digitalocean.com/products/app-platform/how-to/clone-app/index.html.md): Clone an existing App Platform app to create a separate instance for testing, staging, or feature-branch deployments.
+- [How to Deploy from Container Images](https://docs.digitalocean.com/products/app-platform/how-to/deploy-from-container-images/index.html.md): Deploy an application using a container image stored in your DigitalOcean Container Registry.
+- [How to Deploy from Monorepos](https://docs.digitalocean.com/products/app-platform/how-to/deploy-from-monorepo/index.html.md): Deploy applications from monorepos in App Platform.
+- [How to Deploy using GitHub Actions](https://docs.digitalocean.com/products/app-platform/how-to/deploy-from-github-actions/index.html.md): Deploy applications directly from your GitHub repository using GitHub Actions.
+- [How to Scale Apps in App Platform](https://docs.digitalocean.com/products/app-platform/how-to/scale-app/index.html.md): Add capacity to your app by scaling the number of containers.
+- [How to Manage Services in App Platform](https://docs.digitalocean.com/products/app-platform/how-to/manage-services/index.html.md): Create and configure services in App Platform.
+- [How to Manage Cron Jobs and Deployment Jobs in App Platform](https://docs.digitalocean.com/products/app-platform/how-to/manage-jobs/index.html.md): Create and configure jobs in App Platform.
+- [How to Manage Static Sites in App Platform](https://docs.digitalocean.com/products/app-platform/how-to/manage-static-sites/index.html.md): Create and configure a static site in App Platform.
+- [How to Manage Workers in App Platform](https://docs.digitalocean.com/products/app-platform/how-to/manage-workers/index.html.md): Create and configure background workers in App Platform.
+- [How to Manage Functions in App Platform](https://docs.digitalocean.com/products/app-platform/how-to/manage-functions/index.html.md): Create and configure functions in App Platform. Functions are blocks of code that run on demand without requiring you to provision or manage servers.
+- [Manage App Platform Databases](https://docs.digitalocean.com/products/app-platform/how-to/manage-data-storage/index.html.md): How to accomplish specific tasks in detail for App Platform databases.
+- [How to Manage Databases in App Platform](https://docs.digitalocean.com/products/app-platform/how-to/manage-databases/index.html.md): Create managed relational databases from directly within App Platform for use in development or production applications.
+- [How to Store Data in App Platform](https://docs.digitalocean.com/products/app-platform/how-to/store-data/index.html.md): Review data storage options for App Platform.
+- [How to Connect PostgreSQL to Connection Pools in App Platform](https://docs.digitalocean.com/products/app-platform/how-to/connect-pg-pools/index.html.md): Connect your app to PostgreSQL database with connection pools using App Platform.
+- [Manage App Platform App Settings](https://docs.digitalocean.com/products/app-platform/how-to/manage-settings/index.html.md): How to accomplish specific tasks in detail for App Platform app settings.
+- [How to Manage Build and Run Commands](https://docs.digitalocean.com/products/app-platform/how-to/build-run-commands/index.html.md): Add, edit, and delete buildtime and runtime commands for your application.
+- [How to Use Environment Variables in App Platform](https://docs.digitalocean.com/products/app-platform/how-to/use-environment-variables/index.html.md): Use and encrypt environment variables in App Platform.
+- [How to Configure Edge Settings in App Platform](https://docs.digitalocean.com/products/app-platform/how-to/configure-edge-settings/index.html.md): Improve your app's performance by caching content with Cache-Control headers.
+- [How to Change an App's Datacenter Region](https://docs.digitalocean.com/products/app-platform/how-to/change-region/index.html.md): Redeploy an existing App Platform app to a different datacenter region.
+- [How to Configure Maintenance Mode](https://docs.digitalocean.com/products/app-platform/how-to/maintenance-mode/index.html.md): Temporarily take your app offline for maintenance and display a maintenance message to users.
+- [How to Configure App Termination Settings](https://docs.digitalocean.com/products/app-platform/how-to/configure-termination/index.html.md): Configure the amount of time that app components have between receiving a termination command and actually shutting down to leave room to complete clean-up tasks.
+- [How to Archive and Restore an App](https://docs.digitalocean.com/products/app-platform/how-to/archive-restore/index.html.md): Archive apps to store their data and configuration, and to stop incurring charges for the app. Restore an archived app to resume using it.
+- [How to Upgrade Your App's Stack](https://docs.digitalocean.com/products/app-platform/how-to/change-stack/index.html.md): Upgrade your app's stack to take advantage of new features and security updates, or maintain your app's compatibility.
+- [How to Upgrade Your NodeJS Buildpack in App Platform](https://docs.digitalocean.com/products/app-platform/how-to/migrate-nodejs-buildpack/index.html.md): Upgrade your app to use new NodeJS Buildpack.
+- [How to Upgrade Buildpacks in App Platform](https://docs.digitalocean.com/products/app-platform/how-to/upgrade-buildpacks/index.html.md): Upgrade your app's buildpacks to their latest versions.
+- [How to Manage App Server's Time Zone](https://docs.digitalocean.com/products/app-platform/how-to/manage-time-zone/index.html.md): Change your app server's time zone configuration to match your application's needs.
+- [Manage App Platform Networking](https://docs.digitalocean.com/products/app-platform/how-to/manage-networking/index.html.md): How to accomplish specific tasks in detail for App Platform networking.
+- [How to Add Static IP Addresses to App Platform Apps](https://docs.digitalocean.com/products/app-platform/how-to/add-ip-address/index.html.md): Add a static IP addresses to your app that allow you to route traffic to and from your app with consistent IP addresses.
+- [How to Manage Domains in App Platform](https://docs.digitalocean.com/products/app-platform/how-to/manage-domains/index.html.md): Add a custom domain to use for your app, in addition to its included ondigitalocean.com subdomain.
+- [How to Configure CORS Policies in App Platform](https://docs.digitalocean.com/products/app-platform/how-to/configure-cors-policies/index.html.md): Enable cross-origin resource sharing in App Platform.
+- [How to Enable App Platform VPC](https://docs.digitalocean.com/products/app-platform/how-to/enable-vpc/index.html.md): Enable VPC for apps to connect it to other DigitalOcean resources.
+- [How to Set Up Internal Routing in App Platform](https://docs.digitalocean.com/products/app-platform/how-to/manage-internal-routing/index.html.md): Set up internal routing between components in your app to support API gateways, backend job processing, and microservice architecture.
+- [How to Rewrite or Redirect URL Paths](https://docs.digitalocean.com/products/app-platform/how-to/url-rewrites/index.html.md): Change the ingress URL paths in your app to create more manageable URLs or redirect traffic to different URLs.
+- [How to Configure HTTP/2](https://docs.digitalocean.com/products/app-platform/how-to/configure-http2/index.html.md): Configure apps to receive HTTP/2 traffic. This allows you to use gRPC and other HTTP/2 features.
+- [Use an External CDN in Front of an App Platform App](https://docs.digitalocean.com/products/app-platform/how-to/configure-external-cdn/index.html.md): Use an external CDN to route traffic to your App Platform app.
+- [Manage App Platform App Observability](https://docs.digitalocean.com/products/app-platform/how-to/manage-observability/index.html.md): How to accomplish specific tasks in detail for App Platform app observability, such as setting up log forwarding and viewing metrics.
+- [How to Set Up and Manage Health Checks](https://docs.digitalocean.com/products/app-platform/how-to/manage-health-checks/index.html.md): Add health checks to your app to monitor the availability and performance of its services.
+- [How to View Logs in App Platform](https://docs.digitalocean.com/products/app-platform/how-to/view-logs/index.html.md): View application, build, deploy, and runtime logs in App Platform.
+- [How to Forward Logs in App Platform](https://docs.digitalocean.com/products/app-platform/how-to/forward-logs/index.html.md): Enable log forwarding to log management providers in App Platform.
+- [How to Create Alerts and Set Up Monitoring in App Platform](https://docs.digitalocean.com/products/app-platform/how-to/create-alerts/index.html.md): Create alert policies and set up alerts for app or resource events.
+- [How to View Insights in App Platform](https://docs.digitalocean.com/products/app-platform/how-to/view-insights/index.html.md): View application insights in App Platform in the control panel or using the API.
+- [How to Manage Deployments in App Platform](https://docs.digitalocean.com/products/app-platform/how-to/manage-deployments/index.html.md): Manage deployments in App Platform.
+- [How to Access the Console for an App Platform Component](https://docs.digitalocean.com/products/app-platform/how-to/console/index.html.md): Access the console for components in your app to troubleshoot issues and run commands in their container.
+- [How to Restart or Force Rebuild Your App](https://docs.digitalocean.com/products/app-platform/how-to/restart-rebuild-app/index.html.md): Resolve deadlocks or connection issues by restarting or rebuilding your app.
+- [How to Update an App's Spec](https://docs.digitalocean.com/products/app-platform/how-to/update-app-spec/index.html.md): Update an app's configuration by editing its spec file.
+- [How to Manage an App's Source Repository](https://docs.digitalocean.com/products/app-platform/how-to/manage-source-repo/index.html.md): How change source repositories, configure submodules, and enable Git Large File Support (LFS).
+- [How to Build Components Locally](https://docs.digitalocean.com/products/app-platform/how-to/build-locally/index.html.md): Build app components locally using the same build process as App Platform.
+- [How to Add a "Deploy to DigitalOcean" Button to Your Repository](https://docs.digitalocean.com/products/app-platform/how-to/add-deploy-do-button/index.html.md): Add a "Deploy to DigitalOcean" button to your GitHub or GitLab repository so users can launch your app on App Platform with one click.
+- [How to Destroy Apps in App Platform](https://docs.digitalocean.com/products/app-platform/how-to/destroy-app/index.html.md): Delete apps from your app platform.
+
+## App Platform Reference
+
+Native and third-party tools, troubleshooting, and answers to frequently asked questions.
+
+- [App Platform Dockerfile Build Reference](https://docs.digitalocean.com/products/app-platform/reference/dockerfile/index.html.md): Reference for using Dockerfiles to build App Platform apps.
+- [Reference for Dev Config YAML](https://docs.digitalocean.com/products/app-platform/reference/dev-config/index.html.md): Reference for the format of dev-config.yaml, a file that configures local App Platform builds using doctl
+- [Reference for App Specification](https://docs.digitalocean.com/products/app-platform/reference/app-spec/index.html.md): Reference for the format of app configuration files for App Platform, also known as app specs.
+- [App Platform Error Code Reference](https://docs.digitalocean.com/products/app-platform/reference/error-codes/index.html.md): Reference for error codes and their reasons in App Platform.
+- [Rust Buildpack on App Platform](https://docs.digitalocean.com/products/app-platform/reference/buildpacks/rust/index.html.md): Details on using the Rust buildpack in App Platform, including files for buildpack detection, choosing versions, and configuration options.
+- [.NET Buildpack on App Platform](https://docs.digitalocean.com/products/app-platform/reference/buildpacks/dotnet/index.html.md): Details on using the .NET buildpack in App Platform, including files for buildpack detection, choosing versions, and configuration options.
+- [Bun Buildpack on App Platform](https://docs.digitalocean.com/products/app-platform/reference/buildpacks/bun/index.html.md): Details on using the Bun buildpack in App Platform, including files for buildpack detection, choosing versions, and limits.
+- [Legacy Node.js Buildpack on App Platform](https://docs.digitalocean.com/products/app-platform/reference/buildpacks/legacy-nodejs/index.html.md): Details on using the Node.js buildpack in App Platform, including files for buildpack detection, choosing versions, and limits.
+- [Aptfile Buildpack on App Platform](https://docs.digitalocean.com/products/app-platform/reference/buildpacks/aptfile/index.html.md): Details on using the Aptfile buildpack in App Platform, including files for buildpack detection, choosing versions, and limits.
+- [Go Buildpack on App Platform](https://docs.digitalocean.com/products/app-platform/reference/buildpacks/go/index.html.md): Details on using the Go buildpack in App Platform, including files for buildpack detection, choosing versions, and limits.
+- [Hugo Buildpack on App Platform](https://docs.digitalocean.com/products/app-platform/reference/buildpacks/hugo/index.html.md): Details on using the Hugo buildpack in App Platform, including files for buildpack detection, choosing versions, and limits.
+- [Node.js Buildpack on App Platform](https://docs.digitalocean.com/products/app-platform/reference/buildpacks/nodejs/index.html.md): Details on using the Node.js buildpack in App Platform, including files for buildpack detection, choosing versions, and limits.
+- [PHP Buildpack on App Platform](https://docs.digitalocean.com/products/app-platform/reference/buildpacks/php/index.html.md): Details on using the PHP buildpack in App Platform, including files for buildpack detection, choosing versions, and limits.
+- [Python Buildpack on App Platform](https://docs.digitalocean.com/products/app-platform/reference/buildpacks/python/index.html.md): Details on using the Python buildpack in App Platform, including files for buildpack detection, choosing versions, and limits.
+- [Ruby Buildpack on App Platform](https://docs.digitalocean.com/products/app-platform/reference/buildpacks/ruby/index.html.md): Details on using the Ruby buildpack in App Platform, including files for buildpack detection, choosing versions, and limits.
+
+## App Platform Concepts
+
+Explanations and definitions of core concepts in App Platform.
+
+- [Choosing a Plan for Your App Components](https://docs.digitalocean.com/products/app-platform/concepts/choosing-a-plan/index.html.md): Guidance on choosing the right App Platform plan for your app's components based on usage patterns and needs.
+- [App Platform Build System Update Policy](https://docs.digitalocean.com/products/app-platform/concepts/platform-upgrade-policy/index.html.md): App Platform's policies for rollout of new stacks, deprecation of old stacks, and timing.
+
+## App Platform Details
+
+Features, plans and pricing, availability, limits, known issues, and more.
+
+- [An Introduction to App Platform](https://docs.digitalocean.com/products/app-platform/details/intro-faq/index.html.md): An FAQ for App Platform
+- [App Platform Features](https://docs.digitalocean.com/products/app-platform/details/features/index.html.md): App Platform is a Platform-as-a-Service (PaaS) offering that allows developers to publish code directly to DigitalOcean servers without worrying about the underlying infrastructure. App Platform can either automatically analyze and build code from your …
+- [App Platform Pricing](https://docs.digitalocean.com/products/app-platform/details/pricing/index.html.md): Pricing for App Platform containers and additional resources.
+- [App Platform Availability](https://docs.digitalocean.com/products/app-platform/details/availability/index.html.md): Regional datacenter availability for App Platform.
+- [App Platform Limits](https://docs.digitalocean.com/products/app-platform/details/limits/index.html.md): Limits and known issues for App Platform.
+- [App Platform Maintenance](https://docs.digitalocean.com/products/app-platform/details/maintenance/index.html.md): App Platform's maintenance policy.
+
+## App Platform Support
+
+Technical support articles for App Platform.
+
+- [How do I fix the error "Record is managed by an App on this account, and cannot be deleted"?](https://docs.digitalocean.com/support/how-do-i-fix-the-error-record-is-managed-by-an-app-on-this-account-and-cannot-be-deleted/index.html.md): Use the app's Settings tab to remove domains associated with App Platform apps.
+- [Why do I get the error “JavaScript heap out of memory” during deployment?](https://docs.digitalocean.com/support/why-do-i-get-the-error-javascript-heap-out-of-memory-during-deployment/index.html.md): Increase the heap memory by setting the environment variable NODE_OPTIONS=--max-old-space-size=4096.
+- [How do I fix a "permission denied for schema public" error in my dev database?](https://docs.digitalocean.com/support/how-do-i-fix-a-permission-denied-for-schema-public-error-in-my-dev-database/index.html.md): Delete the existing dev database and create a new one. Then make sure that the app deployment completes successfully.
+- [Why do I get the error "Domain Already Exists" when trying to add a domain to an app in another account?](https://docs.digitalocean.com/support/why-do-i-get-the-error-domain-already-exists-when-trying-to-add-a-domain-to-an-app-in-another-account/index.html.md): You cannot add the same domain name to multiple apps or split an app and domain name across more than one account.
+- [How do I fix an "Image or digest not found" error with multiple registries?](https://docs.digitalocean.com/support/how-do-i-fix-an-image-or-digest-not-found-error-with-multiple-registries/index.html.md): Specify the registry property in the app spec.
+- [Why am I getting an error when trying to forward DigitalOcean Functions to Managed OpenSearch?](https://docs.digitalocean.com/support/why-am-i-getting-an-error-when-trying-to-forward-digitalocean-functions-to-managed-opensearch/index.html.md): Functions does not support forwarding to Managed OpenSearch.
+- [My container-based app fails to deploy without logs or error codes.](https://docs.digitalocean.com/support/my-container-based-app-fails-to-deploy-without-logs-or-error-codes./index.html.md): Troubleshoot by making sure the Dockerfile and its commands build on Linux AMD64 and other steps.
+- [How do I generate my app's SSL certificate?](https://docs.digitalocean.com/support/how-do-i-generate-my-apps-ssl-certificate/index.html.md): App Platform automatically generates and issues the SSL certificate during the configuration.
+- [Why am I receiving 520 status codes from my app?](https://docs.digitalocean.com/support/why-am-i-receiving-520-status-codes-from-my-app/index.html.md): Your app may have crashed while trying to receive an upload or return a response larger than it has been configured to manage.
+- [Why am I receiving a forbidden error when making changes to my App Platform app?](https://docs.digitalocean.com/support/why-am-i-receiving-a-forbidden-error-when-making-changes-to-my-app-platform-app/index.html.md): Your team balance may be past due. Pay your balance to lift restrictions on actions you can take on the platform.
+- [Where can I find the client IP address of a request connecting to my app?](https://docs.digitalocean.com/support/where-can-i-find-the-client-ip-address-of-a-request-connecting-to-my-app/index.html.md): You can find the client IP address of a request connecting to your app in the `do-connecting-ip` HTTP header.
+- [Why is my app's database connection timing out?](https://docs.digitalocean.com/support/why-is-my-apps-database-connection-timing-out/index.html.md): Timeouts can be caused by high CPU utilization, so check your app's CPU utilization and consider scaling your app.
+- [Why can't I route traffic to my app's dedicated egress IP address?](https://docs.digitalocean.com/support/why-cant-i-route-traffic-to-my-apps-dedicated-egress-ip-address/index.html.md): Dedicated egress IPs route egress (outbound) traffic from an app. To route ingress (inbound) traffic to an app, use one of App Platform's public ingress IPs.
+- [Why doesn't my app's wildcard subdomain work?](https://docs.digitalocean.com/support/why-doesnt-my-apps-wildcard-subdomain-work/index.html.md): Add the root domain to the list of domains in the app's settings along with the wildcard subdomain.
+- [Why is my app not resolving .gov domains?](https://docs.digitalocean.com/support/why-is-my-app-not-resolving-.gov-domains/index.html.md): App Platform apps may be slow or unable to resolve .gov domains because the domain administrators have blocked DigitalOcean’s IP addresses. To fix this, you can contact the domain administrator or use a custom DNS resolver. For example, if you are using …
+- [Why can't I find my app even after paying my past due balance?](https://docs.digitalocean.com/support/why-cant-i-find-my-app-even-after-paying-my-past-due-balance/index.html.md): If your resources have been destroyed due to a prolonged past due balance, you can contact support to request the app spec for deleted apps to recreate the app with the same configuration.
+- [How do I disable email obfuscation on my App Platform site?](https://docs.digitalocean.com/support/how-do-i-disable-email-obfuscation-on-my-app-platform-site/index.html.md): Disable the feature in the app spec using the disable_email_obfuscation field.
+- [My PHP app is timing out and throwing 5xx errors](https://docs.digitalocean.com/support/my-php-app-is-timing-out-and-throwing-5xx-errors/index.html.md): Increase your app's maximum execution time in its .user.ini file to give it more time to complete requests.
+- [Why is my domain pointing to my old static site app?](https://docs.digitalocean.com/support/why-is-my-domain-pointing-to-my-old-static-site-app/index.html.md): Remove the domain from the old app before deleting the old app, or wait 24 hours for the DNS to update.
+- [Why am I receiving a "user does not exist" error when building my Docker app on App Platform?](https://docs.digitalocean.com/support/why-am-i-receiving-a-user-does-not-exist-error-when-building-my-docker-app-on-app-platform/index.html.md): In your Dockerfile, the `USER` instruction needs to be after the `FROM` and `WORKDIR` instructions.
+- [Why am I receiving an "invalid dockerfile_path" error when building my Docker app on App Platform?](https://docs.digitalocean.com/support/why-am-i-receiving-an-invalid-dockerfile_path-error-when-building-my-docker-app-on-app-platform/index.html.md): Ensure your Dockerfile's path is correctly defined using the `dockerfile_path` parameter in your app spec file.
+- [Why are there multiple 408 errors in App Platform's runtime logs?](https://docs.digitalocean.com/support/why-are-there-multiple-408-errors-in-app-platforms-runtime-logs/index.html.md): Multiple 408 errors are often caused by your app sending health checks with very short timeouts to App Platform. They typically don’t affect the functionality of the app. Some apps, especially PHP apps, send health checks that time out before App Platform …
+- [Why is my App Platform build or deployment failing with an out of memory error?](https://docs.digitalocean.com/support/why-is-my-app-platform-build-or-deployment-failing-with-an-out-of-memory-error/index.html.md): App Platform builds have a fixed amount of memory available, so try optimizing your builds to stay within the 8 GB limit. You can increase the amount of memory in App Platform deployments by upgrading to a different plan.
+- [How do I back up my dev database on App Platform?](https://docs.digitalocean.com/support/how-do-i-back-up-my-dev-database-on-app-platform/index.html.md): Dev Databases have no direct backup feature but you can use a cron job to back up your data to another database.
+- [Why am I receiving “1001 DNS Resolution Error” when accessing my app's subdomain?](https://docs.digitalocean.com/support/why-am-i-receiving-1001-dns-resolution-error-when-accessing-my-apps-subdomain/index.html.md): You need to explicitly add the subdomain in your app's settings.
+- [Can I stop, pause, or disable my app on App Platform?](https://docs.digitalocean.com/support/can-i-stop-pause-or-disable-my-app-on-app-platform/index.html.md): You cannot pause, stop, or disable an app. You can delete the app and re-create it when needed.
+- [Why are my App Platform environment variables not updating?](https://docs.digitalocean.com/support/why-are-my-app-platform-environment-variables-not-updating/index.html.md): Component-level variables override app-level variables, so you may have defined environment variables at both levels.
+- [Why does my app fail to build while trying to connect to a DigitalOcean Managed Database?](https://docs.digitalocean.com/support/why-does-my-app-fail-to-build-while-trying-to-connect-to-a-digitalocean-managed-database/index.html.md): App Platform does not support connecting to DigitalOcean Managed Databases during the build process if the database has trusted sources enabled.
+- [How do I back up my app on App Platform?](https://docs.digitalocean.com/support/how-do-i-back-up-my-app-on-app-platform/index.html.md): App Platform does not support backups, but you can use DigitalOcean Managed Databases to back up your data.
+- [What region is my app's dev database located in and can I change it?](https://docs.digitalocean.com/support/what-region-is-my-apps-dev-database-located-in-and-can-i-change-it/index.html.md): Dev databases are located in the same region as your app and cannot be migrated to another region.
+- [Why are large files failing to upload to my app on App Platform?](https://docs.digitalocean.com/support/why-are-large-files-failing-to-upload-to-my-app-on-app-platform/index.html.md): Your upload may be exceeding your app's allotted file storage space or it could be timing out.
+- [Why does my app have a US-based IP address when I created it in a different region?](https://docs.digitalocean.com/support/why-does-my-app-have-a-us-based-ip-address-when-i-created-it-in-a-different-region/index.html.md): You see the CDN load balancer's IP address. Use `dig` to see the dynamic IP address of the app.
+- [Why does my app keep restarting on App Platform?](https://docs.digitalocean.com/support/why-does-my-app-keep-restarting-on-app-platform/index.html.md): Application crashes, high memory consumption, and high disk usage are usually responsible for apps restarting.
+- [How do I add an A record to my app on App Platform?](https://docs.digitalocean.com/support/how-do-i-add-an-a-record-to-my-app-on-app-platform/index.html.md): App Platform provides two static ingress IPs you can use to map A records to your app.
+- [Why can't I access my environment variables at build time when building from a Dockerfile on App Platform?](https://docs.digitalocean.com/support/why-cant-i-access-my-environment-variables-at-build-time-when-building-from-a-dockerfile-on-app-platform/index.html.md): Environment variables are only available as build-args for Dockerfile builds in App Platform.
+- [How do I change my app's GitHub repository on App Platform?](https://docs.digitalocean.com/support/how-do-i-change-my-apps-github-repository-on-app-platform/index.html.md): You can change an app's source repository by updating the app's spec.
+- [Why am I receiving a missing module error when building my Node.js app on App Platform ?](https://docs.digitalocean.com/support/why-am-i-receiving-a-missing-module-error-when-building-my-node.js-app-on-app-platform/index.html.md): Ensure the missing module is listed in the `dependencies` section of the `package.json` file.
+- [Can I inject certificates or other files into my app at build time?](https://docs.digitalocean.com/support/can-i-inject-certificates-or-other-files-into-my-app-at-build-time/index.html.md): App Platform does not currently support injecting values as files on disk. Use environment variables to create files at run time.
+- [My app failed to build and I received an exit code](https://docs.digitalocean.com/support/my-app-failed-to-build-and-i-received-an-exit-code/index.html.md): Review your app's build logs to diagnose which process failed during building.
+- [Why are my database bind variables missing from my app?](https://docs.digitalocean.com/support/why-are-my-database-bind-variables-missing-from-my-app/index.html.md): Database bind variables are only available during an app's deployment and run times.
+- [My app deployment failed because of a health check](https://docs.digitalocean.com/support/my-app-deployment-failed-because-of-a-health-check/index.html.md): Your app is likely unavailable on the port App Platform uses to perform health checks. Customize the health check or update the ports in your app.
+- [How to Troubleshoot Apps in App Platform](https://docs.digitalocean.com/support/how-to-troubleshoot-apps-in-app-platform/index.html.md): Review some common troubleshooting techniques for App Platform.
+
+## App Platform Migration Guides
+
+LLM-ready instructions for migrating apps to App Platform.
+
+- [Migration guide from Vercel to App Platform](https://github.com/digitalocean-labs/mcp-digitalocean/blob/main/pkg/registry/apps/docs/vercel-migration-guide.md)
+

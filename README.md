@@ -9,6 +9,10 @@
 </p>
 
 <p align="center">
+  <a href="https://vibedeploy-7tgzk.ondigitalocean.app"><img src="https://img.shields.io/badge/LIVE%20DEMO-vibedeploy--7tgzk.ondigitalocean.app-00C853?style=for-the-badge&logo=digitalocean&logoColor=white" alt="Live Demo"/></a>
+</p>
+
+<p align="center">
   <a href="https://github.com/Two-Weeks-Team/vibeDeploy/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg?style=flat-square" alt="License: MIT"/></a>
   <a href="https://github.com/Two-Weeks-Team/vibeDeploy/issues"><img src="https://img.shields.io/github/issues/Two-Weeks-Team/vibeDeploy?style=flat-square&color=orange" alt="Issues"/></a>
   <a href="https://github.com/Two-Weeks-Team/vibeDeploy/pulls"><img src="https://img.shields.io/github/issues-pr/Two-Weeks-Team/vibeDeploy?style=flat-square&color=blue" alt="PRs"/></a>
@@ -198,7 +202,7 @@ Each agent generates **ideas, opportunities, wild cards, and action items** from
 | Agent Backend | Python 3.12 + Gradient ADK + LangGraph | Gradient ADK |
 | Database | PostgreSQL 16 | Managed PostgreSQL |
 | Storage | S3-compatible object storage | Spaces |
-| AI Models | 8 models via Serverless Inference | Gradient AI Platform |
+| AI Models | 4 open-source model families via Serverless Inference | Gradient AI Platform |
 | Knowledge Base | RAG over DO docs + framework patterns | Gradient KB |
 
 ### DigitalOcean Gradient AI Features Used (8)
@@ -216,23 +220,23 @@ Each agent generates **ideas, opportunities, wild cards, and action items** from
 
 ### Model Assignment
 
-| Role | Model | Vendor | Cost (per 1M tokens) |
-|------|-------|--------|---------------------|
-| Council (5 agents) | `anthropic-claude-4.6-sonnet` | Anthropic | $3.00 / $15.00 |
-| Strategist | `openai-gpt-5.2` | OpenAI | $1.75 / $14.00 |
-| Cross-Examination | `openai-gpt-5.2` | OpenAI | $1.75 / $14.00 |
-| Doc Generation | `anthropic-claude-4.6-sonnet` | Anthropic | $3.00 / $15.00 |
-| Code Generation | `anthropic-claude-opus-4.6` | Anthropic | $5.00 / $25.00 |
-| CI Repair | `anthropic-claude-opus-4.6` | Anthropic | $5.00 / $25.00 |
-| Input Processing | `anthropic-claude-4.6-sonnet` | Anthropic | $3.00 / $15.00 |
-| Decision Gate | `anthropic-claude-4.6-sonnet` | Anthropic | $3.00 / $15.00 |
-| Brainstorm Agents | `anthropic-claude-4.6-sonnet` | Anthropic | $3.00 / $15.00 |
-| Brainstorm Synthesis | `openai-gpt-5.2` | OpenAI | $1.75 / $14.00 |
-| Web Search | `openai-gpt-5-mini` | OpenAI | $0.25 / $2.00 |
-| Image Generation | `openai-gpt-image-1` | OpenAI | $5.00 / $40.00 |
+| Role | Model | Type | Cost (per 1M tokens) |
+|------|-------|------|---------------------|
+| Council (5 agents) | `openai-gpt-oss-120b` | Open-Source (120B) | $0.10 / $0.70 |
+| Strategist | `deepseek-r1-distill-llama-70b` | Open-Source (70B) | $0.99 / $0.99 |
+| Cross-Examination | `deepseek-r1-distill-llama-70b` | Open-Source (70B) | $0.99 / $0.99 |
+| Code Generation | `openai-gpt-oss-120b` | Open-Source (120B) | $0.10 / $0.70 |
+| CI Repair | `openai-gpt-oss-120b` | Open-Source (120B) | $0.10 / $0.70 |
+| Doc Generation | `alibaba-qwen3-32b` | Open-Source (32B) | $0.25 / $0.55 |
+| Input Processing | `openai-gpt-oss-120b` | Open-Source (120B) | $0.10 / $0.70 |
+| Decision Gate | `deepseek-r1-distill-llama-70b` | Open-Source (70B) | $0.99 / $0.99 |
+| Brainstorm Agents | `openai-gpt-oss-120b` | Open-Source (120B) | $0.10 / $0.70 |
+| Brainstorm Synthesis | `deepseek-r1-distill-llama-70b` | Open-Source (70B) | $0.99 / $0.99 |
+| Web Search | `mistral-nemo-instruct-2407` | Open-Source (12B) | $0.30 / $0.30 |
+| Image Generation | `openai-gpt-image-1` | Commercial | $5.00 / $40.00 |
 
-**Multi-vendor AI: 6 Anthropic + 6 OpenAI models via DO Serverless Inference**
-**Cost per full deployment: ~$0.85** | $200 credits = ~235 deployments
+**Multi-model open-source AI: 4 model families via DO Serverless Inference**
+**Cost per full deployment: ~$0.12** | $200 credits = ~1,600+ deployments
 
 ---
 
@@ -271,22 +275,40 @@ Open `http://localhost:3000` and enter your idea.
 
 ## Deployment
 
-### Agent → Gradient ADK
+**Live at: [https://vibedeploy-7tgzk.ondigitalocean.app](https://vibedeploy-7tgzk.ondigitalocean.app)**
 
-```bash
-cd agent/
-gradient secret set DIGITALOCEAN_INFERENCE_KEY=<key>
-gradient secret set GITHUB_TOKEN=<token>
-gradient secret set DIGITALOCEAN_API_TOKEN=<token>
-gradient agent deploy
-# → https://agents.do-ai.run/v1/{workspace}/vibedeploy-agent/run
-```
+### Full Stack → App Platform
 
-### Frontend → App Platform
+The FastAPI backend and Next.js frontend are both deployed via DigitalOcean App Platform:
 
 ```bash
 doctl apps create --spec .do/app.yaml
 # Or push to main → auto-deploy (deploy_on_push: true)
+# → https://vibedeploy-7tgzk.ondigitalocean.app
+```
+
+### Gradient AI Agent (API)
+
+```bash
+# Create agent via doctl (attach Knowledge Base for RAG)
+doctl gradient agent create \
+  --name "vibedeploy-agent" \
+  --project-id "<project-id>" \
+  --model-id "<model-uuid>" \
+  --region "tor1" \
+  --instruction "Your agent instruction" \
+  --knowledge-base-id "<kb-uuid>"
+```
+
+### Knowledge Base (RAG)
+
+```bash
+doctl gradient knowledge-base create \
+  --name vibedeploy-docs \
+  --region tor1 \
+  --project-id "<project-id>" \
+  --embedding-model-uuid "<embedding-model-uuid>" \
+  --data-sources '[{"web_crawler_data_source":{"base_url":"https://docs.digitalocean.com/products/app-platform/","crawling_option":"UNKNOWN","embed_media":false}}]'
 ```
 
 ---
