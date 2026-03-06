@@ -1,7 +1,93 @@
-name: vibedeploy-web
+name: vibedeploy
 region: nyc
+
+alerts:
+  - rule: DEPLOYMENT_FAILED
+  - rule: DOMAIN_FAILED
+
+ingress:
+  rules:
+    - component:
+        name: api
+      match:
+        path:
+          prefix: /api
+    - component:
+        name: api
+      match:
+        path:
+          prefix: /run
+    - component:
+        name: api
+      match:
+        path:
+          prefix: /brainstorm
+    - component:
+        name: api
+      match:
+        path:
+          prefix: /resume
+    - component:
+        name: api
+      match:
+        path:
+          prefix: /result
+    - component:
+        name: api
+      match:
+        path:
+          prefix: /health
+    - component:
+        name: api
+      match:
+        path:
+          prefix: /dashboard
+    - component:
+        name: web
+      match:
+        path:
+          prefix: /
+
+services:
+  - name: api
+    environment_slug: python
+    github:
+      repo: Two-Weeks-Team/vibeDeploy
+      branch: main
+      deploy_on_push: true
+    source_dir: agent
+    http_port: 8080
+    instance_count: 1
+    instance_size_slug: professional-xs
+    build_command: pip install -r requirements.txt
+    run_command: gunicorn -w 2 -k uvicorn.workers.UvicornWorker server:app --bind 0.0.0.0:8080 --timeout 300
+    envs:
+      - key: DATABASE_URL
+        scope: RUN_TIME
+        type: SECRET
+        value: ENC[REPLACE_WITH_DB_URL]
+      - key: DIGITALOCEAN_INFERENCE_KEY
+        scope: RUN_TIME
+        type: SECRET
+        value: REPLACE_WITH_MODEL_ACCESS_KEY
+      - key: DIGITALOCEAN_API_TOKEN
+        scope: RUN_TIME
+        type: SECRET
+        value: REPLACE_WITH_API_TOKEN
+      - key: GITHUB_TOKEN
+        scope: RUN_TIME
+        type: SECRET
+        value: REPLACE_WITH_GITHUB_TOKEN
+      - key: GITHUB_ORG
+        scope: RUN_TIME
+        value: Two-Weeks-Team
+      - key: DO_KNOWLEDGE_BASE_ID
+        scope: RUN_TIME
+        value: REPLACE_WITH_KB_ID
+
 static_sites:
   - name: web
+    environment_slug: node-js
     github:
       repo: Two-Weeks-Team/vibeDeploy
       branch: main
@@ -9,8 +95,8 @@ static_sites:
     source_dir: web
     build_command: npm install && npm run build
     output_dir: .next
-    environment_slug: node-js
+    catchall_document: index.html
     envs:
       - key: NEXT_PUBLIC_AGENT_URL
         scope: BUILD_TIME
-        value: "${AGENT_URL}"
+        value: ${APP_URL}
