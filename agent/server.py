@@ -649,16 +649,19 @@ async def put_test_result(meeting_id: str, body: dict):
 
 
 @app.get("/health")
+@app.get("/")
 async def health():
-    return {"status": "ok", "provider": "local-fastapi"}
+    return {"status": "ok", "provider": "do-app-platform"}
 
 
 @app.get("/api/cost-estimate")
+@app.get("/cost-estimate")
 async def cost_estimate():
     return estimate_pipeline_cost()
 
 
 @app.get("/api/models")
+@app.get("/models")
 async def models():
     return {
         "models": MODEL_CONFIG,
@@ -670,27 +673,32 @@ async def models():
 
 
 @app.get("/dashboard/stats")
+@app.get("/stats")
 async def dashboard_stats():
     stats = await _store.get_stats()
     return stats
 
 
 @app.get("/dashboard/results")
+@app.get("/results")
 async def dashboard_results():
     return await _store.list_meetings(limit=50)
 
 
 @app.get("/dashboard/brainstorms")
+@app.get("/brainstorms")
 async def dashboard_brainstorms():
     return await _store.list_brainstorms(limit=50)
 
 
 @app.get("/dashboard/active")
+@app.get("/active")
 async def dashboard_active():
     return list(_active_pipelines.values())
 
 
 @app.get("/dashboard/events")
+@app.get("/events")
 async def dashboard_events():
     queue: asyncio.Queue = asyncio.Queue(maxsize=256)
     _dashboard_queues.append(queue)
