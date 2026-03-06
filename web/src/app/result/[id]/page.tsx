@@ -212,6 +212,7 @@ export default function ResultPage() {
               status={result.deployment?.status}
               ciStatus={result.deployment?.ciStatus}
               ciUrl={result.deployment?.ciUrl}
+              ciRepairAttempts={result.deployment?.ciRepairAttempts}
               localUrl={result.deployment?.localUrl}
               localBackendUrl={result.deployment?.localBackendUrl}
               localFrontendUrl={result.deployment?.localFrontendUrl}

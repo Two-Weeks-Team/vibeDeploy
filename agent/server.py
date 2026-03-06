@@ -194,6 +194,8 @@ async def _store_result(thread_id: str, state: dict):
             deployment["ciStatus"] = deploy["ci_status"]
         if deploy.get("ci_url"):
             deployment["ciUrl"] = deploy["ci_url"]
+        if deploy.get("ci_repair_attempts"):
+            deployment["ciRepairAttempts"] = deploy["ci_repair_attempts"]
         if deploy.get("local_url"):
             deployment["localUrl"] = deploy["local_url"]
         if deploy.get("local_backend_url"):

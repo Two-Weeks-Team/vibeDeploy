@@ -9,7 +9,7 @@ from urllib import error, request
 
 from ..state import VibeDeployState
 from ..tools.digitalocean import build_app_spec, deploy_to_digitalocean, wait_for_deployment
-from ..tools.github import create_github_repo, push_files, wait_for_ci
+from ..tools.github import create_github_repo, get_ci_failure_logs, push_files, wait_for_ci
 
 
 async def deployer(state: VibeDeployState) -> dict:
@@ -72,14 +72,22 @@ async def deployer(state: VibeDeployState) -> dict:
         )
 
     ci_result = {"status": "skipped"}
+    repair_attempts = 0
     if github_full_name and commit_sha:
-        ci_result = await wait_for_ci(github_full_name, commit_sha, timeout=120)
+        ci_result, all_files, repair_attempts = await _ci_repair_loop(
+            github_full_name, commit_sha, all_files, max_retries=3
+        )
+
+    ci_meta = {
+        "ci_status": ci_result.get("status", "skipped"),
+        "ci_url": ci_result.get("url", ""),
+        "ci_repair_attempts": repair_attempts,
+    }
 
     do_token = os.getenv("DIGITALOCEAN_API_TOKEN")
     if not do_token:
         result = await _local_fallback_deploy(app_name, all_files, github_repo_url, "do_token_missing")
-        result["deploy_result"]["ci_status"] = ci_result.get("status", "skipped")
-        result["deploy_result"]["ci_url"] = ci_result.get("url", "")
+        result["deploy_result"].update(ci_meta)
         return result
 
     app_spec = build_app_spec(app_name, github_clone_url)
@@ -93,8 +101,7 @@ async def deployer(state: VibeDeployState) -> dict:
             f"do_deploy_failed: {deploy_result.get('error', 'DigitalOcean deployment failed')}",
             app_id=deploy_result.get("app_id", ""),
         )
-        result["deploy_result"]["ci_status"] = ci_result.get("status", "skipped")
-        result["deploy_result"]["ci_url"] = ci_result.get("url", "")
+        result["deploy_result"].update(ci_meta)
         return result
 
     app_id = deploy_result.get("app_id", "")
@@ -107,11 +114,114 @@ async def deployer(state: VibeDeployState) -> dict:
             "live_url": live_url,
             "github_repo": github_repo_url,
             "status": status,
-            "ci_status": ci_result.get("status", "skipped"),
-            "ci_url": ci_result.get("url", ""),
+            **ci_meta,
         },
         "phase": "deployed",
     }
+
+
+_CI_REPAIR_PROMPT = """You are a CI repair engineer. Fix the failing code so CI passes.
+
+Rules:
+- Only fix files that caused the CI failure. Do NOT rewrite working files.
+- For Python: fix imports, dependency names in requirements.txt, syntax errors.
+- For Node/TypeScript: fix package.json deps, type errors, build errors.
+- Return ONLY the corrected files as JSON: { "files": { "path": "content" } }
+- If a file doesn't need changes, do NOT include it.
+- Keep all existing functionality — minimal fixes only.
+"""
+
+
+async def _ci_repair_loop(
+    full_name: str,
+    commit_sha: str,
+    files: dict[str, str],
+    max_retries: int = 3,
+) -> tuple[dict, dict[str, str], int]:
+    for attempt in range(1, max_retries + 1):
+        ci_result = await wait_for_ci(full_name, commit_sha, timeout=180)
+
+        if ci_result.get("status") == "passed":
+            return ci_result, files, attempt - 1
+
+        if ci_result.get("status") in ("timeout", "skipped"):
+            return ci_result, files, attempt - 1
+
+        error_logs = await get_ci_failure_logs(full_name, commit_sha)
+        if not error_logs:
+            return ci_result, files, attempt
+
+        fixed_files = await _repair_code_from_errors(files, error_logs)
+        if fixed_files == files:
+            return ci_result, files, attempt
+
+        files = fixed_files
+        push_result = await push_files(
+            {"full_name": full_name},
+            files,
+            commit_message=f"fix: CI repair attempt {attempt}",
+        )
+        commit_sha = push_result.get("commit_sha", "")
+        if not commit_sha:
+            return ci_result, files, attempt
+
+    final_ci = await wait_for_ci(full_name, commit_sha, timeout=180)
+    return final_ci, files, max_retries
+
+
+async def _repair_code_from_errors(files: dict[str, str], error_logs: str) -> dict[str, str]:
+    from ..llm import content_to_str, get_llm
+
+    llm = get_llm(model="openai-gpt-5.3-codex", temperature=0.1, max_tokens=8000)
+
+    file_listing = "\n\n".join(
+        f"=== {path} ===\n{content}" for path, content in sorted(files.items()) if isinstance(content, str)
+    )
+
+    try:
+        response = await llm.ainvoke(
+            [
+                {"role": "system", "content": _CI_REPAIR_PROMPT},
+                {
+                    "role": "user",
+                    "content": f"CI ERROR LOG:\n{error_logs[:4000]}\n\nCURRENT FILES:\n{file_listing}",
+                },
+            ]
+        )
+    except Exception:
+        return files
+
+    raw = content_to_str(response.content).strip()
+    parsed = _parse_repair_json(raw)
+    if not parsed:
+        return files
+
+    result = dict(files)
+    for path, content in parsed.items():
+        if isinstance(path, str) and isinstance(content, str):
+            result[path] = content
+    return result
+
+
+def _parse_repair_json(raw: str) -> dict[str, str] | None:
+    if raw.startswith("```"):
+        raw = re.sub(r"^```(?:json)?\n?", "", raw)
+        raw = re.sub(r"\n?```$", "", raw)
+
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        match = re.search(r"\{[\s\S]*\}", raw)
+        if not match:
+            return None
+        try:
+            data = json.loads(match.group())
+        except json.JSONDecodeError:
+            return None
+
+    if isinstance(data, dict) and "files" in data:
+        return data["files"] if isinstance(data["files"], dict) else None
+    return data if isinstance(data, dict) else None
 
 
 async def _local_fallback_deploy(

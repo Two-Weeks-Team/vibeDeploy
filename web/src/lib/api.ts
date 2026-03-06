@@ -65,6 +65,7 @@ export type MeetingResult = {
     status?: string;
     ciStatus?: string;
     ciUrl?: string;
+    ciRepairAttempts?: number;
     localUrl?: string;
     localBackendUrl?: string;
     localFrontendUrl?: string;

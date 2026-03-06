@@ -16,6 +16,7 @@ interface DeployStatusProps {
   status?: string;
   ciStatus?: string;
   ciUrl?: string;
+  ciRepairAttempts?: number;
   localUrl?: string;
   localBackendUrl?: string;
   localFrontendUrl?: string;
@@ -37,6 +38,7 @@ export function DeployStatus({
   status,
   ciStatus,
   ciUrl,
+  ciRepairAttempts,
   localUrl,
   localBackendUrl,
   localFrontendUrl,
@@ -44,7 +46,8 @@ export function DeployStatus({
   const isGithubOnly = status === "github_only";
   const isLocalRunning = status === "local_running";
 
-  const ciLabel = ciStatus === "passed" ? "CI passed" : ciStatus === "failed" ? "CI failed" : ciStatus === "timeout" ? "CI timeout" : "CI checks";
+  const repairSuffix = ciRepairAttempts ? ` (${ciRepairAttempts} repair${ciRepairAttempts > 1 ? "s" : ""})` : "";
+  const ciLabel = ciStatus === "passed" ? `CI passed${repairSuffix}` : ciStatus === "failed" ? `CI failed${repairSuffix}` : ciStatus === "timeout" ? "CI timeout" : "CI checks";
 
   const effectiveSteps = isGithubOnly || isLocalRunning
     ? [

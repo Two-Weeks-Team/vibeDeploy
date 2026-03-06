@@ -49,6 +49,7 @@ class DeployResult(TypedDict):
     status: str
     ci_status: NotRequired[str]  # "pending", "running", "passed", "failed", "timeout"
     ci_url: NotRequired[str]  # Link to GitHub Actions run
+    ci_repair_attempts: NotRequired[int]
     local_reason: NotRequired[str]
     local_url: NotRequired[str]
     local_backend_url: NotRequired[str]

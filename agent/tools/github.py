@@ -65,6 +65,71 @@ async def wait_for_ci(full_name: str, commit_sha: str, timeout: int = 120) -> di
     return {"status": "timeout", "reason": f"CI not complete within {timeout}s"}
 
 
+def _github_api_get(path: str, token: str) -> dict | list | None:
+    req = request.Request(
+        url=f"https://api.github.com{path}",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        },
+    )
+    try:
+        with request.urlopen(req, timeout=15) as resp:
+            return json.loads(resp.read().decode())
+    except (error.HTTPError, error.URLError, json.JSONDecodeError):
+        return None
+
+
+def _get_job_log(full_name: str, job_id: int, token: str) -> str:
+    req = request.Request(
+        url=f"https://api.github.com/repos/{full_name}/actions/jobs/{job_id}/logs",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        },
+    )
+    try:
+        with request.urlopen(req, timeout=20) as resp:
+            raw = resp.read().decode("utf-8", errors="replace")
+            return raw[-3000:]
+    except (error.HTTPError, error.URLError):
+        return ""
+
+
+async def get_ci_failure_logs(full_name: str, commit_sha: str) -> str:
+    token = os.getenv("GITHUB_TOKEN")
+    if not token:
+        return ""
+
+    runs = _github_api_get(f"/repos/{full_name}/actions/runs?head_sha={commit_sha}", token)
+    if not runs or not isinstance(runs, dict) or not runs.get("workflow_runs"):
+        return ""
+
+    run_id = runs["workflow_runs"][0]["id"]
+
+    jobs_data = _github_api_get(f"/repos/{full_name}/actions/runs/{run_id}/jobs", token)
+    if not jobs_data or not isinstance(jobs_data, dict):
+        return ""
+
+    logs_parts: list[str] = []
+    for job in jobs_data.get("jobs", []):
+        if job.get("conclusion") != "failure":
+            continue
+
+        job_name = job["name"]
+        failed_steps = [s["name"] for s in job.get("steps", []) if s.get("conclusion") == "failure"]
+        job_log = _get_job_log(full_name, job["id"], token)
+
+        logs_parts.append(f"=== Job '{job_name}' FAILED ===")
+        logs_parts.append(f"Failed steps: {', '.join(failed_steps)}")
+        if job_log:
+            logs_parts.append(job_log)
+
+    return "\n".join(logs_parts)
+
+
 async def create_github_repo(
     name: str,
     files: dict[str, str],
