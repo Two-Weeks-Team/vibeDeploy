@@ -55,12 +55,12 @@ services:
       repo: Two-Weeks-Team/vibeDeploy
       branch: main
       deploy_on_push: true
-    source_dir: agent
+    source_dir: /
     http_port: 8080
     instance_count: 1
     instance_size_slug: professional-xs
-    build_command: pip install -r requirements.txt
-    run_command: gunicorn -w 2 -k uvicorn.workers.UvicornWorker server:app --bind 0.0.0.0:8080 --timeout 300
+    build_command: pip install -r agent/requirements.txt
+    run_command: gunicorn -w 2 -k uvicorn.workers.UvicornWorker agent.server:app --bind 0.0.0.0:8080 --timeout 300
     envs:
       - key: DATABASE_URL
         scope: RUN_TIME
