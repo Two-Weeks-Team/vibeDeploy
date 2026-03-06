@@ -1,10 +1,21 @@
+import sys
 import traceback
+from pathlib import Path
 
-from gradient_adk import RequestContext, entrypoint
+_AGENT_DIR = str(Path(__file__).resolve().parent)
+if _AGENT_DIR not in sys.path:
+    sys.path.insert(0, _AGENT_DIR)
 
-from .graph import app
-from .graph_brainstorm import brainstorm_app
-from .sse import NODE_EVENTS, format_sse
+from gradient_adk import RequestContext, entrypoint  # noqa: E402
+
+try:
+    from .graph import app
+    from .graph_brainstorm import brainstorm_app
+    from .sse import NODE_EVENTS, format_sse
+except ImportError:
+    from graph import app  # type: ignore[import-untyped]  # noqa: E402
+    from graph_brainstorm import brainstorm_app  # type: ignore[import-untyped]  # noqa: E402
+    from sse import NODE_EVENTS, format_sse  # type: ignore[import-untyped]  # noqa: E402
 
 
 @entrypoint
