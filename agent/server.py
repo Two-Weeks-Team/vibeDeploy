@@ -27,7 +27,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from starlette.responses import StreamingResponse
 
+from .cost import estimate_pipeline_cost
 from .db.store import ResultStore
+from .llm import MODEL_CONFIG
 from .sse import NODE_EVENTS, format_sse
 
 _AGENT_DIR = Path(__file__).resolve().parent
@@ -212,6 +214,7 @@ async def _store_result(thread_id: str, state: dict):
         "code_files": code_files,
         "scoring": scoring,
         "deployment": deployment,
+        "cost_estimate": state.get("cost_estimate"),
     }
     await _store.save_meeting(thread_id, result)
 
@@ -312,12 +315,16 @@ async def _stream_pipeline(prompt: str, thread_id: str) -> AsyncGenerator[str, N
 
             final_state.update(output)
 
+        cost = estimate_pipeline_cost()
+        final_state["cost_estimate"] = cost
+
         yield _sse(
             "council.phase.complete",
             {
                 "type": "council.phase.complete",
                 "phase": "complete",
                 "message": "Pipeline complete",
+                "cost_estimate": cost,
             },
         )
 
@@ -336,11 +343,17 @@ async def _stream_pipeline(prompt: str, thread_id: str) -> AsyncGenerator[str, N
 
 @app.post("/run")
 async def run_pipeline(request: RunRequest):
+    from .guardrails import sanitize_input
+
+    sanitized, valid, error, pii_found = sanitize_input(request.prompt)
+    if not valid:
+        raise HTTPException(status_code=400, detail=error)
+
     config = request.config or {}
     thread_id = config.get("configurable", {}).get("thread_id", "default")
 
     return StreamingResponse(
-        _with_tracking(thread_id, "evaluation", request.prompt, _stream_pipeline(request.prompt, thread_id)),
+        _with_tracking(thread_id, "evaluation", sanitized, _stream_pipeline(sanitized, thread_id)),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -547,12 +560,16 @@ async def _stream_brainstorm(prompt: str, thread_id: str) -> AsyncGenerator[str,
                 else:
                     final_state[key] = val
 
+        cost = estimate_pipeline_cost()
+        final_state["cost_estimate"] = cost
+
         yield _sse(
             "brainstorm.phase.complete",
             {
                 "type": "brainstorm.phase.complete",
                 "phase": "complete",
                 "message": "Brainstorming complete",
+                "cost_estimate": cost,
             },
         )
 
@@ -582,17 +599,24 @@ async def _store_brainstorm_result(thread_id: str, state: dict):
         "synthesis": synthesis,
         "idea": state.get("idea", {}),
         "idea_summary": state.get("idea_summary", ""),
+        "cost_estimate": state.get("cost_estimate"),
     }
     await _store.save_brainstorm(thread_id, result)
 
 
 @app.post("/brainstorm")
 async def brainstorm_pipeline(request: RunRequest):
+    from .guardrails import sanitize_input
+
+    sanitized, valid, error, pii_found = sanitize_input(request.prompt)
+    if not valid:
+        raise HTTPException(status_code=400, detail=error)
+
     config = request.config or {}
     thread_id = config.get("configurable", {}).get("thread_id", "default")
 
     return StreamingResponse(
-        _with_tracking(thread_id, "brainstorm", request.prompt, _stream_brainstorm(request.prompt, thread_id)),
+        _with_tracking(thread_id, "brainstorm", sanitized, _stream_brainstorm(sanitized, thread_id)),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -627,6 +651,22 @@ async def put_test_result(meeting_id: str, body: dict):
 @app.get("/health")
 async def health():
     return {"status": "ok", "provider": "local-fastapi"}
+
+
+@app.get("/api/cost-estimate")
+async def cost_estimate():
+    return estimate_pipeline_cost()
+
+
+@app.get("/api/models")
+async def models():
+    return {
+        "models": MODEL_CONFIG,
+        "vendors": {
+            "anthropic": [k for k, v in MODEL_CONFIG.items() if v.startswith("anthropic-")],
+            "openai": [k for k, v in MODEL_CONFIG.items() if v.startswith("openai-")],
+        },
+    }
 
 
 @app.get("/dashboard/stats")

@@ -44,7 +44,10 @@ async def test_brainstorm_404_for_missing(app_client):
 async def test_brainstorm_error_emits_sse_error(app_client, mock_brainstorm_error_graph):
     resp = await app_client.post(
         "/brainstorm",
-        json={"prompt": "Will fail", "config": {"configurable": {"thread_id": "bs-error"}}},
+        json={
+            "prompt": "This brainstorm will fail with an error",
+            "config": {"configurable": {"thread_id": "bs-error"}},
+        },
     )
     events = parse_sse_events(resp.text)
     error_events = [e for e in events if e["event"] == "brainstorm.error"]

@@ -47,7 +47,7 @@ async def test_evaluate_404_for_missing_result(app_client):
 async def test_evaluate_nogo_pipeline(app_client, mock_nogo_graph):
     resp = await app_client.post(
         "/run",
-        json={"prompt": "Bad idea", "config": {"configurable": {"thread_id": "eval-nogo"}}},
+        json={"prompt": "Build something bad and unfeasible", "config": {"configurable": {"thread_id": "eval-nogo"}}},
     )
     events = parse_sse_events(resp.text)
     event_types = [e["event"] for e in events]
@@ -63,7 +63,10 @@ async def test_evaluate_nogo_pipeline(app_client, mock_nogo_graph):
 async def test_evaluate_error_emits_sse_error(app_client, mock_error_graph):
     resp = await app_client.post(
         "/run",
-        json={"prompt": "Will fail", "config": {"configurable": {"thread_id": "eval-error"}}},
+        json={
+            "prompt": "This evaluation will fail with an error",
+            "config": {"configurable": {"thread_id": "eval-error"}},
+        },
     )
     events = parse_sse_events(resp.text)
     error_events = [e for e in events if e["event"] == "council.error"]
