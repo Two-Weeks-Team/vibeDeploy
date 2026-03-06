@@ -4,19 +4,28 @@ import os
 
 DO_INFERENCE_BASE_URL = "https://inference.do-ai.run/v1"
 
+# Open-source models via DO Serverless Inference (no subscription tier restrictions)
+# Commercial models (Anthropic/OpenAI) temporarily unavailable — DO Support ticket pending.
+# When commercial access is restored, switch back to:
+#   council/brainstorm/input: anthropic-claude-4.6-sonnet
+#   strategist/cross_exam/brainstorm_synthesis/decision: openai-gpt-5.2
+#   code_gen/ci_repair: anthropic-claude-opus-4.6
+#   doc_gen: anthropic-claude-4.6-sonnet
+#   web_search: openai-gpt-5-mini
+#   image: openai-gpt-image-1
 MODEL_CONFIG = {
-    "council": "anthropic-claude-4.6-sonnet",
-    "strategist": "openai-gpt-5.2",
-    "cross_exam": "openai-gpt-5.2",
-    "code_gen": "anthropic-claude-opus-4.6",
-    "ci_repair": "anthropic-claude-opus-4.6",
-    "doc_gen": "anthropic-claude-4.6-sonnet",
+    "council": "openai-gpt-oss-120b",
+    "strategist": "deepseek-r1-distill-llama-70b",
+    "cross_exam": "deepseek-r1-distill-llama-70b",
+    "code_gen": "openai-gpt-oss-120b",
+    "ci_repair": "openai-gpt-oss-120b",
+    "doc_gen": "alibaba-qwen3-32b",
     "image": "openai-gpt-image-1",
-    "brainstorm": "anthropic-claude-4.6-sonnet",
-    "brainstorm_synthesis": "openai-gpt-5.2",
-    "input": "anthropic-claude-4.6-sonnet",
-    "decision": "anthropic-claude-4.6-sonnet",
-    "web_search": "openai-gpt-5-mini",
+    "brainstorm": "openai-gpt-oss-120b",
+    "brainstorm_synthesis": "deepseek-r1-distill-llama-70b",
+    "input": "openai-gpt-oss-120b",
+    "decision": "deepseek-r1-distill-llama-70b",
+    "web_search": "mistral-nemo-instruct-2407",
 }
 
 
@@ -37,6 +46,7 @@ def content_to_str(content) -> str:
 def get_llm(model: str, temperature: float = 0.5, max_tokens: int = 3000):
     """Route LLM calls through DO Inference when key is available, else direct OpenAI."""
     inference_key = os.getenv("DIGITALOCEAN_INFERENCE_KEY", "")
+    effective_max_tokens = max(256, max_tokens)
 
     if inference_key and inference_key not in ("test-key", ""):
         from langchain_openai import ChatOpenAI
@@ -46,7 +56,7 @@ def get_llm(model: str, temperature: float = 0.5, max_tokens: int = 3000):
             api_key=inference_key,
             base_url=DO_INFERENCE_BASE_URL,
             temperature=temperature,
-            max_tokens=max_tokens,
+            max_tokens=effective_max_tokens,
         )
 
     from langchain_openai import ChatOpenAI
@@ -54,5 +64,5 @@ def get_llm(model: str, temperature: float = 0.5, max_tokens: int = 3000):
     return ChatOpenAI(
         model=_strip_openai_prefix(model),
         temperature=temperature,
-        max_tokens=max_tokens,
+        max_tokens=effective_max_tokens,
     )

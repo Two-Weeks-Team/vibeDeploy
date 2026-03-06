@@ -82,16 +82,16 @@ class CostTracker:
 def estimate_pipeline_cost() -> dict:
     """Estimate cost for a full evaluation pipeline run based on typical token usage."""
     estimates = [
-        ("anthropic-claude-4.6-sonnet", 2000, 3000, "input_processor"),
-        ("anthropic-claude-4.6-sonnet", 2000, 4000, "architect"),
-        ("anthropic-claude-4.6-sonnet", 2000, 4000, "scout"),
-        ("anthropic-claude-4.6-sonnet", 2000, 4000, "guardian"),
-        ("anthropic-claude-4.6-sonnet", 2000, 4000, "catalyst"),
-        ("anthropic-claude-4.6-sonnet", 2000, 4000, "advocate"),
-        ("openai-gpt-5.2", 8000, 6000, "cross_examination"),
-        ("openai-gpt-5.2", 10000, 5000, "strategist_verdict"),
-        ("anthropic-claude-4.6-sonnet", 3000, 8000, "doc_generation"),
-        ("anthropic-claude-opus-4.6", 5000, 12000, "code_generation"),
+        ("openai-gpt-oss-120b", 2000, 3000, "input_processor"),
+        ("openai-gpt-oss-120b", 2000, 4000, "architect"),
+        ("openai-gpt-oss-120b", 2000, 4000, "scout"),
+        ("openai-gpt-oss-120b", 2000, 4000, "guardian"),
+        ("openai-gpt-oss-120b", 2000, 4000, "catalyst"),
+        ("openai-gpt-oss-120b", 2000, 4000, "advocate"),
+        ("deepseek-r1-distill-llama-70b", 8000, 6000, "cross_examination"),
+        ("deepseek-r1-distill-llama-70b", 10000, 5000, "strategist_verdict"),
+        ("alibaba-qwen3-32b", 3000, 8000, "doc_generation"),
+        ("openai-gpt-oss-120b", 5000, 12000, "code_generation"),
         ("openai-gpt-image-1", 500, 500, "image_generation"),
     ]
 
