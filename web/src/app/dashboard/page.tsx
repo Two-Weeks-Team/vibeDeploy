@@ -16,7 +16,7 @@ import { HistoryList } from "@/components/dashboard/history-list";
 import { LiveMonitor } from "@/components/dashboard/live-monitor";
 import { DeployedApps } from "@/components/dashboard/deployed-apps";
 import { PieChart, Pie, ResponsiveContainer, Tooltip } from "recharts";
-import type { VerdictType } from "@/types/dashboard";
+import type { VerdictType, MeetingResultFull, BrainstormResultFull } from "@/types/dashboard";
 
 const containerVariants = {
   hidden: {},
@@ -240,8 +240,8 @@ export default function DashboardPage() {
                                 ) : (
                                   <Badge className="bg-purple-500/10 text-purple-400 border-purple-500/20">Brainstorm</Badge>
                                 )}
-                                <span className="font-mono text-sm text-muted-foreground">
-                                  {item.data.thread_id.substring(0, 8)}
+                                <span className="text-sm text-foreground truncate max-w-[300px]">
+                                  {(item.type === "evaluation" ? (item.data as MeetingResultFull).idea_summary || (item.data as MeetingResultFull).input_prompt : (item.data as BrainstormResultFull).idea_summary) || item.data.thread_id}
                                 </span>
                               </div>
                               <div className="flex items-center gap-4">

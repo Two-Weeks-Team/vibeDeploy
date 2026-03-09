@@ -56,8 +56,8 @@ export function DeployedApps({ deployments }: { deployments: DeployedApp[] }) {
     >
       {deployments.map((app) => {
         const title =
-          app.idea_summary?.slice(0, 60) ||
-          app.input_prompt?.slice(0, 60) ||
+          app.idea_summary ||
+          app.input_prompt ||
           app.thread_id;
 
         return (
@@ -75,9 +75,8 @@ export function DeployedApps({ deployments }: { deployments: DeployedApp[] }) {
                     {app.score.toFixed(1)}
                   </div>
                 </div>
-                <CardTitle className="text-lg leading-tight line-clamp-2" title={title}>
+                <CardTitle className="text-base leading-tight line-clamp-3" title={title}>
                   {title}
-                  {(app.idea_summary?.length > 60 || app.input_prompt?.length > 60) && "..."}
                 </CardTitle>
               </CardHeader>
               <CardContent className="flex-1 flex flex-col justify-end gap-4">
