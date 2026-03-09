@@ -82,7 +82,7 @@ services:
     http_port: 3000
     instance_count: 1
     instance_size_slug: basic-xxs
-    build_command: npm install && npm run build
+    build_command: npm install && npm run build && cp -r .next/static .next/standalone/.next/static && cp -r public .next/standalone/public
     run_command: node .next/standalone/server.js
     envs:
       - key: NEXT_PUBLIC_AGENT_URL

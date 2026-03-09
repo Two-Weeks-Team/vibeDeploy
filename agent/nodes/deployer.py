@@ -667,11 +667,13 @@ def _build_repo_name(idea: dict) -> str:
 
 
 def _verify_live_url(live_url: str) -> dict:
-    result = {"root_ok": False, "health_ok": False, "root_bytes": 0}
+    base = live_url.rstrip("/")
+    result = {"root_ok": False, "health_ok": False, "root_bytes": 0, "endpoint_results": {}}
+
     for path, key in [("/", "root"), ("/health", "health")]:
         try:
             req = request.Request(
-                f"{live_url.rstrip('/')}{path}",
+                f"{base}{path}",
                 headers={"User-Agent": "vibeDeploy-verifier/1.0"},
             )
             with request.urlopen(req, timeout=15) as resp:
@@ -683,7 +685,65 @@ def _verify_live_url(live_url: str) -> dict:
                     result["health_ok"] = resp.status == 200
         except (error.HTTPError, error.URLError, OSError):
             pass
+
+    openapi_endpoints = _discover_endpoints_from_openapi(base)
+    for ep in openapi_endpoints:
+        path = ep["path"]
+        method = ep["method"]
+        status_code = _probe_endpoint(base, path, method)
+        passed = status_code is not None and status_code < 500
+        result["endpoint_results"][f"{method} {path}"] = {
+            "status": status_code,
+            "ok": passed,
+        }
+        if not passed:
+            logger.warning("[DEPLOYER] Endpoint probe failed: %s %s → %s", method, path, status_code)
+
     return result
+
+
+def _discover_endpoints_from_openapi(base_url: str) -> list[dict]:
+    try:
+        req = request.Request(
+            f"{base_url}/openapi.json",
+            headers={"User-Agent": "vibeDeploy-verifier/1.0"},
+        )
+        with request.urlopen(req, timeout=10) as resp:
+            spec = json.loads(resp.read())
+    except (error.HTTPError, error.URLError, OSError, json.JSONDecodeError):
+        return []
+
+    endpoints = []
+    for path, methods in spec.get("paths", {}).items():
+        if path in ("/health", "/", "/docs", "/redoc", "/openapi.json"):
+            continue
+        for method in methods:
+            if method.lower() in ("get", "post", "put", "patch", "delete"):
+                endpoints.append({"path": path, "method": method.upper()})
+    return endpoints
+
+
+def _probe_endpoint(base_url: str, path: str, method: str) -> int | None:
+    url = f"{base_url}{path}"
+    try:
+        if method == "GET":
+            req = request.Request(url, headers={"User-Agent": "vibeDeploy-verifier/1.0"})
+        else:
+            req = request.Request(
+                url,
+                data=b"{}",
+                method=method,
+                headers={
+                    "User-Agent": "vibeDeploy-verifier/1.0",
+                    "Content-Type": "application/json",
+                },
+            )
+        with request.urlopen(req, timeout=15) as resp:
+            return resp.status
+    except error.HTTPError as e:
+        return e.code
+    except (error.URLError, OSError):
+        return None
 
 
 def _inject_landing_page(main_py_content: str, idea: dict) -> str:

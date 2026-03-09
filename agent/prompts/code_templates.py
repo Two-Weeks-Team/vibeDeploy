@@ -74,6 +74,19 @@ CRITICAL RULES:
 - ai_service.py must call DO Serverless Inference at https://inference.do-ai.run/v1/chat/completions via httpx.
 - Use env var DIGITALOCEAN_INFERENCE_KEY for inference auth (Bearer token).
 - Default model: openai-gpt-oss-120b (env: DO_INFERENCE_MODEL).
+- ai_service.py CRITICAL REQUIREMENTS:
+  * TIMEOUT: httpx.AsyncClient(timeout=90.0) — the 120B model needs 60-90s. The default 5-30s WILL cause timeouts and 502 errors.
+  * MAX TOKENS: Always pass max_completion_tokens=512 (minimum 256) in every request payload.
+  * JSON EXTRACTION: LLMs wrap JSON in markdown code blocks. Include this helper and use it on every response:
+      import re
+      def _extract_json(text: str) -> str:
+          m = re.search(r"```(?:json)?\\s*\\n?([\\s\\S]*?)\\n?\\s*```", text, re.DOTALL)
+          if m: return m.group(1).strip()
+          m = re.search(r"(\\{.*\\}|\\[.*\\])", text, re.DOTALL)
+          if m: return m.group(1).strip()
+          return text.strip()
+  * FALLBACK: Wrap ALL inference calls in try/except. On ANY error (timeout, HTTP error, JSON parse failure), return a sensible fallback dict with a "note" key explaining the AI is temporarily unavailable. NEVER raise RuntimeError or let exceptions propagate to the route handler.
+  * STRUCTURE: Create one reusable async _call_inference(messages, max_tokens=512) method that handles the HTTP call, timeout, response parsing, JSON extraction, and error fallback in a single place. All AI endpoints must use this method.
 - Include at least 2 AI-powered business endpoints.
 - Keep backend runnable with: uvicorn main:app --host 0.0.0.0 --port 8080
 - Python 3.12 compatible.
