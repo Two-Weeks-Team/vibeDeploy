@@ -38,7 +38,6 @@ interface EdgeDef {
   target: string;
   label?: string;
   labelColor?: string;
-  particle?: boolean;
 }
 
 const evalNodes: NodeDef[] = [
@@ -57,11 +56,13 @@ const evalNodes: NodeDef[] = [
   { id: "verdict", label: "Vibe Score™", x: 50, y: 57, emoji: "🏛️", glow: true },
   { id: "decision", label: "Decision Gate", x: 50, y: 69, emoji: "🚦" },
   { id: "doc_gen", label: "Specs", x: 30, y: 80, emoji: "📄" },
-  { id: "code_gen", label: "Full Stack", x: 70, y: 80, emoji: "💻" },
-  { id: "github", label: "GitHub", x: 14, y: 92, emoji: "📦" },
-  { id: "ci", label: "CI/CD", x: 34, y: 92, emoji: "⚙️" },
-  { id: "do_deploy", label: "DO Deploy", x: 58, y: 92, emoji: "🚀" },
-  { id: "verified", label: "Live", x: 82, y: 92, emoji: "✅", glow: true },
+  { id: "code_gen", label: "Code Gen", x: 70, y: 80, emoji: "💻" },
+  { id: "git_push", label: "Git Push", x: 10, y: 92, emoji: "📦" },
+  { id: "ci_test", label: "CI Test", x: 26, y: 92, emoji: "⚙️" },
+  { id: "app_spec", label: "App Spec", x: 42, y: 92, emoji: "📋" },
+  { id: "do_build", label: "Build", x: 58, y: 92, emoji: "🏗️" },
+  { id: "do_deploy", label: "Deploy", x: 74, y: 92, emoji: "🚀" },
+  { id: "verified", label: "Live", x: 90, y: 92, emoji: "✅", glow: true },
   { id: "review", label: "Review", x: 50, y: 86 },
   { id: "feedback", label: "Feedback", x: 50, y: 86 },
 ];
@@ -69,7 +70,7 @@ const evalNodes: NodeDef[] = [
 const evalEdges: EdgeDef[] = [
   { source: "input", target: "architect" },
   { source: "input", target: "scout" },
-  { source: "input", target: "catalyst", particle: true },
+  { source: "input", target: "catalyst" },
   { source: "input", target: "guardian" },
   { source: "input", target: "advocate" },
   { source: "architect", target: "cross_exam" },
@@ -84,15 +85,17 @@ const evalEdges: EdgeDef[] = [
   { source: "cross_exam", target: "score_user" },
   { source: "score_tech", target: "verdict" },
   { source: "score_market", target: "verdict" },
-  { source: "score_innovation", target: "verdict", particle: true },
+  { source: "score_innovation", target: "verdict" },
   { source: "score_risk", target: "verdict" },
   { source: "score_user", target: "verdict" },
-  { source: "verdict", target: "decision", particle: true },
+  { source: "verdict", target: "decision" },
   { source: "decision", target: "doc_gen", label: "GO", labelColor: "rgba(16,185,129,0.9)" },
   { source: "doc_gen", target: "code_gen" },
-  { source: "code_gen", target: "github" },
-  { source: "github", target: "ci" },
-  { source: "ci", target: "do_deploy", particle: true },
+  { source: "code_gen", target: "git_push" },
+  { source: "git_push", target: "ci_test" },
+  { source: "ci_test", target: "app_spec" },
+  { source: "app_spec", target: "do_build" },
+  { source: "do_build", target: "do_deploy" },
   { source: "do_deploy", target: "verified" },
   { source: "decision", target: "review" },
   { source: "decision", target: "feedback" },
@@ -111,18 +114,28 @@ const brainstormNodes: NodeDef[] = [
 const brainstormEdges: EdgeDef[] = [
   { source: "input", target: "architect" },
   { source: "input", target: "scout" },
-  { source: "input", target: "catalyst", particle: true },
+  { source: "input", target: "catalyst" },
   { source: "input", target: "guardian" },
   { source: "input", target: "advocate" },
   { source: "architect", target: "synthesize" },
   { source: "scout", target: "synthesize" },
-  { source: "catalyst", target: "synthesize", particle: true },
+  { source: "catalyst", target: "synthesize" },
   { source: "guardian", target: "synthesize" },
   { source: "advocate", target: "synthesize" },
 ];
 
-const GO_NODES = new Set(["doc_gen", "code_gen", "github", "ci", "do_deploy", "verified"]);
+const GO_NODES = new Set(["doc_gen", "code_gen", "git_push", "ci_test", "app_spec", "do_build", "do_deploy", "verified"]);
 const BOTTOM_NODES = new Set([...GO_NODES, "review", "feedback"]);
+
+const EVAL_FLOW_PATH = [
+  "M 50 5", "C 50 11, 50 11, 50 18", "C 50 24, 50 24, 50 31",
+  "C 50 37, 50 37, 50 44", "C 50 50, 50 50, 50 57", "C 50 63, 50 63, 50 69",
+  "C 50 74, 30 74, 30 80", "L 70 80", "C 70 86, 10 86, 10 92", "L 90 92",
+].join(" ");
+
+const BRAINSTORM_FLOW_PATH = [
+  "M 50 10", "C 50 27, 50 27, 50 45", "C 50 65, 50 65, 50 85",
+].join(" ");
 
 function getVisibleNodeIds(
   pipeline: PipelineType,
@@ -197,6 +210,7 @@ const SVG_STYLES = `
 export function PipelineViz({ activeNodes = {}, pipeline = "evaluation", className }: PipelineVizProps) {
   const nodes = pipeline === "evaluation" ? evalNodes : brainstormNodes;
   const edges = pipeline === "evaluation" ? evalEdges : brainstormEdges;
+  const flowPath = pipeline === "evaluation" ? EVAL_FLOW_PATH : BRAINSTORM_FLOW_PATH;
 
   const getNodeStatus = (id: string): NodeStatus => activeNodes[id] || "idle";
   const visibleNodeIds = getVisibleNodeIds(pipeline, nodes, activeNodes);
@@ -286,6 +300,9 @@ export function PipelineViz({ activeNodes = {}, pipeline = "evaluation", classNa
           <filter id="edge-glow">
             <feGaussianBlur stdDeviation="2" />
           </filter>
+          <filter id="particle-glow">
+            <feGaussianBlur stdDeviation="1.5" />
+          </filter>
         </defs>
 
         {visibleEdges.map((edge, idx) => {
@@ -315,10 +332,6 @@ export function PipelineViz({ activeNodes = {}, pipeline = "evaluation", classNa
           const midY = (src.y + tgt.y) / 2;
           const d = `M ${src.x} ${src.y} C ${src.x} ${midY}, ${tgt.x} ${midY}, ${tgt.x} ${tgt.y}`;
 
-          const showParticle = edge.particle && (isOverview || srcStatus === "complete");
-          const particleDur = isOverview ? `${2.2 + idx * 0.3}s` : "1s";
-          const particleDelay = `${(idx * 0.4) % 2}s`;
-
           return (
             <g key={`${edge.source}-${edge.target}`}>
               {showGlow && (
@@ -333,11 +346,6 @@ export function PipelineViz({ activeNodes = {}, pipeline = "evaluation", classNa
                 vectorEffect="non-scaling-stroke"
                 className={cn(edgeClass, "transition-colors duration-300")}
               />
-              {showParticle && (
-                <circle r="1" fill={isOverview ? "rgba(99,166,255,0.7)" : stroke} opacity={0.9}>
-                  <animateMotion dur={particleDur} repeatCount="indefinite" begin={particleDelay} path={d} />
-                </circle>
-              )}
               {edge.label && (
                 <text
                   x={(src.x + tgt.x) / 2 - 4}
@@ -354,6 +362,13 @@ export function PipelineViz({ activeNodes = {}, pipeline = "evaluation", classNa
             </g>
           );
         })}
+
+        <circle r="1" fill="rgba(99,166,255,0.9)">
+          <animateMotion dur="10s" repeatCount="indefinite" path={flowPath} />
+        </circle>
+        <circle r="2.5" fill="rgba(59,130,246,0.25)" filter="url(#particle-glow)">
+          <animateMotion dur="10s" repeatCount="indefinite" path={flowPath} />
+        </circle>
       </svg>
 
       <motion.div

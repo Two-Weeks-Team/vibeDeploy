@@ -133,15 +133,18 @@ export function usePipelineMonitor() {
               }
 
               if (data.node === "code_generator" && data.type.includes(".node.complete")) {
-                updateNode("github", "active");
+                updateNode("git_push", "active");
               }
 
               if (data.node === "deployer") {
                 if (data.type.includes(".node.start")) {
-                  updateNode("github", "complete");
-                  updateNode("ci", "active");
+                  updateNode("git_push", "complete");
+                  updateNode("ci_test", "active");
+                  updateNode("app_spec", "active");
                 } else if (data.type.includes(".node.complete")) {
-                  updateNode("ci", "complete");
+                  updateNode("ci_test", "complete");
+                  updateNode("app_spec", "complete");
+                  updateNode("do_build", "complete");
                   updateNode("do_deploy", "complete");
                   updateNode("verified", "complete");
                 }
