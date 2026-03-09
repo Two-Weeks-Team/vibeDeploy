@@ -305,6 +305,31 @@ async def _stream_pipeline(prompt: str, thread_id: str) -> AsyncGenerator[str, N
                         "decision": scoring.get("decision", "NO_GO"),
                     },
                 )
+            elif name == "blueprint_generator":
+                bp = output.get("blueprint", {}) or {}
+                yield _sse(
+                    "blueprint.complete",
+                    {
+                        "type": "blueprint.complete",
+                        "frontend_files": len(bp.get("frontend_files", {})),
+                        "backend_files": len(bp.get("backend_files", {})),
+                        "app_name": bp.get("app_name", ""),
+                    },
+                )
+            elif name == "code_evaluator":
+                eval_res = output.get("code_eval_result", {}) or {}
+                yield _sse(
+                    "code_eval.result",
+                    {
+                        "type": "code_eval.result",
+                        "match_rate": eval_res.get("match_rate", 0),
+                        "completeness": eval_res.get("completeness", 0),
+                        "consistency": eval_res.get("consistency", 0),
+                        "runnability": eval_res.get("runnability", 0),
+                        "iteration": eval_res.get("iteration", 0),
+                        "passed": eval_res.get("passed", False),
+                    },
+                )
             elif name == "code_generator":
                 frontend = output.get("frontend_code", {}) or {}
                 backend = output.get("backend_code", {}) or {}

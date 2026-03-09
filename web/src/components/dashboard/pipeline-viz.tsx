@@ -58,14 +58,16 @@ const evalNodes: NodeDef[] = [
   { id: "decision", label: "Decision Gate", x: 50, y: 51, emoji: "🚦" },
   { id: "fix_storm", label: "Fix-Storm", x: 30, y: 59, emoji: "🔧" },
   { id: "scope_down", label: "Scope-Down", x: 70, y: 59, emoji: "📐" },
-  { id: "doc_gen", label: "Specs", x: 30, y: 68, emoji: "📄" },
-  { id: "code_gen", label: "Code Gen", x: 70, y: 68, emoji: "💻" },
-  { id: "git_push", label: "Git Push", x: 10, y: 80, emoji: "📦" },
-  { id: "ci_test", label: "CI Test", x: 26, y: 80, emoji: "⚙️" },
-  { id: "app_spec", label: "App Spec", x: 42, y: 80, emoji: "📋" },
-  { id: "do_build", label: "Build", x: 58, y: 80, emoji: "🏗️" },
-  { id: "do_deploy", label: "Deploy", x: 74, y: 80, emoji: "🚀" },
-  { id: "verified", label: "Live", x: 90, y: 80, emoji: "✅", glow: true },
+  { id: "doc_gen", label: "Specs", x: 20, y: 66, emoji: "📄" },
+  { id: "blueprint", label: "Blueprint", x: 50, y: 66, emoji: "🗺️" },
+  { id: "code_gen", label: "Code Gen", x: 80, y: 66, emoji: "💻" },
+  { id: "code_eval", label: "Eval", x: 50, y: 73, emoji: "✅" },
+  { id: "git_push", label: "Git Push", x: 10, y: 82, emoji: "📦" },
+  { id: "ci_test", label: "CI Test", x: 26, y: 82, emoji: "⚙️" },
+  { id: "app_spec", label: "App Spec", x: 42, y: 82, emoji: "📋" },
+  { id: "do_build", label: "Build", x: 58, y: 82, emoji: "🏗️" },
+  { id: "do_deploy", label: "Deploy", x: 74, y: 82, emoji: "🚀" },
+  { id: "verified", label: "Live", x: 90, y: 82, emoji: "✅", glow: true },
 ];
 
 const evalEdges: EdgeDef[] = [
@@ -96,8 +98,11 @@ const evalEdges: EdgeDef[] = [
   { source: "decision", target: "scope_down" },
   { source: "fix_storm", target: "architect" },
   { source: "scope_down", target: "doc_gen" },
-  { source: "doc_gen", target: "code_gen" },
-  { source: "code_gen", target: "git_push" },
+  { source: "doc_gen", target: "blueprint" },
+  { source: "blueprint", target: "code_gen" },
+  { source: "code_gen", target: "code_eval" },
+  { source: "code_eval", target: "git_push", label: "PASS", labelColor: "rgba(16,185,129,0.9)" },
+  { source: "code_eval", target: "code_gen" },
   { source: "git_push", target: "ci_test" },
   { source: "ci_test", target: "app_spec" },
   { source: "app_spec", target: "do_build" },
@@ -128,23 +133,23 @@ const brainstormEdges: EdgeDef[] = [
   { source: "advocate", target: "synthesize" },
 ];
 
-const GO_NODES = new Set(["doc_gen", "code_gen", "git_push", "ci_test", "app_spec", "do_build", "do_deploy", "verified"]);
+const GO_NODES = new Set(["doc_gen", "blueprint", "code_gen", "code_eval", "git_push", "ci_test", "app_spec", "do_build", "do_deploy", "verified"]);
 const CONDITIONAL_NODES = new Set(["fix_storm", "scope_down"]);
 const BOTTOM_NODES = new Set([...GO_NODES, ...CONDITIONAL_NODES]);
 
 const PARTICLE_DUR = "12s";
 const EASE = "0.25 0.1 0.25 1";
 
-const EVAL_KT = "0;0.05;0.10;0.15;0.25;0.33;0.40;0.50;0.55;0.62;0.68;0.74;0.80;0.85;0.90;0.95;1";
-const EVAL_CY = "2;8;16;16;26;34;34;43;51;68;68;80;80;80;80;80;80";
+const EVAL_KT = "0;0.04;0.08;0.13;0.21;0.28;0.34;0.42;0.48;0.53;0.58;0.63;0.68;0.74;0.79;0.84;0.88;0.92;0.96;1";
+const EVAL_CY = "2;8;16;16;26;34;34;43;51;66;66;66;73;82;82;82;82;82;82;82";
 const EVAL_CX: number[][] = [
-  [50,50,10,10,50,10,10,50,50,30,70,10,26,42,58,74,90],
-  [50,50,30,30,50,30,30,50,50,30,70,10,26,42,58,74,90],
-  [50,50,50,50,50,50,50,50,50,30,70,10,26,42,58,74,90],
-  [50,50,70,70,50,70,70,50,50,30,70,10,26,42,58,74,90],
-  [50,50,90,90,50,90,90,50,50,30,70,10,26,42,58,74,90],
+  [50,50,10,10,50,10,10,50,50,20,50,80,50,10,26,42,58,74,90,90],
+  [50,50,30,30,50,30,30,50,50,20,50,80,50,10,26,42,58,74,90,90],
+  [50,50,50,50,50,50,50,50,50,20,50,80,50,10,26,42,58,74,90,90],
+  [50,50,70,70,50,70,70,50,50,20,50,80,50,10,26,42,58,74,90,90],
+  [50,50,90,90,50,90,90,50,50,20,50,80,50,10,26,42,58,74,90,90],
 ];
-const EVAL_KS = Array(16).fill(EASE).join("; ");
+const EVAL_KS = Array(19).fill(EASE).join("; ");
 
 const BS_KT = "0;0.30;0.45;1";
 const BS_CY = "10;45;45;85";
@@ -266,8 +271,9 @@ export function PipelineViz({ activeNodes = {}, pipeline = "evaluation", classNa
         { label: "VERDICT", y: "42%", color: "text-blue-500/70" },
         { label: "GATE", y: "50%", color: "text-amber-500/70" },
         { label: "FIX", y: "58%", color: "text-orange-500/70" },
-        { label: "GEN", y: "67%", color: "text-emerald-500/60" },
-        { label: "SHIP", y: "79%", color: "text-emerald-500/70" },
+        { label: "BUILD", y: "65%", color: "text-emerald-500/60" },
+        { label: "EVAL", y: "72%", color: "text-cyan-500/70" },
+        { label: "SHIP", y: "81%", color: "text-emerald-500/70" },
       ]
     : [
         { label: "INPUT", y: "7%", color: "text-slate-500" },
@@ -276,7 +282,7 @@ export function PipelineViz({ activeNodes = {}, pipeline = "evaluation", classNa
       ];
 
   const phaseDividers = pipeline === "evaluation"
-    ? [5, 12, 21, 30, 38.5, 47, 55, 63.5, 74]
+    ? [5, 12, 21, 30, 38.5, 47, 55, 63, 70, 78]
     : [28, 67];
 
   return (

@@ -87,10 +87,18 @@ class VibeDeployState(TypedDict):
     # Documents
     generated_docs: Optional[GeneratedDocs]
 
+    # Blueprint
+    blueprint: Optional[Dict]
+
     # Code
     frontend_code: Optional[Dict]
     backend_code: Optional[Dict]
     code_gen_warnings: Optional[List[str]]
+
+    # Code Evaluation
+    code_eval_iteration: int
+    code_eval_result: Optional[Dict]
+    match_rate: Optional[float]
 
     # Deployment
     deploy_result: Optional[DeployResult]

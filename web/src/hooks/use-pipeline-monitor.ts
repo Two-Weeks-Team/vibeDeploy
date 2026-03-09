@@ -19,7 +19,9 @@ const NODE_NAME_TO_VIZ_ID: Record<string, string> = {
   fix_storm: "fix_storm",
   scope_down: "scope_down",
   doc_generator: "doc_gen",
+  blueprint_generator: "blueprint",
   code_generator: "code_gen",
+  code_evaluator: "code_eval",
   deployer: "do_deploy",
 };
 
@@ -133,7 +135,7 @@ export function usePipelineMonitor() {
                 updateNode("verdict", "complete");
               }
 
-              if (data.node === "code_generator" && data.type.includes(".node.complete")) {
+              if (data.node === "code_evaluator" && data.type.includes(".node.complete")) {
                 updateNode("git_push", "active");
               }
 
