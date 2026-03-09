@@ -141,6 +141,17 @@ export function PipelineViz({ activeNodes = {}, pipeline = "evaluation", classNa
     <Card className={cn("relative w-full h-[600px] overflow-hidden border-border/50 bg-card/50 backdrop-blur-sm bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.08),transparent_50%)]", className)}>
       <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="none">
         <title>Pipeline Visualization</title>
+        <defs>
+          <marker id="arrow-idle" viewBox="0 0 10 8" refX="10" refY="4" markerWidth="6" markerHeight="5" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 4 L 0 8 z" fill="rgba(148,163,184,0.5)" />
+          </marker>
+          <marker id="arrow-active" viewBox="0 0 10 8" refX="10" refY="4" markerWidth="6" markerHeight="5" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 4 L 0 8 z" fill="rgba(59,130,246,0.7)" />
+          </marker>
+          <marker id="arrow-complete" viewBox="0 0 10 8" refX="10" refY="4" markerWidth="6" markerHeight="5" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 4 L 0 8 z" fill="rgba(16,185,129,0.6)" />
+          </marker>
+        </defs>
         {edges.map((edge) => {
           const sourceNode = nodes.find((n) => n.id === edge.source);
           const targetNode = nodes.find((n) => n.id === edge.target);
@@ -148,12 +159,15 @@ export function PipelineViz({ activeNodes = {}, pipeline = "evaluation", classNa
 
           const sourceStatus = getNodeStatus(edge.source);
           const targetStatus = getNodeStatus(edge.target);
-          
-          let strokeClass = "stroke-border/30";
+
+          let stroke = "rgba(148,163,184,0.5)";
+          let markerId = "arrow-idle";
           if (sourceStatus === "complete" && (targetStatus === "active" || targetStatus === "complete")) {
-            strokeClass = "stroke-blue-500/50";
+            stroke = "rgba(59,130,246,0.7)";
+            markerId = "arrow-active";
           } else if (sourceStatus === "complete") {
-            strokeClass = "stroke-emerald-500/30";
+            stroke = "rgba(16,185,129,0.6)";
+            markerId = "arrow-complete";
           }
 
           const path = `M ${sourceNode.x} ${sourceNode.y} C ${sourceNode.x} ${(sourceNode.y + targetNode.y) / 2}, ${targetNode.x} ${(sourceNode.y + targetNode.y) / 2}, ${targetNode.x} ${targetNode.y}`;
@@ -162,8 +176,12 @@ export function PipelineViz({ activeNodes = {}, pipeline = "evaluation", classNa
             <path
               key={`${edge.source}-${edge.target}`}
               d={path}
-              className={cn("fill-none stroke-2 transition-colors duration-500", strokeClass)}
+              fill="none"
+              stroke={stroke}
+              strokeWidth={1.5}
+              markerEnd={`url(#${markerId})`}
               vectorEffect="non-scaling-stroke"
+              className="transition-colors duration-500"
             />
           );
         })}
