@@ -300,6 +300,28 @@ async def _stream_pipeline(prompt: str, thread_id: str) -> AsyncGenerator[str, N
                         "decision": scoring.get("decision", "NO_GO"),
                     },
                 )
+            elif name == "code_generator":
+                frontend = output.get("frontend_code", {}) or {}
+                backend = output.get("backend_code", {}) or {}
+                warnings = output.get("code_gen_warnings", [])
+                yield _sse(
+                    "code_gen.complete",
+                    {
+                        "type": "code_gen.complete",
+                        "frontend_files": len(frontend),
+                        "backend_files": len(backend),
+                        "has_frontend": len(frontend) >= 3,
+                        "warnings": warnings,
+                    },
+                )
+                if warnings:
+                    yield _sse(
+                        "code_gen.warning",
+                        {
+                            "type": "code_gen.warning",
+                            "message": "; ".join(warnings),
+                        },
+                    )
             elif name == "deployer":
                 deploy = output.get("deploy_result", {}) or {}
                 final_state["deploy_result"] = deploy
@@ -310,6 +332,9 @@ async def _stream_pipeline(prompt: str, thread_id: str) -> AsyncGenerator[str, N
                         "live_url": deploy.get("live_url", ""),
                         "github_repo": deploy.get("github_repo", ""),
                         "status": deploy.get("status", ""),
+                        "frontend_files": deploy.get("frontend_files", 0),
+                        "backend_files": deploy.get("backend_files", 0),
+                        "url_verification": deploy.get("url_verification", {}),
                     },
                 )
 

@@ -84,8 +84,9 @@ class VibeDeployState(TypedDict):
     generated_docs: Optional[GeneratedDocs]
 
     # Code
-    frontend_code: Optional[Dict]  # { filepath: content }
-    backend_code: Optional[Dict]  # { filepath: content }
+    frontend_code: Optional[Dict]
+    backend_code: Optional[Dict]
+    code_gen_warnings: Optional[List[str]]
 
     # Deployment
     deploy_result: Optional[DeployResult]

@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import re
 
 from ..llm import MODEL_CONFIG, get_llm
@@ -9,6 +10,12 @@ from ..prompts.code_templates import (
     FRONTEND_SYSTEM_PROMPT,
 )
 from ..state import VibeDeployState
+
+logger = logging.getLogger(__name__)
+
+# Minimum expected file counts for validation
+_MIN_FRONTEND_FILES = 3  # At least package.json + 2 source files
+_MIN_BACKEND_FILES = 2  # At least main.py + requirements.txt
 
 
 async def code_generator(state: VibeDeployState) -> dict:
@@ -36,14 +43,61 @@ async def code_generator(state: VibeDeployState) -> dict:
         _generate_backend_files(llm, context),
     )
 
+    generation_warnings = []
+
+    if len(frontend_code) < _MIN_FRONTEND_FILES:
+        warning = (
+            f"Frontend generation produced {len(frontend_code)} files "
+            f"(expected >= {_MIN_FRONTEND_FILES}). "
+            f"Files: {list(frontend_code.keys()) if frontend_code else '(none)'}"
+        )
+        logger.warning("[CODE_GEN] %s", warning)
+        generation_warnings.append(warning)
+
+        logger.info("[CODE_GEN] Retrying frontend generation (attempt 2)...")
+        frontend_code = await _generate_frontend_files(llm, context, retry=True)
+
+        if len(frontend_code) < _MIN_FRONTEND_FILES:
+            retry_warning = (
+                f"Frontend retry also produced {len(frontend_code)} files. "
+                "Frontend will be omitted — backend-only deployment."
+            )
+            logger.warning("[CODE_GEN] %s", retry_warning)
+            generation_warnings.append(retry_warning)
+
+    if len(backend_code) < _MIN_BACKEND_FILES:
+        warning = (
+            f"Backend generation produced {len(backend_code)} files "
+            f"(expected >= {_MIN_BACKEND_FILES}). "
+            f"Files: {list(backend_code.keys()) if backend_code else '(none)'}"
+        )
+        logger.warning("[CODE_GEN] %s", warning)
+        generation_warnings.append(warning)
+
+    logger.info(
+        "[CODE_GEN] Result: frontend=%d files, backend=%d files, warnings=%d",
+        len(frontend_code),
+        len(backend_code),
+        len(generation_warnings),
+    )
+
     return {
         "frontend_code": frontend_code,
         "backend_code": backend_code,
         "phase": "code_generated",
+        "code_gen_warnings": generation_warnings,
     }
 
 
-async def _generate_frontend_files(llm, context: str) -> dict[str, str]:
+async def _generate_frontend_files(llm, context: str, retry: bool = False) -> dict[str, str]:
+    extra_instruction = ""
+    if retry:
+        extra_instruction = (
+            "\n\nCRITICAL: Your previous response could not be parsed as valid JSON. "
+            'You MUST return ONLY a valid JSON object like: {"files": {"path": "content", ...}}. '
+            "No markdown, no explanation — ONLY the JSON object."
+        )
+
     response = await llm.ainvoke(
         [
             {
@@ -52,6 +106,7 @@ async def _generate_frontend_files(llm, context: str) -> dict[str, str]:
                     f"{CODE_GENERATION_BASE_SYSTEM_PROMPT}\n\n"
                     f"{FRONTEND_SYSTEM_PROMPT}\n\n"
                     "Return JSON object with exactly one top-level key: 'files'."
+                    f"{extra_instruction}"
                 ),
             },
             {
@@ -61,7 +116,7 @@ async def _generate_frontend_files(llm, context: str) -> dict[str, str]:
         ]
     )
 
-    parsed = _parse_json_response(response.content, {"files": {}})
+    parsed = _parse_json_response(response.content, {"files": {}}, label="frontend")
     files = parsed.get("files", {})
     return _normalize_files_dict(files)
 
@@ -88,7 +143,7 @@ async def _generate_backend_files(llm, context: str) -> dict[str, str]:
         ]
     )
 
-    parsed = _parse_json_response(response.content, {"files": {}})
+    parsed = _parse_json_response(response.content, {"files": {}}, label="backend")
     files = parsed.get("files", {})
     return _normalize_files_dict(files)
 
@@ -104,24 +159,39 @@ def _normalize_files_dict(files: object) -> dict[str, str]:
     return normalized
 
 
-def _parse_json_response(content, default: dict) -> dict:
+def _parse_json_response(content, default: dict, label: str = "unknown") -> dict:
     from ..llm import content_to_str
 
-    content = content_to_str(content).strip()
-    if content.startswith("```"):
-        content = re.sub(r"^```(?:json)?\n?", "", content)
-        content = re.sub(r"\n?```$", "", content)
+    raw_content = content_to_str(content).strip()
+    cleaned = raw_content
+    if cleaned.startswith("```"):
+        cleaned = re.sub(r"^```(?:json)?\n?", "", cleaned)
+        cleaned = re.sub(r"\n?```$", "", cleaned)
 
     try:
-        return json.loads(content)
+        return json.loads(cleaned)
     except json.JSONDecodeError:
-        json_match = re.search(r"\{[\s\S]*\}", content)
-        if json_match:
-            try:
-                return json.loads(json_match.group())
-            except json.JSONDecodeError:
-                pass
+        logger.warning(
+            "[CODE_GEN] %s: Direct JSON parse failed (response length: %d chars)",
+            label,
+            len(raw_content),
+        )
 
-        result = dict(default)
-        result["raw_response"] = content[:500]
-        return result
+    json_match = re.search(r"\{[\s\S]*\}", cleaned)
+    if json_match:
+        try:
+            return json.loads(json_match.group())
+        except json.JSONDecodeError:
+            logger.warning(
+                "[CODE_GEN] %s: Regex JSON extraction also failed",
+                label,
+            )
+
+    logger.error(
+        "[CODE_GEN] %s: All JSON parse attempts failed. Returning default. Response preview: %.200s",
+        label,
+        raw_content,
+    )
+    result = dict(default)
+    result["raw_response"] = raw_content[:500]
+    return result
