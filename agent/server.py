@@ -675,6 +675,12 @@ async def put_test_result(meeting_id: str, body: dict):
     return {"stored": meeting_id}
 
 
+@app.put("/test/brainstorm/{brainstorm_id}")
+async def put_test_brainstorm(brainstorm_id: str, body: dict):
+    await _store.save_brainstorm(brainstorm_id, body)
+    return {"stored": brainstorm_id}
+
+
 @app.get("/health")
 @app.get("/")
 async def health():

@@ -10,7 +10,6 @@ const DASHBOARD_API_URL = AGENT_URL.includes("ondigitalocean.app")
 const ACTIVE_POLL_MS = 2_000;
 const MAX_EVENTS = 200;
 
-// SSE node name (LangGraph fn) → pipeline-viz node ID
 const NODE_NAME_TO_VIZ_ID: Record<string, string> = {
   input_processor: "input",
   cross_examination: "cross_exam",
@@ -18,7 +17,7 @@ const NODE_NAME_TO_VIZ_ID: Record<string, string> = {
   decision_gate: "decision",
   doc_generator: "doc_gen",
   code_generator: "code_gen",
-  deployer: "deployer",
+  deployer: "do_deploy",
   feedback_generator: "feedback",
   conditional_review: "review",
 };
@@ -31,7 +30,6 @@ const AGENT_TO_VIZ_ID: Record<string, string> = {
   advocate: "advocate",
 };
 
-// Backend scoring axis → pipeline-viz score node ID
 const SCORE_AXIS_TO_VIZ_ID: Record<string, string> = {
   technical_feasibility: "score_tech",
   market_viability: "score_market",
@@ -134,8 +132,24 @@ export function usePipelineMonitor() {
                 updateNode("verdict", "complete");
               }
 
+              if (data.node === "code_generator" && data.type.includes(".node.complete")) {
+                updateNode("github", "active");
+              }
+
+              if (data.node === "deployer") {
+                if (data.type.includes(".node.start")) {
+                  updateNode("github", "complete");
+                  updateNode("ci", "active");
+                } else if (data.type.includes(".node.complete")) {
+                  updateNode("ci", "complete");
+                  updateNode("do_deploy", "complete");
+                  updateNode("verified", "complete");
+                }
+              }
+
               if (data.type === "deploy.complete") {
-                updateNode("deployer", "complete");
+                updateNode("do_deploy", "complete");
+                updateNode("verified", "complete");
               }
 
               if (data.type === "brainstorm.agent.insight" && data.agent) {
