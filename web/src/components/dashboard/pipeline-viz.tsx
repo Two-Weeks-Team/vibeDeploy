@@ -139,7 +139,7 @@ export function PipelineViz({ activeNodes = {}, pipeline = "evaluation", classNa
 
   return (
     <Card className={cn("relative w-full h-[600px] overflow-hidden border-border/50 bg-card/50 backdrop-blur-sm bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.08),transparent_50%)]", className)}>
-      <svg className="absolute inset-0 w-full h-full pointer-events-none" preserveAspectRatio="none">
+      <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="none">
         <title>Pipeline Visualization</title>
         {edges.map((edge) => {
           const sourceNode = nodes.find((n) => n.id === edge.source);
