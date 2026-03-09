@@ -1,6 +1,10 @@
 const AGENT_URL =
   process.env.NEXT_PUBLIC_AGENT_URL ?? "http://localhost:8080";
 
+const DASHBOARD_API_URL = AGENT_URL.includes("ondigitalocean.app")
+  ? `${AGENT_URL}/api`
+  : AGENT_URL;
+
 export async function startMeeting(input: string): Promise<{
   meetingId: string;
   streamUrl: string;
@@ -45,7 +49,7 @@ export async function resumeMeeting(
 
 export async function checkHealth(): Promise<boolean> {
   try {
-    const response = await fetch(`${AGENT_URL}/health`);
+    const response = await fetch(`${DASHBOARD_API_URL}/health`);
     return response.ok;
   } catch {
     return false;
@@ -146,7 +150,7 @@ export async function getDashboardStats(): Promise<{
   nogo_count: number;
 }> {
   try {
-    const response = await fetch(`${AGENT_URL}/dashboard/stats`);
+    const response = await fetch(`${DASHBOARD_API_URL}/dashboard/stats`);
     if (!response.ok) throw new Error("Failed to fetch stats");
     return response.json();
   } catch {
@@ -169,7 +173,7 @@ export async function getDashboardResults(): Promise<
   }>
 > {
   try {
-    const response = await fetch(`${AGENT_URL}/dashboard/results`);
+    const response = await fetch(`${DASHBOARD_API_URL}/dashboard/results`);
     if (!response.ok) throw new Error("Failed to fetch results");
     return response.json();
   } catch {
@@ -184,7 +188,7 @@ export async function getDashboardBrainstorms(): Promise<
   }>
 > {
   try {
-    const response = await fetch(`${AGENT_URL}/dashboard/brainstorms`);
+    const response = await fetch(`${DASHBOARD_API_URL}/dashboard/brainstorms`);
     if (!response.ok) throw new Error("Failed to fetch brainstorms");
     return response.json();
   } catch {
@@ -194,7 +198,7 @@ export async function getDashboardBrainstorms(): Promise<
 
 export async function getDashboardDeployments(): Promise<import("@/types/dashboard").DeployedApp[]> {
   try {
-    const response = await fetch(`${AGENT_URL}/dashboard/deployments`);
+    const response = await fetch(`${DASHBOARD_API_URL}/dashboard/deployments`);
     if (!response.ok) throw new Error("Failed to fetch deployments");
     return response.json();
   } catch {

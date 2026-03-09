@@ -4,6 +4,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { ActivePipeline, DashboardEvent, PipelineNodeStatus } from "@/types/dashboard";
 
 const AGENT_URL = process.env.NEXT_PUBLIC_AGENT_URL ?? "http://localhost:8080";
+const DASHBOARD_API_URL = AGENT_URL.includes("ondigitalocean.app")
+  ? `${AGENT_URL}/api`
+  : AGENT_URL;
 const ACTIVE_POLL_MS = 2_000;
 const MAX_EVENTS = 200;
 
@@ -62,7 +65,7 @@ export function usePipelineMonitor() {
 
     (async () => {
       try {
-        const res = await fetch(`${AGENT_URL}/dashboard/events`, {
+        const res = await fetch(`${DASHBOARD_API_URL}/dashboard/events`, {
           signal: controller.signal,
         });
         if (!res.ok || !res.body) throw new Error("SSE connect failed");
@@ -166,7 +169,7 @@ export function usePipelineMonitor() {
 
   const fetchActive = useCallback(async () => {
     try {
-      const res = await fetch(`${AGENT_URL}/dashboard/active`);
+      const res = await fetch(`${DASHBOARD_API_URL}/dashboard/active`);
       if (res.ok) setActivePipelines(await res.json());
     } catch { }
   }, []);
