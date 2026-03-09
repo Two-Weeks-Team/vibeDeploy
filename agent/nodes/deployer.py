@@ -66,11 +66,6 @@ async def deployer(state: VibeDeployState) -> dict:
             commit_message="Add project docs, CI workflow, and env example",
         )
         commit_sha = push_result.get("commit_sha", "")
-        _set_repo_metadata(
-            github_full_name,
-            topics=["ai", "fastapi", "nextjs", "digitalocean", "vibedeploy", "hackathon", "llm"],
-            homepage="https://github.com/Two-Weeks-Team/vibeDeploy",
-        )
 
     ci_result = {"status": "skipped"}
     repair_attempts = 0
@@ -87,11 +82,17 @@ async def deployer(state: VibeDeployState) -> dict:
 
     do_token = os.getenv("DIGITALOCEAN_API_TOKEN")
     if not do_token:
+        if github_full_name:
+            _set_repo_metadata(
+                github_full_name,
+                topics=["ai", "fastapi", "digitalocean", "vibedeploy", "hackathon", "llm"],
+                homepage=github_repo_url,
+            )
         result = await _local_fallback_deploy(app_name, all_files, github_repo_url, "do_token_missing")
         result["deploy_result"].update(ci_meta)
         return result
 
-    app_spec = build_app_spec(app_name, github_clone_url)
+    app_spec = build_app_spec(app_name, github_clone_url, has_frontend=has_frontend)
     deploy_result = await deploy_to_digitalocean(github_clone_url, app_spec)
 
     if deploy_result.get("status") == "error":
@@ -107,6 +108,14 @@ async def deployer(state: VibeDeployState) -> dict:
 
     app_id = deploy_result.get("app_id", "")
     live_url = await wait_for_deployment(app_id) if app_id else ""
+
+    homepage = live_url or github_repo_url
+    if github_full_name:
+        _set_repo_metadata(
+            github_full_name,
+            topics=["ai", "fastapi", "digitalocean", "vibedeploy", "hackathon", "llm"],
+            homepage=homepage,
+        )
 
     status = "deployed" if live_url else "deployment_started"
     return {

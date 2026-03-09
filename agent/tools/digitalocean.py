@@ -103,32 +103,59 @@ async def get_app_status(app_id: str) -> dict:
 def build_app_spec(
     name: str,
     repo_url: str,
-    branch: str = "main",
+    branch: str = "master",
+    has_frontend: bool = False,
 ) -> dict:
     github_parts = repo_url.replace("https://github.com/", "").replace(".git", "")
 
-    return {
-        "name": name,
+    # Build env vars for the generated app from our own env
+    db_url = os.getenv("DATABASE_URL", "")
+    # Convert to psycopg scheme for generated apps (they use sync psycopg)
+    if db_url.startswith("postgresql+asyncpg://"):
+        db_url = db_url.replace("postgresql+asyncpg://", "postgresql+psycopg://", 1)
+    elif db_url.startswith("postgres://"):
+        db_url = db_url.replace("postgres://", "postgresql+psycopg://", 1)
+    elif db_url.startswith("postgresql://") and "+psycopg" not in db_url:
+        db_url = db_url.replace("postgresql://", "postgresql+psycopg://", 1)
+
+    envs = []
+    if db_url:
+        envs.append({"key": "DATABASE_URL", "value": db_url, "scope": "RUN_TIME", "type": "SECRET"})
+        envs.append({"key": "POSTGRES_URL", "value": db_url, "scope": "RUN_TIME", "type": "SECRET"})
+    inference_key = os.getenv("DIGITALOCEAN_INFERENCE_KEY", "")
+    if inference_key:
+        envs.append(
+            {"key": "DIGITALOCEAN_INFERENCE_KEY", "value": inference_key, "scope": "RUN_TIME", "type": "SECRET"}
+        )
+    envs.append({"key": "DO_INFERENCE_MODEL", "value": "openai-gpt-oss-120b", "scope": "RUN_TIME"})
+
+    service: dict = {
+        "name": f"{name[:28]}-api",
+        "github": {
+            "repo": github_parts,
+            "branch": branch,
+            "deploy_on_push": True,
+        },
+        "build_command": "pip install -r requirements.txt",
+        "run_command": "uvicorn main:app --host 0.0.0.0 --port 8080",
+        "http_port": 8080,
+        "instance_count": 1,
+        "instance_size_slug": "apps-s-1vcpu-0.5gb",
+        "source_dir": "/",
+    }
+    if envs:
+        service["envs"] = envs
+
+    spec: dict = {
+        "name": name[:32],
         "region": "nyc",
-        "services": [
+        "services": [service],
+    }
+
+    if has_frontend:
+        spec["static_sites"] = [
             {
-                "name": f"{name}-api",
-                "github": {
-                    "repo": github_parts,
-                    "branch": branch,
-                    "deploy_on_push": True,
-                },
-                "build_command": "pip install -r requirements.txt",
-                "run_command": "uvicorn main:app --host 0.0.0.0 --port 8080",
-                "http_port": 8080,
-                "instance_count": 1,
-                "instance_size_slug": "apps-s-1vcpu-0.5gb",
-                "source_dir": "/",
-            },
-        ],
-        "static_sites": [
-            {
-                "name": f"{name}-web",
+                "name": f"{name[:28]}-web",
                 "github": {
                     "repo": github_parts,
                     "branch": branch,
@@ -139,5 +166,6 @@ def build_app_spec(
                 "source_dir": "/web",
                 "environment_slug": "node-js",
             },
-        ],
-    }
+        ]
+
+    return spec

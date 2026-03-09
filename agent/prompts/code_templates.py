@@ -8,21 +8,23 @@ Hard constraints:
 - Backend must call DigitalOcean Serverless Inference API using httpx.
 - Return strict JSON only.
 - Every file content must be complete and runnable.
+- All files are FLAT (in project root) — NEVER use relative imports (from .module). Use absolute: from models import X.
+- Python 3.12 compatibility required (DO App Platform runtime).
 
-MANDATORY VERSION REQUIREMENTS (use these exact versions or higher — NEVER lower):
-  Python: >=3.14
+MANDATORY VERSION REQUIREMENTS (use these exact versions):
+  Python: >=3.12
   Node.js: >=24
   Next.js: 16.1.6
   React / React DOM: 19.2.4
   TypeScript: 5.9.2
   Tailwind CSS: 4.2.1
-  FastAPI: 0.135.1
-  uvicorn: 0.41.0
-  Pydantic: 2.12.5
-  SQLAlchemy: 2.0.48
-  httpx: 0.28.1
-  psycopg: 3.3.3
-  AI Model: gpt-5-mini (via DO Serverless Inference)
+  FastAPI: 0.115.0
+  uvicorn[standard]: 0.30.0
+  Pydantic: 2.9.0
+  SQLAlchemy: 2.0.35
+  httpx: 0.27.0
+  psycopg[binary]: 3.2.3
+  AI Model: openai-gpt-oss-120b (via DO Serverless Inference)
 """.strip()
 
 
@@ -51,18 +53,28 @@ BACKEND_SYSTEM_PROMPT = """
 Generate a FastAPI backend as JSON map: { "files": { "path": "content" } }.
 
 Required files:
-- requirements.txt (MUST use: fastapi==0.135.1, uvicorn==0.41.0, httpx==0.28.1, sqlalchemy==2.0.48, psycopg==3.3.3, pydantic==2.12.5, python-dotenv==1.1.0)
+- requirements.txt (MUST use: fastapi==0.115.0, uvicorn[standard]==0.30.0, httpx==0.27.0, sqlalchemy==2.0.35, psycopg[binary]==3.2.3, pydantic==2.9.0, python-dotenv==1.0.1, python-multipart==0.0.12)
 - main.py
 - models.py
 - routes.py
 - ai_service.py
 
-Requirements:
-- Use FastAPI with clean route registration.
-- ai_service.py must call DigitalOcean Serverless Inference chat/completions endpoint via httpx.
-- Use env var DIGITALOCEAN_INFERENCE_KEY for inference auth.
-- Default model: gpt-5-mini (env: DO_INFERENCE_MODEL).
-- Include at least 2 AI-powered business endpoints (prediction/recommendation/classification/generation).
+CRITICAL RULES:
+- All Python files are in the project ROOT (flat structure, NOT a package). NEVER use relative imports like "from .models import X". Always use absolute: "from models import X".
+- Use SYNCHRONOUS SQLAlchemy only (create_engine, sessionmaker, Session). NEVER use create_async_engine or AsyncSession — asyncpg is NOT installed.
+- models.py must handle DATABASE_URL env var with URL scheme auto-fix:
+  * Read from os.getenv("DATABASE_URL", os.getenv("POSTGRES_URL", "sqlite:///./app.db"))
+  * If starts with "postgresql+asyncpg://", replace with "postgresql+psycopg://"
+  * If starts with "postgres://", replace with "postgresql+psycopg://"
+  * Add connect_args={"sslmode": "require"} when not localhost and not sqlite
+- TABLE NAME PREFIXING (CRITICAL — shared database): All table names MUST be prefixed with a short app-specific prefix (e.g. "qb_" for queuebite, "ss_" for spendsense). This prevents collisions when multiple apps share the same PostgreSQL database. ForeignKey references must also use the prefixed table names.
+- RELATIONSHIP TYPE ANNOTATIONS: Do NOT add Python type annotations to SQLAlchemy relationship() declarations. Write `transactions = relationship("Transaction", ...)` NOT `transactions: List["Transaction"] = relationship(...)`. The Mapped[] annotation style causes ArgumentError on Python 3.13.
+- main.py must include a GET /health endpoint returning {"status": "ok"}
+- main.py must include a GET / root route returning an HTMLResponse landing page that shows: app name, description, all API endpoints with methods, tech stack info, and links to /docs and /redoc. Use inline CSS for dark-themed styling. Import HTMLResponse from fastapi.responses.
+- ai_service.py must call DO Serverless Inference at https://inference.do-ai.run/v1/chat/completions via httpx.
+- Use env var DIGITALOCEAN_INFERENCE_KEY for inference auth (Bearer token).
+- Default model: openai-gpt-oss-120b (env: DO_INFERENCE_MODEL).
+- Include at least 2 AI-powered business endpoints.
 - Keep backend runnable with: uvicorn main:app --host 0.0.0.0 --port 8080
-- Python version: 3.14+
+- Python 3.12 compatible.
 """.strip()
