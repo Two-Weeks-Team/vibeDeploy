@@ -1,199 +1,142 @@
-import sys
+"""vibeDeploy ADK Agent — Vibe Council evaluator.
+
+Standalone entrypoint for Gradient ADK deployment.
+Uses DO Serverless Inference directly (no relative imports).
+The full LangGraph pipeline runs on App Platform via server.py.
+"""
+
+import json
+import os
 import traceback
-from pathlib import Path
 
-_AGENT_DIR = str(Path(__file__).resolve().parent)
-if _AGENT_DIR not in sys.path:
-    sys.path.insert(0, _AGENT_DIR)
+import httpx
+from gradient_adk import RequestContext, entrypoint
 
-from gradient_adk import RequestContext, entrypoint  # noqa: E402
+_INFERENCE_URL = "https://inference.do-ai.run/v1/chat/completions"
+_MODEL = "openai-gpt-oss-120b"
+_REASONING_MODEL = "deepseek-r1-distill-llama-70b"
 
-try:
-    from .graph import app
-    from .graph_brainstorm import brainstorm_app
-    from .sse import NODE_EVENTS, format_sse
-except ImportError:
-    from graph import app  # type: ignore[import-untyped]  # noqa: E402
-    from graph_brainstorm import brainstorm_app  # type: ignore[import-untyped]  # noqa: E402
-    from sse import NODE_EVENTS, format_sse  # type: ignore[import-untyped]  # noqa: E402
+_COUNCIL_AGENTS = {
+    "architect": "You are the Architect — technical lead analyzing feasibility, complexity, and tech stack for app ideas. Score technical_feasibility 0-100.",
+    "scout": "You are the Scout — market analyst evaluating competition, trends, TAM, and product-market fit. Score market_viability 0-100.",
+    "guardian": "You are the Guardian — risk assessor identifying security, legal, scalability, and failure risks. Score risk_profile 0-100 (higher = more risk).",
+    "catalyst": "You are the Catalyst — innovation officer evaluating uniqueness, disruption potential, and creative differentiation. Score innovation_score 0-100.",
+    "advocate": "You are the Advocate — UX champion assessing user experience, accessibility, onboarding, and retention. Score user_impact 0-100.",
+}
+
+
+def _get_api_key() -> str:
+    return os.environ.get("GRADIENT_MODEL_ACCESS_KEY", os.environ.get("DIGITALOCEAN_INFERENCE_KEY", ""))
+
+
+async def _call_model(system: str, user: str, model: str = _MODEL) -> str:
+    api_key = _get_api_key()
+    if not api_key:
+        return '{"error": "No API key configured"}'
+
+    async with httpx.AsyncClient(timeout=60) as client:
+        resp = await client.post(
+            _INFERENCE_URL,
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json={
+                "model": model,
+                "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+                "max_completion_tokens": 1024,
+                "temperature": 0.7,
+            },
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+        return content
+
+
+async def _evaluate_idea(prompt: str) -> dict:
+    analyses = {}
+    for agent_name, system_prompt in _COUNCIL_AGENTS.items():
+        try:
+            raw = await _call_model(
+                system=f'{system_prompt}\n\nRespond in JSON: {{"score": <0-100>, "reasoning": "...", "key_findings": ["..."]}}',
+                user=f"Evaluate this app idea:\n\n{prompt}",
+            )
+            try:
+                analyses[agent_name] = json.loads(raw)
+            except json.JSONDecodeError:
+                analyses[agent_name] = {"score": 50, "reasoning": raw[:500], "key_findings": []}
+        except Exception as exc:
+            analyses[agent_name] = {"score": 0, "reasoning": f"Error: {exc}", "key_findings": []}
+
+    scores = {name: a.get("score", 50) for name, a in analyses.items()}
+    risk = scores.get("guardian", 50)
+    vibe_score = round(
+        scores.get("architect", 50) * 0.25
+        + scores.get("scout", 50) * 0.20
+        + scores.get("catalyst", 50) * 0.20
+        + (100 - risk) * 0.20
+        + scores.get("advocate", 50) * 0.15,
+        1,
+    )
+
+    if vibe_score >= 70:
+        decision = "GO"
+    elif vibe_score >= 50:
+        decision = "CONDITIONAL"
+    else:
+        decision = "NO_GO"
+
+    try:
+        synthesis = await _call_model(
+            system=(
+                "You are the Strategist — synthesize the Vibe Council's analyses into a final verdict. "
+                "Provide a concise summary, key strengths, key risks, and recommendation."
+            ),
+            user=f"Idea: {prompt}\n\nCouncil analyses: {json.dumps(analyses, ensure_ascii=False)}\n\nVibe Score: {vibe_score} -> {decision}",
+            model=_REASONING_MODEL,
+        )
+    except Exception:
+        synthesis = f"Vibe Score: {vibe_score} -> {decision}"
+
+    return {
+        "vibe_score": vibe_score,
+        "decision": decision,
+        "analyses": analyses,
+        "synthesis": synthesis,
+    }
+
+
+async def _brainstorm_idea(prompt: str) -> dict:
+    try:
+        raw = await _call_model(
+            system=(
+                "You are a creative brainstorming AI. Generate 5 innovative variations "
+                "of the given app idea. For each, provide: name, tagline, key differentiator, "
+                "and estimated technical complexity (low/medium/high). Respond in JSON array format."
+            ),
+            user=f"Brainstorm variations of this app idea:\n\n{prompt}",
+        )
+        try:
+            ideas = json.loads(raw)
+        except json.JSONDecodeError:
+            ideas = raw
+        return {"ideas": ideas}
+    except Exception as exc:
+        return {"error": str(exc)}
 
 
 @entrypoint
 async def main(input: dict, context: RequestContext):
     prompt = input.get("prompt", "")
     action = input.get("action", "evaluate")
-    config_data = input.get("config", {})
-    thread_id = config_data.get("configurable", {}).get("thread_id", "default")
-    config = {"configurable": {"thread_id": thread_id}}
     _ = context
 
-    if action == "brainstorm":
-        return _stream_brainstorm(prompt, config)
-    return _stream_evaluate(prompt, config)
+    if not prompt:
+        return {"error": 'No prompt provided. Send {"prompt": "your app idea"}'}
 
-
-def _stream_evaluate(prompt: str, config: dict):
-    async def stream():
-        yield format_sse(
-            "council.phase.start",
-            {
-                "type": "council.phase.start",
-                "phase": "input_processing",
-                "message": "Processing your idea...",
-            },
-        )
-
-        try:
-            async for event in app.astream_events(
-                {"raw_input": prompt},
-                config=config,
-                version="v2",
-            ):
-                kind = event.get("event", "")
-                name = event.get("name", "")
-                data = event.get("data", {})
-
-                if kind == "on_chain_start" and name in NODE_EVENTS:
-                    node_event = NODE_EVENTS[name]
-                    yield format_sse(
-                        "council.node.start",
-                        {
-                            "type": "council.node.start",
-                            "node": name,
-                            "phase": node_event["phase"],
-                            "message": node_event["message"],
-                        },
-                    )
-                    continue
-
-                if kind != "on_chain_end" or name not in NODE_EVENTS:
-                    continue
-
-                output = data.get("output", {})
-                phase = output.get("phase", NODE_EVENTS[name]["phase"])
-                yield format_sse(
-                    "council.node.complete",
-                    {
-                        "type": "council.node.complete",
-                        "node": name,
-                        "phase": phase,
-                        "message": f"{name} complete",
-                    },
-                )
-
-                if name == "run_council_agent":
-                    analyses = output.get("council_analysis", {}) or {}
-                    for agent_name, analysis in analyses.items():
-                        yield format_sse(
-                            "council.agent.analysis",
-                            {
-                                "type": "council.agent.analysis",
-                                "agent": agent_name,
-                                "score": analysis.get("score", 0),
-                                "findings_count": len(analysis.get("findings", [])),
-                            },
-                        )
-                elif name == "strategist_verdict":
-                    scoring = output.get("scoring", {}) or {}
-                    yield format_sse(
-                        "council.verdict",
-                        {
-                            "type": "council.verdict",
-                            "final_score": scoring.get("final_score", 0),
-                            "decision": scoring.get("decision", "NO_GO"),
-                        },
-                    )
-                elif name == "deployer":
-                    deploy = output.get("deploy_result", {}) or {}
-                    yield format_sse(
-                        "deploy.complete",
-                        {
-                            "type": "deploy.complete",
-                            "live_url": deploy.get("live_url", ""),
-                            "github_repo": deploy.get("github_repo", ""),
-                            "status": deploy.get("status", ""),
-                        },
-                    )
-
-            yield format_sse(
-                "council.phase.complete",
-                {
-                    "type": "council.phase.complete",
-                    "phase": "complete",
-                    "message": "Pipeline complete",
-                },
-            )
-        except Exception as exc:
-            yield format_sse(
-                "council.error",
-                {
-                    "type": "council.error",
-                    "error": str(exc)[:500],
-                    "traceback": traceback.format_exc()[:1000],
-                },
-            )
-
-    return stream()
-
-
-def _stream_brainstorm(prompt: str, config: dict):
-    async def stream():
-        yield format_sse(
-            "brainstorm.phase.start",
-            {
-                "type": "brainstorm.phase.start",
-                "phase": "input_processing",
-                "message": "Starting brainstorm session...",
-            },
-        )
-
-        try:
-            async for event in brainstorm_app.astream_events(
-                {"raw_input": prompt},
-                config=config,
-                version="v2",
-            ):
-                kind = event.get("event", "")
-                name = event.get("name", "")
-                data = event.get("data", {})
-
-                if kind == "on_chain_end" and name == "synthesize_brainstorm":
-                    output = data.get("output", {})
-                    yield format_sse(
-                        "brainstorm.synthesis",
-                        {
-                            "type": "brainstorm.synthesis",
-                            "synthesis": output.get("synthesis", {}),
-                        },
-                    )
-                elif kind == "on_chain_end" and name == "run_brainstorm_agent":
-                    output = data.get("output", {})
-                    insights = output.get("brainstorm_insights", {})
-                    for agent_name in insights:
-                        yield format_sse(
-                            "brainstorm.agent.complete",
-                            {
-                                "type": "brainstorm.agent.complete",
-                                "agent": agent_name,
-                            },
-                        )
-
-            yield format_sse(
-                "brainstorm.phase.complete",
-                {
-                    "type": "brainstorm.phase.complete",
-                    "phase": "complete",
-                    "message": "Brainstorm complete",
-                },
-            )
-        except Exception as exc:
-            yield format_sse(
-                "brainstorm.error",
-                {
-                    "type": "brainstorm.error",
-                    "error": str(exc)[:500],
-                    "traceback": traceback.format_exc()[:1000],
-                },
-            )
-
-    return stream()
+    try:
+        if action == "brainstorm":
+            result = await _brainstorm_idea(prompt)
+        else:
+            result = await _evaluate_idea(prompt)
+        return {"response": result}
+    except Exception as exc:
+        return {"error": str(exc), "traceback": traceback.format_exc()[:1000]}
