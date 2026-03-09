@@ -28,6 +28,37 @@ ingress:
       match:
         path:
           prefix: /health
+    # Dashboard API endpoints → backend
+    - component:
+        name: api
+      match:
+        path:
+          prefix: /dashboard/stats
+    - component:
+        name: api
+      match:
+        path:
+          prefix: /dashboard/results
+    - component:
+        name: api
+      match:
+        path:
+          prefix: /dashboard/brainstorms
+    - component:
+        name: api
+      match:
+        path:
+          prefix: /dashboard/active
+    - component:
+        name: api
+      match:
+        path:
+          prefix: /dashboard/events
+    - component:
+        name: api
+      match:
+        path:
+          prefix: /dashboard/deployments
     # Everything else → frontend (Next.js handles its own routing)
     - component:
         name: web

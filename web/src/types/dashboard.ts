@@ -26,6 +26,21 @@ export interface DocumentEntry {
   content: string;
 }
 
+export interface DeployedApp {
+  thread_id: string;
+  score: number;
+  verdict: VerdictType;
+  input_prompt: string;
+  idea_summary: string;
+  deployment: {
+    repoUrl: string;
+    liveUrl: string;
+    status?: string;
+    ciStatus?: string;
+  };
+  created_at: string;
+}
+
 export interface MeetingResultFull {
   thread_id: string;
   score: number;
@@ -35,6 +50,8 @@ export interface MeetingResultFull {
   debates: DebateEntry[];
   documents: DocumentEntry[];
   deployment?: { repoUrl: string; liveUrl: string };
+  input_prompt?: string;
+  idea_summary?: string;
   created_at: string;
 }
 

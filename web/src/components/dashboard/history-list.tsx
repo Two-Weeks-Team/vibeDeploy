@@ -15,7 +15,7 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { FileText, Code, Rocket, Brain, Target, Clock } from "lucide-react";
+import { FileText, Code, Rocket, Brain, Target, Clock, Github } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { MeetingResultFull, BrainstormResultFull, VerdictType } from "@/types/dashboard";
 
@@ -189,6 +189,30 @@ export function HistoryList({ results, brainstorms }: HistoryListProps) {
                             <div className="text-xs text-muted-foreground">Score</div>
                           </div>
                           {getVerdictBadge(item.data.verdict)}
+                          {item.data.deployment && (
+                            <div className="flex items-center gap-2 ml-2 border-l border-border/50 pl-4">
+                              <a
+                                href={item.data.deployment.repoUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="p-2 rounded-full hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+                                onClick={(e) => e.stopPropagation()}
+                                title="View Repository"
+                              >
+                                <Github className="w-4 h-4" />
+                              </a>
+                              <a
+                                href={item.data.deployment.liveUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="p-2 rounded-full hover:bg-accent text-muted-foreground hover:text-primary transition-colors"
+                                onClick={(e) => e.stopPropagation()}
+                                title="View Live App"
+                              >
+                                <Rocket className="w-4 h-4" />
+                              </a>
+                            </div>
+                          )}
                         </>
                       )}
                     </div>

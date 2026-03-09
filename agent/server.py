@@ -215,6 +215,8 @@ async def _store_result(thread_id: str, state: dict):
         "scoring": scoring,
         "deployment": deployment,
         "cost_estimate": state.get("cost_estimate"),
+        "input_prompt": state.get("raw_input", ""),
+        "idea_summary": state.get("idea_summary", ""),
     }
     await _store.save_meeting(thread_id, result)
 
@@ -714,6 +716,28 @@ async def dashboard_results():
 @app.get("/brainstorms")
 async def dashboard_brainstorms():
     return await _store.list_brainstorms(limit=50)
+
+
+@app.get("/dashboard/deployments")
+@app.get("/deployments")
+async def dashboard_deployments():
+    meetings = await _store.list_meetings(limit=100)
+    deployed = []
+    for m in meetings:
+        dep = m.get("deployment")
+        if dep and (dep.get("liveUrl") or dep.get("repoUrl")):
+            deployed.append(
+                {
+                    "thread_id": m["thread_id"],
+                    "score": m.get("score", 0),
+                    "verdict": m.get("verdict", ""),
+                    "input_prompt": m.get("input_prompt", ""),
+                    "idea_summary": m.get("idea_summary", ""),
+                    "deployment": dep,
+                    "created_at": m.get("created_at", ""),
+                }
+            )
+    return deployed
 
 
 @app.get("/dashboard/active")

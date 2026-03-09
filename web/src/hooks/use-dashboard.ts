@@ -6,6 +6,7 @@ import {
   getDashboardStats,
   getDashboardResults,
   getDashboardBrainstorms,
+  getDashboardDeployments,
 } from "@/lib/api";
 import type {
   DashboardStats,
@@ -14,6 +15,7 @@ import type {
   ScoreDistributionBin,
   AgentPerformance,
   VerdictType,
+  DeployedApp,
 } from "@/types/dashboard";
 
 const POLL_MS = 5_000;
@@ -83,6 +85,7 @@ export function useDashboard() {
   });
   const [results, setResults] = useState<MeetingResultFull[]>([]);
   const [brainstorms, setBrainstorms] = useState<BrainstormResultFull[]>([]);
+  const [deployments, setDeployments] = useState<DeployedApp[]>([]);
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
@@ -90,14 +93,16 @@ export function useDashboard() {
     setHealthy(health);
     if (!health) return;
 
-    const [s, r, b] = await Promise.all([
+    const [s, r, b, d] = await Promise.all([
       getDashboardStats(),
       getDashboardResults(),
       getDashboardBrainstorms(),
+      getDashboardDeployments(),
     ]);
     setStats(s);
     setResults(r as unknown as MeetingResultFull[]);
     setBrainstorms(b as unknown as BrainstormResultFull[]);
+    setDeployments(d);
     setLoading(false);
   }, []);
 
@@ -115,6 +120,7 @@ export function useDashboard() {
     stats,
     results,
     brainstorms,
+    deployments,
     loading,
     refresh,
     scoreDistribution: computeScoreDistribution(results),

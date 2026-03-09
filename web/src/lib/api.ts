@@ -191,3 +191,13 @@ export async function getDashboardBrainstorms(): Promise<
     return [];
   }
 }
+
+export async function getDashboardDeployments(): Promise<import("@/types/dashboard").DeployedApp[]> {
+  try {
+    const response = await fetch(`${AGENT_URL}/dashboard/deployments`);
+    if (!response.ok) throw new Error("Failed to fetch deployments");
+    return response.json();
+  } catch {
+    return [];
+  }
+}

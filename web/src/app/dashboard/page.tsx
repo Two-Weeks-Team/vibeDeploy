@@ -14,6 +14,7 @@ import { PipelineViz } from "@/components/dashboard/pipeline-viz";
 import { DashboardCharts } from "@/components/dashboard/dashboard-charts";
 import { HistoryList } from "@/components/dashboard/history-list";
 import { LiveMonitor } from "@/components/dashboard/live-monitor";
+import { DeployedApps } from "@/components/dashboard/deployed-apps";
 import { PieChart, Pie, ResponsiveContainer, Tooltip } from "recharts";
 import type { VerdictType } from "@/types/dashboard";
 
@@ -39,6 +40,7 @@ export default function DashboardPage() {
     stats,
     results,
     brainstorms,
+    deployments,
     loading,
     scoreDistribution,
     verdictBreakdown,
@@ -116,12 +118,20 @@ export default function DashboardPage() {
         </header>
 
         <Tabs defaultValue="overview" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 lg:grid-cols-4 mb-8">
+          <TabsList className="grid w-full grid-cols-2 lg:grid-cols-5 mb-8">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="live">
               Live Monitor
               {activePipelines.length > 0 && (
                 <span className="ml-2 flex h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="deployed">
+              Deployed Apps
+              {deployments.length > 0 && (
+                <Badge variant="secondary" className="ml-2 bg-primary/20 text-primary hover:bg-primary/30">
+                  {deployments.length}
+                </Badge>
               )}
             </TabsTrigger>
             <TabsTrigger value="history">History</TabsTrigger>
@@ -311,6 +321,12 @@ export default function DashboardPage() {
                   nodeStatuses={nodeStatuses}
                   connected={connected}
                 />
+              </motion.div>
+            </TabsContent>
+
+            <TabsContent value="deployed" className="outline-none">
+              <motion.div variants={fadeUp} initial="hidden" animate="visible">
+                <DeployedApps deployments={deployments} />
               </motion.div>
             </TabsContent>
 
