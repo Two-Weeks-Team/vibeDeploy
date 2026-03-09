@@ -94,8 +94,11 @@ async def _with_tracking(
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _store
-    db_path = os.environ.get("DB_PATH", str(_AGENT_DIR / "vibedeploy.db"))
-    _store = ResultStore(db_path)
+    if os.environ.get("DATABASE_URL"):
+        _store = ResultStore()
+    else:
+        db_path = os.environ.get("DB_PATH", str(_AGENT_DIR / "vibedeploy.db"))
+        _store = ResultStore(db_path=db_path)
     await _store.init()
     yield
     await _store.close()

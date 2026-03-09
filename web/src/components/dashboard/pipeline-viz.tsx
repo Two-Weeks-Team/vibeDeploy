@@ -304,7 +304,7 @@ export function PipelineViz({ activeNodes = {}, pipeline = "evaluation", classNa
         ))}
       </svg>
 
-      <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="none">
+      <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 -2 100 88" preserveAspectRatio="xMidYMid meet">
         <title>Pipeline Flow</title>
         <defs>
           <style>{SVG_STYLES}</style>
