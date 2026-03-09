@@ -127,15 +127,30 @@ const brainstormEdges: EdgeDef[] = [
 const GO_NODES = new Set(["doc_gen", "code_gen", "git_push", "ci_test", "app_spec", "do_build", "do_deploy", "verified"]);
 const BOTTOM_NODES = new Set([...GO_NODES, "review", "feedback"]);
 
-const EVAL_FLOW_PATH = [
-  "M 50 5", "C 50 11, 50 11, 50 18", "C 50 24, 50 24, 50 31",
-  "C 50 37, 50 37, 50 44", "C 50 50, 50 50, 50 57", "C 50 63, 50 63, 50 69",
-  "C 50 74, 30 74, 30 80", "L 70 80", "C 70 86, 10 86, 10 92", "L 90 92",
-].join(" ");
+const PARTICLE_DUR = "12s";
+const EASE = "0.25 0.1 0.25 1";
 
-const BRAINSTORM_FLOW_PATH = [
-  "M 50 10", "C 50 27, 50 27, 50 45", "C 50 65, 50 65, 50 85",
-].join(" ");
+const EVAL_KT = "0;0.08;0.15;0.25;0.33;0.40;0.50;0.55;0.62;0.68;0.74;0.80;0.85;0.90;0.95;1";
+const EVAL_CY = "5;18;18;31;44;44;57;69;80;80;92;92;92;92;92;92";
+const EVAL_CX: number[][] = [
+  [50,10,10,50,10,10,50,50,30,70,10,26,42,58,74,90],
+  [50,30,30,50,30,30,50,50,30,70,10,26,42,58,74,90],
+  [50,50,50,50,50,50,50,50,30,70,10,26,42,58,74,90],
+  [50,70,70,50,70,70,50,50,30,70,10,26,42,58,74,90],
+  [50,90,90,50,90,90,50,50,30,70,10,26,42,58,74,90],
+];
+const EVAL_KS = Array(15).fill(EASE).join("; ");
+
+const BS_KT = "0;0.30;0.45;1";
+const BS_CY = "10;45;45;85";
+const BS_CX: number[][] = [
+  [50,10,10,50],
+  [50,30,30,50],
+  [50,50,50,50],
+  [50,70,70,50],
+  [50,90,90,50],
+];
+const BS_KS = Array(3).fill(EASE).join("; ");
 
 function getVisibleNodeIds(
   pipeline: PipelineType,
@@ -210,8 +225,6 @@ const SVG_STYLES = `
 export function PipelineViz({ activeNodes = {}, pipeline = "evaluation", className }: PipelineVizProps) {
   const nodes = pipeline === "evaluation" ? evalNodes : brainstormNodes;
   const edges = pipeline === "evaluation" ? evalEdges : brainstormEdges;
-  const flowPath = pipeline === "evaluation" ? EVAL_FLOW_PATH : BRAINSTORM_FLOW_PATH;
-
   const getNodeStatus = (id: string): NodeStatus => activeNodes[id] || "idle";
   const visibleNodeIds = getVisibleNodeIds(pipeline, nodes, activeNodes);
   const isOverview = Object.keys(activeNodes).length === 0;
@@ -363,12 +376,25 @@ export function PipelineViz({ activeNodes = {}, pipeline = "evaluation", classNa
           );
         })}
 
-        <circle r="1" fill="rgba(99,166,255,0.9)">
-          <animateMotion dur="10s" repeatCount="indefinite" path={flowPath} />
-        </circle>
-        <circle r="2.5" fill="rgba(59,130,246,0.25)" filter="url(#particle-glow)">
-          <animateMotion dur="10s" repeatCount="indefinite" path={flowPath} />
-        </circle>
+        {(pipeline === "evaluation" ? EVAL_CX : BS_CX).map((cxArr) => {
+          const kt = pipeline === "evaluation" ? EVAL_KT : BS_KT;
+          const cy = pipeline === "evaluation" ? EVAL_CY : BS_CY;
+          const ks = pipeline === "evaluation" ? EVAL_KS : BS_KS;
+          const cx = cxArr.join(";");
+          const particleId = `p-${cxArr[1]}`;
+          return (
+            <g key={particleId}>
+              <circle r="0.7" fill="rgba(99,166,255,0.85)">
+                <animate attributeName="cx" dur={PARTICLE_DUR} repeatCount="indefinite" values={cx} keyTimes={kt} calcMode="spline" keySplines={ks} />
+                <animate attributeName="cy" dur={PARTICLE_DUR} repeatCount="indefinite" values={cy} keyTimes={kt} calcMode="spline" keySplines={ks} />
+              </circle>
+              <circle r="2" fill="rgba(59,130,246,0.15)" filter="url(#particle-glow)">
+                <animate attributeName="cx" dur={PARTICLE_DUR} repeatCount="indefinite" values={cx} keyTimes={kt} calcMode="spline" keySplines={ks} />
+                <animate attributeName="cy" dur={PARTICLE_DUR} repeatCount="indefinite" values={cy} keyTimes={kt} calcMode="spline" keySplines={ks} />
+              </circle>
+            </g>
+          );
+        })}
       </svg>
 
       <motion.div
