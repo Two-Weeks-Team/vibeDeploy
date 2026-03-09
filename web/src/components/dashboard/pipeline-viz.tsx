@@ -41,38 +41,40 @@ interface EdgeDef {
 }
 
 const evalNodes: NodeDef[] = [
-  { id: "input", label: "Input", x: 50, y: 5, emoji: "📝" },
-  { id: "architect", label: "Architect", x: 10, y: 18, emoji: "🏗️" },
-  { id: "scout", label: "Scout", x: 30, y: 18, emoji: "🔭" },
-  { id: "catalyst", label: "Catalyst", x: 50, y: 18, emoji: "⚡" },
-  { id: "guardian", label: "Guardian", x: 70, y: 18, emoji: "🛡️" },
-  { id: "advocate", label: "Advocate", x: 90, y: 18, emoji: "🎯" },
-  { id: "cross_exam", label: "Cross-Exam", x: 50, y: 31, emoji: "⚔️" },
-  { id: "score_tech", label: "Tech", x: 10, y: 44, emoji: "📊" },
-  { id: "score_market", label: "Market", x: 30, y: 44, emoji: "📊" },
-  { id: "score_innovation", label: "Innovation", x: 50, y: 44, emoji: "📊" },
-  { id: "score_risk", label: "Risk", x: 70, y: 44, emoji: "📊" },
-  { id: "score_user", label: "User", x: 90, y: 44, emoji: "📊" },
-  { id: "verdict", label: "Vibe Score™", x: 50, y: 57, emoji: "🏛️", glow: true },
-  { id: "decision", label: "Decision Gate", x: 50, y: 69, emoji: "🚦" },
-  { id: "doc_gen", label: "Specs", x: 30, y: 80, emoji: "📄" },
-  { id: "code_gen", label: "Code Gen", x: 70, y: 80, emoji: "💻" },
-  { id: "git_push", label: "Git Push", x: 10, y: 92, emoji: "📦" },
-  { id: "ci_test", label: "CI Test", x: 26, y: 92, emoji: "⚙️" },
-  { id: "app_spec", label: "App Spec", x: 42, y: 92, emoji: "📋" },
-  { id: "do_build", label: "Build", x: 58, y: 92, emoji: "🏗️" },
-  { id: "do_deploy", label: "Deploy", x: 74, y: 92, emoji: "🚀" },
-  { id: "verified", label: "Live", x: 90, y: 92, emoji: "✅", glow: true },
-  { id: "review", label: "Review", x: 50, y: 86 },
-  { id: "feedback", label: "Feedback", x: 50, y: 86 },
+  { id: "input", label: "Input", x: 50, y: 2, emoji: "📝" },
+  { id: "enrich", label: "Enrich", x: 50, y: 8, emoji: "✨" },
+  { id: "architect", label: "Architect", x: 10, y: 16, emoji: "🏗️" },
+  { id: "scout", label: "Scout", x: 30, y: 16, emoji: "🔭" },
+  { id: "catalyst", label: "Catalyst", x: 50, y: 16, emoji: "⚡" },
+  { id: "guardian", label: "Guardian", x: 70, y: 16, emoji: "🛡️" },
+  { id: "advocate", label: "Advocate", x: 90, y: 16, emoji: "🎯" },
+  { id: "cross_exam", label: "Cross-Exam", x: 50, y: 26, emoji: "⚔️" },
+  { id: "score_tech", label: "Tech", x: 10, y: 34, emoji: "📊" },
+  { id: "score_market", label: "Market", x: 30, y: 34, emoji: "📊" },
+  { id: "score_innovation", label: "Innovation", x: 50, y: 34, emoji: "📊" },
+  { id: "score_risk", label: "Risk", x: 70, y: 34, emoji: "📊" },
+  { id: "score_user", label: "User", x: 90, y: 34, emoji: "📊" },
+  { id: "verdict", label: "Vibe Score™", x: 50, y: 43, emoji: "🏛️", glow: true },
+  { id: "decision", label: "Decision Gate", x: 50, y: 51, emoji: "🚦" },
+  { id: "fix_storm", label: "Fix-Storm", x: 30, y: 59, emoji: "🔧" },
+  { id: "scope_down", label: "Scope-Down", x: 70, y: 59, emoji: "📐" },
+  { id: "doc_gen", label: "Specs", x: 30, y: 68, emoji: "📄" },
+  { id: "code_gen", label: "Code Gen", x: 70, y: 68, emoji: "💻" },
+  { id: "git_push", label: "Git Push", x: 10, y: 80, emoji: "📦" },
+  { id: "ci_test", label: "CI Test", x: 26, y: 80, emoji: "⚙️" },
+  { id: "app_spec", label: "App Spec", x: 42, y: 80, emoji: "📋" },
+  { id: "do_build", label: "Build", x: 58, y: 80, emoji: "🏗️" },
+  { id: "do_deploy", label: "Deploy", x: 74, y: 80, emoji: "🚀" },
+  { id: "verified", label: "Live", x: 90, y: 80, emoji: "✅", glow: true },
 ];
 
 const evalEdges: EdgeDef[] = [
-  { source: "input", target: "architect" },
-  { source: "input", target: "scout" },
-  { source: "input", target: "catalyst" },
-  { source: "input", target: "guardian" },
-  { source: "input", target: "advocate" },
+  { source: "input", target: "enrich" },
+  { source: "enrich", target: "architect" },
+  { source: "enrich", target: "scout" },
+  { source: "enrich", target: "catalyst" },
+  { source: "enrich", target: "guardian" },
+  { source: "enrich", target: "advocate" },
   { source: "architect", target: "cross_exam" },
   { source: "scout", target: "cross_exam" },
   { source: "catalyst", target: "cross_exam" },
@@ -90,6 +92,10 @@ const evalEdges: EdgeDef[] = [
   { source: "score_user", target: "verdict" },
   { source: "verdict", target: "decision" },
   { source: "decision", target: "doc_gen", label: "GO", labelColor: "rgba(16,185,129,0.9)" },
+  { source: "decision", target: "fix_storm" },
+  { source: "decision", target: "scope_down" },
+  { source: "fix_storm", target: "architect" },
+  { source: "scope_down", target: "doc_gen" },
   { source: "doc_gen", target: "code_gen" },
   { source: "code_gen", target: "git_push" },
   { source: "git_push", target: "ci_test" },
@@ -97,8 +103,6 @@ const evalEdges: EdgeDef[] = [
   { source: "app_spec", target: "do_build" },
   { source: "do_build", target: "do_deploy" },
   { source: "do_deploy", target: "verified" },
-  { source: "decision", target: "review" },
-  { source: "decision", target: "feedback" },
 ];
 
 const brainstormNodes: NodeDef[] = [
@@ -125,21 +129,22 @@ const brainstormEdges: EdgeDef[] = [
 ];
 
 const GO_NODES = new Set(["doc_gen", "code_gen", "git_push", "ci_test", "app_spec", "do_build", "do_deploy", "verified"]);
-const BOTTOM_NODES = new Set([...GO_NODES, "review", "feedback"]);
+const CONDITIONAL_NODES = new Set(["fix_storm", "scope_down"]);
+const BOTTOM_NODES = new Set([...GO_NODES, ...CONDITIONAL_NODES]);
 
 const PARTICLE_DUR = "12s";
 const EASE = "0.25 0.1 0.25 1";
 
-const EVAL_KT = "0;0.08;0.15;0.25;0.33;0.40;0.50;0.55;0.62;0.68;0.74;0.80;0.85;0.90;0.95;1";
-const EVAL_CY = "5;18;18;31;44;44;57;69;80;80;92;92;92;92;92;92";
+const EVAL_KT = "0;0.05;0.10;0.15;0.25;0.33;0.40;0.50;0.55;0.62;0.68;0.74;0.80;0.85;0.90;0.95;1";
+const EVAL_CY = "2;8;16;16;26;34;34;43;51;68;68;80;80;80;80;80;80";
 const EVAL_CX: number[][] = [
-  [50,10,10,50,10,10,50,50,30,70,10,26,42,58,74,90],
-  [50,30,30,50,30,30,50,50,30,70,10,26,42,58,74,90],
-  [50,50,50,50,50,50,50,50,30,70,10,26,42,58,74,90],
-  [50,70,70,50,70,70,50,50,30,70,10,26,42,58,74,90],
-  [50,90,90,50,90,90,50,50,30,70,10,26,42,58,74,90],
+  [50,50,10,10,50,10,10,50,50,30,70,10,26,42,58,74,90],
+  [50,50,30,30,50,30,30,50,50,30,70,10,26,42,58,74,90],
+  [50,50,50,50,50,50,50,50,50,30,70,10,26,42,58,74,90],
+  [50,50,70,70,50,70,70,50,50,30,70,10,26,42,58,74,90],
+  [50,50,90,90,50,90,90,50,50,30,70,10,26,42,58,74,90],
 ];
-const EVAL_KS = Array(15).fill(EASE).join("; ");
+const EVAL_KS = Array(16).fill(EASE).join("; ");
 
 const BS_KT = "0;0.30;0.45;1";
 const BS_CY = "10;45;45;85";
@@ -167,7 +172,7 @@ function getVisibleNodeIds(
     }
 
     if (!isLive) {
-      if (GO_NODES.has(node.id)) visible.add(node.id);
+      if (GO_NODES.has(node.id) || CONDITIONAL_NODES.has(node.id)) visible.add(node.id);
       continue;
     }
 
@@ -175,13 +180,13 @@ function getVisibleNodeIds(
     if (decisionStatus !== "complete") continue;
 
     const isGo = GO_NODES.has(node.id) && [...GO_NODES].some((n) => activeNodes[n] && activeNodes[n] !== "idle");
-    const isConditional = activeNodes["review"] && activeNodes["review"] !== "idle";
-    const isNoGo = activeNodes["feedback"] && activeNodes["feedback"] !== "idle";
+    const isFix = activeNodes["fix_storm"] && activeNodes["fix_storm"] !== "idle";
+    const isScopeDown = activeNodes["scope_down"] && activeNodes["scope_down"] !== "idle";
 
     if (isGo && !GO_NODES.has(node.id)) continue;
-    if (isConditional && node.id !== "review") continue;
-    if (isNoGo && node.id !== "feedback") continue;
-    if (!isGo && !isConditional && !isNoGo) { visible.add(node.id); continue; }
+    if (isFix && node.id !== "fix_storm") continue;
+    if (isScopeDown && node.id !== "scope_down" && !GO_NODES.has(node.id)) continue;
+    if (!isGo && !isFix && !isScopeDown) { visible.add(node.id); continue; }
 
     visible.add(node.id);
   }
@@ -253,14 +258,16 @@ export function PipelineViz({ activeNodes = {}, pipeline = "evaluation", classNa
 
   const phaseLabels = pipeline === "evaluation"
     ? [
-        { label: "INPUT", y: "2%", color: "text-slate-500" },
+        { label: "INPUT", y: "1%", color: "text-slate-500" },
+        { label: "ENRICH", y: "7%", color: "text-slate-500" },
         { label: "COUNCIL", y: "15%", color: "text-slate-500" },
-        { label: "DEBATE", y: "28%", color: "text-slate-500" },
-        { label: "SCORING", y: "41%", color: "text-slate-500" },
-        { label: "VERDICT", y: "54%", color: "text-blue-500/70" },
-        { label: "GATE", y: "66%", color: "text-amber-500/70" },
-        { label: "GEN", y: "77%", color: "text-emerald-500/60" },
-        { label: "SHIP", y: "89%", color: "text-emerald-500/70" },
+        { label: "DEBATE", y: "25%", color: "text-slate-500" },
+        { label: "SCORING", y: "33%", color: "text-slate-500" },
+        { label: "VERDICT", y: "42%", color: "text-blue-500/70" },
+        { label: "GATE", y: "50%", color: "text-amber-500/70" },
+        { label: "FIX", y: "58%", color: "text-orange-500/70" },
+        { label: "GEN", y: "67%", color: "text-emerald-500/60" },
+        { label: "SHIP", y: "79%", color: "text-emerald-500/70" },
       ]
     : [
         { label: "INPUT", y: "7%", color: "text-slate-500" },
@@ -269,7 +276,7 @@ export function PipelineViz({ activeNodes = {}, pipeline = "evaluation", classNa
       ];
 
   const phaseDividers = pipeline === "evaluation"
-    ? [11.5, 24.5, 37.5, 50.5, 63, 74.5, 86]
+    ? [5, 12, 21, 30, 38.5, 47, 55, 63.5, 74]
     : [28, 67];
 
   return (
@@ -433,6 +440,7 @@ export function PipelineViz({ activeNodes = {}, pipeline = "evaluation", classNa
                 className={cn(
                   "relative flex items-center justify-center px-2.5 py-1 rounded-full border text-[11px] font-medium transition-all duration-500 whitespace-nowrap gap-1",
                   getStatusColor(status),
+                  isOverview && CONDITIONAL_NODES.has(node.id) && "border-dashed opacity-60"
                 )}
               >
                 {node.emoji && <span className="text-[11px] leading-none">{node.emoji}</span>}

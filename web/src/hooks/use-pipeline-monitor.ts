@@ -12,14 +12,15 @@ const MAX_EVENTS = 200;
 
 const NODE_NAME_TO_VIZ_ID: Record<string, string> = {
   input_processor: "input",
+  enrich_idea: "enrich",
   cross_examination: "cross_exam",
   strategist_verdict: "verdict",
   decision_gate: "decision",
+  fix_storm: "fix_storm",
+  scope_down: "scope_down",
   doc_generator: "doc_gen",
   code_generator: "code_gen",
   deployer: "do_deploy",
-  feedback_generator: "feedback",
-  conditional_review: "review",
 };
 
 const AGENT_TO_VIZ_ID: Record<string, string> = {

@@ -58,27 +58,31 @@ class DeployResult(TypedDict):
 
 class VibeDeployState(TypedDict):
     # Input
-    raw_input: str  # 사용자 원본 입력
-    input_type: Literal["text", "youtube"]  # 입력 유형
-    transcript: Optional[str]  # YouTube 트랜스크립트 (있을 경우)
-    key_frames: Optional[List[Dict]]  # 추출된 키프레임 [{ timestamp, image_url, analysis }]
-    visual_context: Optional[str]  # GPT-4o vision 분석 결과 종합
+    raw_input: str
+    input_type: Literal["text", "youtube"]
+    transcript: Optional[str]
+    key_frames: Optional[List[Dict]]
+    visual_context: Optional[str]
 
     # Structured idea
-    idea: Dict  # 구조화된 아이디어 (텍스트 + 시각 컨텍스트 결합)
-    idea_summary: str  # 한 줄 요약
+    idea: Dict
+    idea_summary: str
+    original_idea: Optional[Dict]
+
+    eval_iteration: int
+    enrich_result: Optional[Dict]
+    fix_storm_result: Optional[Dict]
 
     # Vibe Council Meeting
-    meeting_messages: Annotated[list, add_messages]  # 회의 대화 로그
-    council_analysis: Optional[CouncilAnalysis]  # Phase 1 결과
-    cross_examination: Optional[CrossExamination]  # Phase 2 결과
+    meeting_messages: Annotated[list, add_messages]
+    council_analysis: Optional[CouncilAnalysis]
+    cross_examination: Optional[CrossExamination]
 
     # Scoring
     scoring: Optional[ScoringResult]
 
-    # Conditional path
-    user_feedback: Optional[str]  # 사용자 피드백 (CONDITIONAL 시)
-    scope_adjustment: Optional[str]  # 스코프 조정안
+    user_feedback: Optional[str]  # legacy
+    scope_adjustment: Optional[str]  # legacy
 
     # Documents
     generated_docs: Optional[GeneratedDocs]
