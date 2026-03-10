@@ -3,7 +3,7 @@ import json
 import logging
 import re
 
-from ..llm import MODEL_CONFIG, get_llm
+from ..llm import MODEL_CONFIG, ainvoke_with_retry, get_llm
 from ..prompts.code_templates import (
     BACKEND_SYSTEM_PROMPT,
     CODE_GENERATION_BASE_SYSTEM_PROMPT,
@@ -42,10 +42,9 @@ async def code_generator(state: VibeDeployState) -> dict:
 
     eval_feedback = _build_eval_feedback(code_eval_result)
 
-    frontend_code, backend_code = await asyncio.gather(
-        _generate_frontend_files(llm, context, eval_feedback=eval_feedback),
-        _generate_backend_files(llm, context, eval_feedback=eval_feedback),
-    )
+    frontend_code = await _generate_frontend_files(llm, context, eval_feedback=eval_feedback)
+    await asyncio.sleep(2)
+    backend_code = await _generate_backend_files(llm, context, eval_feedback=eval_feedback)
 
     generation_warnings = []
 
@@ -109,7 +108,8 @@ async def _generate_frontend_files(
     if eval_feedback:
         extra_instruction += f"\n\nPREVIOUS EVALUATION FEEDBACK (fix these issues):\n{eval_feedback}"
 
-    response = await llm.ainvoke(
+    response = await ainvoke_with_retry(
+        llm,
         [
             {
                 "role": "system",
@@ -124,7 +124,7 @@ async def _generate_frontend_files(
                 "role": "user",
                 "content": f"Generate frontend files from this product context:\n\n{context}",
             },
-        ]
+        ],
     )
 
     parsed = _parse_json_response(response.content, {"files": {}}, label="frontend")
@@ -141,7 +141,8 @@ async def _generate_backend_files(
     if eval_feedback:
         extra_instruction = f"\n\nPREVIOUS EVALUATION FEEDBACK (fix these issues):\n{eval_feedback}"
 
-    response = await llm.ainvoke(
+    response = await ainvoke_with_retry(
+        llm,
         [
             {
                 "role": "system",
@@ -160,7 +161,7 @@ async def _generate_backend_files(
                     f"{context}"
                 ),
             },
-        ]
+        ],
     )
 
     parsed = _parse_json_response(response.content, {"files": {}}, label="backend")

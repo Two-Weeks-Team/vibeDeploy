@@ -1,9 +1,12 @@
 """LLM factory — routes all calls through DO Serverless Inference with direct OpenAI fallback."""
 
+import asyncio
+import logging
 import os
 
 DO_INFERENCE_BASE_URL = "https://inference.do-ai.run/v1"
 DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS = float(os.getenv("LLM_REQUEST_TIMEOUT_SECONDS", "90"))
+logger = logging.getLogger(__name__)
 
 # Open-source models via DO Serverless Inference (no subscription tier restrictions)
 # Commercial models (Anthropic/OpenAI) temporarily unavailable — DO Support ticket pending.
@@ -42,6 +45,42 @@ def content_to_str(content) -> str:
     if isinstance(content, list):
         return "".join(block.get("text", "") if isinstance(block, dict) else str(block) for block in content)
     return str(content) if not isinstance(content, str) else content
+
+
+async def ainvoke_with_retry(
+    llm,
+    messages: list[dict],
+    *,
+    max_attempts: int = 4,
+    initial_delay_seconds: float = 2.0,
+):
+    delay = initial_delay_seconds
+    last_exc = None
+
+    for attempt in range(1, max_attempts + 1):
+        try:
+            return await llm.ainvoke(messages)
+        except Exception as exc:
+            last_exc = exc
+            if attempt >= max_attempts or not _is_rate_limit_error(exc):
+                raise
+
+            logger.warning(
+                "LLM rate limit hit; retrying in %.1fs (attempt %d/%d): %s",
+                delay,
+                attempt,
+                max_attempts,
+                exc,
+            )
+            await asyncio.sleep(delay)
+            delay = min(delay * 2, 15.0)
+
+    raise last_exc
+
+
+def _is_rate_limit_error(exc: Exception) -> bool:
+    message = str(exc).lower()
+    return "rate limit" in message or "429" in message
 
 
 def get_llm(
