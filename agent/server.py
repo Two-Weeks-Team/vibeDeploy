@@ -244,7 +244,7 @@ async def _stream_pipeline(prompt: str, thread_id: str) -> AsyncGenerator[str, N
     final_state = {}
 
     try:
-        config = {"configurable": {"thread_id": thread_id}}
+        config = {"configurable": {"thread_id": thread_id}, "recursion_limit": 80}
         async for event in graph_app.astream_events(
             {"raw_input": prompt},
             config=config,
@@ -440,7 +440,7 @@ async def _stream_resume(thread_id: str, action: str) -> AsyncGenerator[str, Non
     final_state = {}
 
     try:
-        config = {"configurable": {"thread_id": thread_id}}
+        config = {"configurable": {"thread_id": thread_id}, "recursion_limit": 80}
         async for event in graph_app.astream_events(
             Command(resume=action),
             config=config,
@@ -554,7 +554,7 @@ async def _stream_brainstorm(prompt: str, thread_id: str) -> AsyncGenerator[str,
     final_state = {}
 
     try:
-        config = {"configurable": {"thread_id": thread_id}}
+        config = {"configurable": {"thread_id": thread_id}, "recursion_limit": 80}
         async for event in brainstorm_app.astream_events(
             {"raw_input": prompt},
             config=config,
