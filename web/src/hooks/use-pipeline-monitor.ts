@@ -94,7 +94,10 @@ export function usePipelineMonitor() {
               if (data.type === "heartbeat") continue;
 
               if (data.type === "active_pipelines") {
-                setActivePipelines(data.pipelines ?? []);
+                const pipelines = Array.isArray(data.pipelines)
+                  ? (data.pipelines as ActivePipeline[])
+                  : [];
+                setActivePipelines(pipelines);
                 continue;
               }
 
