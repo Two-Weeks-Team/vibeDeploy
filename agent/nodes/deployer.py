@@ -119,6 +119,10 @@ async def deployer(state: VibeDeployState) -> dict:
     deploy_result = await deploy_to_digitalocean(github_clone_url, app_spec)
 
     if deploy_result.get("status") == "error":
+        logger.error(
+            "[DEPLOYER] DO deploy failed: %s",
+            deploy_result.get("error", "unknown"),
+        )
         result = await _local_fallback_deploy(
             app_name,
             all_files,
@@ -343,13 +347,16 @@ def _write_local_files(base_dir: Path, files: dict[str, str]) -> None:
 
 
 async def _spawn_background_process(command: list[str], cwd: Path) -> None:
-    await asyncio.create_subprocess_exec(
-        *command,
-        cwd=str(cwd),
-        stdout=asyncio.subprocess.DEVNULL,
-        stderr=asyncio.subprocess.DEVNULL,
-        start_new_session=True,
-    )
+    try:
+        await asyncio.create_subprocess_exec(
+            *command,
+            cwd=str(cwd),
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+            start_new_session=True,
+        )
+    except FileNotFoundError:
+        logger.warning("[DEPLOYER] Binary not found: %s", command[0])
 
 
 def _find_free_port(start_port: int) -> int:
