@@ -138,7 +138,7 @@ async def get_deploy_error_logs(app_id: str, deployment_id: str = "") -> str:
             for comp in components:
                 if not comp:
                     continue
-                for log_type in ("BUILD", "DEPLOY"):
+                for log_type in ("DEPLOY", "BUILD"):
                     try:
                         log_resp = await client.get(
                             f"{DO_API_BASE}/apps/{app_id}/deployments/{deployment_id}/logs",
@@ -152,8 +152,11 @@ async def get_deploy_error_logs(app_id: str, deployment_id: str = "") -> str:
                             content_resp = await client.get(urls[0], follow_redirects=True, timeout=30.0)
                             if content_resp.status_code == 200:
                                 text = content_resp.text
-                                if text and len(text) > 100:
-                                    logs_parts.append(f"=== {comp} {log_type} ===\n{text[-2000:]}")
+                                if not text or len(text) < 100:
+                                    continue
+                                if log_type == "BUILD" and "build complete" in text.lower():
+                                    continue
+                                logs_parts.append(f"=== {comp} {log_type} ===\n{text[-2000:]}")
                     except Exception:
                         continue
 

@@ -148,6 +148,7 @@ async def deployer(state: VibeDeployState) -> dict:
         if live_url:
             break
 
+        await asyncio.sleep(15)
         error_logs = await get_deploy_error_logs(app_id)
         if not error_logs:
             logger.warning("[DEPLOYER] Deploy failed but no error logs available (attempt %d)", attempt + 1)
