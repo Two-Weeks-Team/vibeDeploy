@@ -58,6 +58,7 @@ Requirements:
 - Keep dependencies minimal and compatible with Next.js 15.
 - TypeScript should be clean and practical.
 - Alias imports like "@/components/..." MUST compile under `npm run build`.
+- NEVER import from "@/src/...". When using the alias, write "@/components/...", "@/lib/...", "@/app/..." because "@/*" already points to "./src/*".
 - package.json engines field must specify: { "node": ">=20" }
 """.strip()
 
