@@ -3,6 +3,7 @@
 import os
 
 DO_INFERENCE_BASE_URL = "https://inference.do-ai.run/v1"
+DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS = float(os.getenv("LLM_REQUEST_TIMEOUT_SECONDS", "90"))
 
 # Open-source models via DO Serverless Inference (no subscription tier restrictions)
 # Commercial models (Anthropic/OpenAI) temporarily unavailable — DO Support ticket pending.
@@ -43,10 +44,16 @@ def content_to_str(content) -> str:
     return str(content) if not isinstance(content, str) else content
 
 
-def get_llm(model: str, temperature: float = 0.5, max_tokens: int = 3000):
+def get_llm(
+    model: str,
+    temperature: float = 0.5,
+    max_tokens: int = 3000,
+    request_timeout: float | None = None,
+):
     """Route LLM calls through DO Inference when key is available, else direct OpenAI."""
     inference_key = os.getenv("DIGITALOCEAN_INFERENCE_KEY", "")
     effective_max_tokens = max(256, max_tokens)
+    effective_timeout = request_timeout or DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS
 
     if inference_key and inference_key not in ("test-key", ""):
         from langchain_openai import ChatOpenAI
@@ -57,6 +64,7 @@ def get_llm(model: str, temperature: float = 0.5, max_tokens: int = 3000):
             base_url=DO_INFERENCE_BASE_URL,
             temperature=temperature,
             max_tokens=effective_max_tokens,
+            request_timeout=effective_timeout,
         )
 
     from langchain_openai import ChatOpenAI
@@ -65,4 +73,5 @@ def get_llm(model: str, temperature: float = 0.5, max_tokens: int = 3000):
         model=_strip_openai_prefix(model),
         temperature=temperature,
         max_tokens=effective_max_tokens,
+        request_timeout=effective_timeout,
     )

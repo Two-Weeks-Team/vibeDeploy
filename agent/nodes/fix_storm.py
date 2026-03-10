@@ -1,7 +1,13 @@
+import asyncio
 import json
+import logging
 import re
 
 from ..state import VibeDeployState
+
+logger = logging.getLogger(__name__)
+
+_FIX_STORM_TIMEOUT_SECONDS = 90
 
 FIX_STORM_PROMPT = (
     "You are an expert product fixer. An app idea was evaluated by The Vibe Council "
@@ -54,26 +60,36 @@ async def fix_storm(state: VibeDeployState) -> dict:
 
     llm = get_llm(model=MODEL_CONFIG["brainstorm"], temperature=0.7, max_tokens=8000)
 
-    response = await llm.ainvoke(
-        [
-            {"role": "system", "content": FIX_STORM_PROMPT},
-            {
-                "role": "user",
-                "content": json.dumps(
+    try:
+        response = await asyncio.wait_for(
+            llm.ainvoke(
+                [
+                    {"role": "system", "content": FIX_STORM_PROMPT},
                     {
-                        "idea": idea,
-                        "weak_axes": weak_axes,
-                        "overall_score": scoring.get("final_score", 0),
-                        "iteration": iteration + 1,
+                        "role": "user",
+                        "content": json.dumps(
+                            {
+                                "idea": idea,
+                                "weak_axes": weak_axes,
+                                "overall_score": scoring.get("final_score", 0),
+                                "iteration": iteration + 1,
+                            },
+                            indent=2,
+                            ensure_ascii=False,
+                        ),
                     },
-                    indent=2,
-                    ensure_ascii=False,
-                ),
-            },
-        ]
-    )
+                ]
+            ),
+            timeout=_FIX_STORM_TIMEOUT_SECONDS,
+        )
+        result = _parse_json(response.content)
+    except TimeoutError:
+        logger.warning("fix_storm timed out at iteration %s", iteration + 1)
+        result = _fallback_fix_storm_result(weak_axes, "fix_storm timed out")
+    except Exception as exc:
+        logger.exception("fix_storm failed at iteration %s", iteration + 1)
+        result = _fallback_fix_storm_result(weak_axes, str(exc)[:200])
 
-    result = _parse_json(response.content)
     improved = result.get("improved_idea", {})
     merged_idea = {**idea, **improved} if improved else idea
 
@@ -94,21 +110,31 @@ async def scope_down(state: VibeDeployState) -> dict:
 
     llm = get_llm(model=MODEL_CONFIG["brainstorm"], temperature=0.5, max_tokens=4000)
 
-    response = await llm.ainvoke(
-        [
-            {"role": "system", "content": SCOPE_DOWN_PROMPT},
-            {
-                "role": "user",
-                "content": json.dumps(
-                    {"idea": idea, "scoring": scoring},
-                    indent=2,
-                    ensure_ascii=False,
-                ),
-            },
-        ]
-    )
+    try:
+        response = await asyncio.wait_for(
+            llm.ainvoke(
+                [
+                    {"role": "system", "content": SCOPE_DOWN_PROMPT},
+                    {
+                        "role": "user",
+                        "content": json.dumps(
+                            {"idea": idea, "scoring": scoring},
+                            indent=2,
+                            ensure_ascii=False,
+                        ),
+                    },
+                ]
+            ),
+            timeout=_FIX_STORM_TIMEOUT_SECONDS,
+        )
+        result = _parse_json(response.content)
+    except TimeoutError:
+        logger.warning("scope_down timed out")
+        result = _fallback_scope_down_result(idea, "scope_down timed out")
+    except Exception as exc:
+        logger.exception("scope_down failed")
+        result = _fallback_scope_down_result(idea, str(exc)[:200])
 
-    result = _parse_json(response.content)
     mvp = result.get("mvp_idea", {})
     merged_idea = {**idea, **mvp} if mvp else idea
 
@@ -142,3 +168,48 @@ def _parse_json(content) -> dict:
             except json.JSONDecodeError:
                 pass
         return {}
+
+
+def _fallback_fix_storm_result(weak_axes: dict, reason: str) -> dict:
+    fixes = []
+    for axis_name in weak_axes:
+        fixes.append(
+            {
+                "axis": axis_name,
+                "fix_description": "Reduce scope and keep the implementation to core CRUD plus one differentiator.",
+                "expected_improvement": "Lower complexity and deployment risk while preserving the main value proposition.",
+            }
+        )
+    return {
+        "diagnosis": {axis_name: f"Fallback diagnosis: {reason}" for axis_name in weak_axes},
+        "fixes": fixes,
+        "improved_idea": {},
+        "improved_summary": "",
+        "fallback": True,
+        "note": reason,
+    }
+
+
+def _fallback_scope_down_result(idea: dict, reason: str) -> dict:
+    base_name = idea.get("name") or idea.get("title") or "Simple MVP"
+    features = idea.get("key_features") or []
+    if not isinstance(features, list):
+        features = []
+    core_features = [str(feature) for feature in features[:3] if str(feature).strip()]
+    if not core_features:
+        core_features = ["Create items", "Browse saved items", "Search or filter items"]
+
+    return {
+        "mvp_idea": {
+            "name": base_name,
+            "tagline": idea.get("tagline") or idea.get("summary") or f"{base_name}: minimal deployable MVP",
+            "problem": idea.get("problem") or "Users need a simpler way to complete one core workflow.",
+            "solution": idea.get("solution") or "Ship a minimal web app focused on one core use case.",
+            "key_features": core_features,
+            "tech_hints": ["FastAPI backend", "Next.js frontend", "Simple persistence only"],
+        },
+        "removed_features": ["Fallback scope reduction applied because the scope-down model was unavailable."],
+        "mvp_rationale": f"Fallback MVP used to keep the pipeline moving ({reason}).",
+        "fallback": True,
+        "note": reason,
+    }

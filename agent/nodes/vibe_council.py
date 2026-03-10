@@ -1,10 +1,16 @@
+import asyncio
 import json
+import logging
 import re
 
 from langgraph.types import Send
 
 from ..council import advocate, architect, catalyst, guardian, scout
 from ..state import VibeDeployState
+
+logger = logging.getLogger(__name__)
+
+_COUNCIL_LLM_TIMEOUT_SECONDS = 90
 
 COUNCIL_MEMBERS = {
     "architect": architect,
@@ -53,7 +59,15 @@ async def run_council_agent(input: dict) -> dict:
             }
         }
 
-    analysis = await agent_module.analyze(idea)
+    try:
+        analysis = await asyncio.wait_for(agent_module.analyze(idea), timeout=_COUNCIL_LLM_TIMEOUT_SECONDS)
+    except TimeoutError:
+        logger.warning("Council agent timed out: %s", agent_name)
+        analysis = _fallback_analysis(agent_name, "analysis timed out")
+    except Exception as exc:
+        logger.exception("Council agent failed: %s", agent_name)
+        analysis = _fallback_analysis(agent_name, str(exc)[:200])
+
     return {
         "council_analysis": {agent_name: analysis},
     }
@@ -114,25 +128,34 @@ async def _run_debate(
         "integer adjustments, e.g. {'architect': -5, 'guardian': +3})."
     )
 
-    response = await llm.ainvoke(
-        [
-            {
-                "role": "system",
-                "content": "You simulate structured debates between AI council members. Return valid JSON only.",
-            },
-            {"role": "user", "content": prompt},
-        ]
-    )
+    default = {
+        "rounds": [],
+        "consensus": [],
+        "disagreements": [],
+        "score_adjustments": {},
+    }
 
-    return _parse_json_response(
-        response.content,
-        {
-            "rounds": [],
-            "consensus": [],
-            "disagreements": [],
-            "score_adjustments": {},
-        },
-    )
+    try:
+        response = await asyncio.wait_for(
+            llm.ainvoke(
+                [
+                    {
+                        "role": "system",
+                        "content": "You simulate structured debates between AI council members. Return valid JSON only.",
+                    },
+                    {"role": "user", "content": prompt},
+                ]
+            ),
+            timeout=_COUNCIL_LLM_TIMEOUT_SECONDS,
+        )
+    except TimeoutError:
+        logger.warning("Cross-examination debate timed out: %s vs %s", agent_a, agent_b)
+        return {**default, "note": f"{agent_a}_vs_{agent_b} debate timed out"}
+    except Exception as exc:
+        logger.exception("Cross-examination debate failed: %s vs %s", agent_a, agent_b)
+        return {**default, "note": str(exc)[:200]}
+
+    return _parse_json_response(response.content, default)
 
 
 async def _run_advocate_challenge(llm, idea: dict, analyses: dict) -> dict:
@@ -149,21 +172,33 @@ async def _run_advocate_challenge(llm, idea: dict, analyses: dict) -> dict:
         "(dict of agent name to int adjustment)."
     )
 
-    response = await llm.ainvoke(
-        [
-            {"role": "system", "content": "You are the Advocate, the voice of end users. Return valid JSON only."},
-            {"role": "user", "content": prompt},
-        ]
-    )
+    default = {
+        "challenges": [],
+        "user_concerns": [],
+        "score_adjustments": {},
+    }
 
-    return _parse_json_response(
-        response.content,
-        {
-            "challenges": [],
-            "user_concerns": [],
-            "score_adjustments": {},
-        },
-    )
+    try:
+        response = await asyncio.wait_for(
+            llm.ainvoke(
+                [
+                    {
+                        "role": "system",
+                        "content": "You are the Advocate, the voice of end users. Return valid JSON only.",
+                    },
+                    {"role": "user", "content": prompt},
+                ]
+            ),
+            timeout=_COUNCIL_LLM_TIMEOUT_SECONDS,
+        )
+    except TimeoutError:
+        logger.warning("Advocate challenge timed out")
+        return {**default, "note": "advocate challenge timed out"}
+    except Exception as exc:
+        logger.exception("Advocate challenge failed")
+        return {**default, "note": str(exc)[:200]}
+
+    return _parse_json_response(response.content, default)
 
 
 def fan_out_scoring(state: VibeDeployState) -> list[Send]:
@@ -278,3 +313,14 @@ def _parse_json_response(content, default: dict) -> dict:
         result = dict(default)
         result["raw_response"] = content[:500]
         return result
+
+
+def _fallback_analysis(agent_name: str, reason: str) -> dict:
+    base_score = 30 if agent_name == "guardian" else 68
+    return {
+        "findings": [f"Fallback analysis used for {agent_name}: {reason}."],
+        "score": base_score,
+        "reasoning": f"Fallback analysis used because the council model could not respond normally ({reason}).",
+        "recommendations": [],
+        "fallback": True,
+    }
