@@ -16,6 +16,18 @@ logger = logging.getLogger(__name__)
 # Minimum expected file counts for validation
 _MIN_FRONTEND_FILES = 3  # At least package.json + 2 source files
 _MIN_BACKEND_FILES = 2  # At least main.py + requirements.txt
+_FONT_DEFAULT_WEIGHTS = {
+    "Merriweather": ["400", "700"],
+    "Playfair_Display": ["400", "700"],
+    "Libre_Baskerville": ["400", "700"],
+    "Cormorant_Garamond": ["400", "700"],
+    "Crimson_Text": ["400", "700"],
+    "Lora": ["400", "700"],
+    "DM_Serif_Display": ["400"],
+    "Baskervville": ["400"],
+    "Alegreya": ["400", "700"],
+    "Roboto_Slab": ["400", "700"],
+}
 
 
 async def code_generator(state: VibeDeployState) -> dict:
@@ -252,6 +264,7 @@ def _normalize_frontend_files(files: dict[str, str]) -> dict[str, str]:
         normalized = _normalize_frontend_invalid_next_imports(normalized)
         normalized = _normalize_frontend_use_client_directives(normalized)
         normalized = _normalize_frontend_state_types(normalized)
+        normalized = _normalize_frontend_next_font_weights(normalized)
         normalized = _normalize_frontend_error_parsing(normalized)
         normalized = _normalize_frontend_partial_ai_requests(normalized)
         normalized = _normalize_frontend_component_exports(normalized)
@@ -397,6 +410,38 @@ def _normalize_frontend_state_types(files: dict[str, str]) -> dict[str, str]:
                 updated,
             )
         normalized[path] = updated
+    return normalized
+
+
+def _normalize_frontend_next_font_weights(files: dict[str, str]) -> dict[str, str]:
+    normalized: dict[str, str] = {}
+
+    for path, content in files.items():
+        updated = content
+        if path.endswith((".ts", ".tsx")) and "next/font/google" in content:
+            imported_fonts = re.findall(
+                r"import\s+\{\s*([A-Za-z0-9_]+)\s*\}\s+from\s+['\"]next/font/google['\"]",
+                content,
+            )
+            for font_name in imported_fonts:
+                default_weights = _FONT_DEFAULT_WEIGHTS.get(font_name)
+                if not default_weights:
+                    continue
+
+                pattern = re.compile(rf"{font_name}\(\{{(?P<body>[\s\S]*?)\}}\)")
+
+                def repl(match: re.Match[str]) -> str:
+                    body = match.group("body")
+                    if "weight" in body:
+                        return match.group(0)
+                    weight_values = ", ".join(f"'{weight}'" for weight in default_weights)
+                    stripped = body.strip()
+                    body_suffix = f", {stripped}" if stripped else ""
+                    return f"{font_name}({{ weight: [{weight_values}]{body_suffix} }})"
+
+                updated = pattern.sub(repl, updated)
+        normalized[path] = updated
+
     return normalized
 
 

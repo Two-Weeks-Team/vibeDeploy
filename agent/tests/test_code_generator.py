@@ -145,6 +145,20 @@ def test_normalize_frontend_files_adds_resilient_api_error_handling_and_partial_
     assert "Tag generation failed, but the summary is available." in normalized["src/components/Hero.tsx"]
 
 
+def test_normalize_frontend_files_adds_required_google_font_weights():
+    files = {
+        "src/components/InsightPanel.tsx": (
+            "import { Merriweather } from 'next/font/google';\n"
+            "const merri = Merriweather({ subsets: ['latin'], variable: '--font-merri' });\n"
+            "export default function InsightPanel(){ return <section className={merri.variable}>Hello</section>; }\n"
+        )
+    }
+
+    normalized = _normalize_frontend_files(files)
+
+    assert "weight: ['400', '700']" in normalized["src/components/InsightPanel.tsx"]
+
+
 def test_normalize_backend_files_coerces_plain_text_ai_responses():
     files = {
         "ai_service.py": (

@@ -57,6 +57,7 @@ Experience and design requirements:
 - Pick an explicit visual direction that matches the product domain. The result must not look like a default SaaS dashboard template.
 - Build a memorable first screen with clear hierarchy, differentiated copy, and a focused primary action.
 - Use `next/font` for typography. Avoid relying on the default system stack alone or a plain Inter-only treatment unless the product context explicitly calls for it.
+- When using `next/font/google`, include valid `weight` values for families that require them. Do not leave required font weights unspecified.
 - Define theme tokens in CSS variables (background, foreground, card, muted, border, primary, accent, success, warning, radius, shadow).
 - Backgrounds must have depth through gradients, radial accents, grids, texture, or layered surfaces. Avoid flat white canvases.
 - Use color intentionally. Do not default to purple-on-white or gray card grids unless the domain genuinely supports it.
