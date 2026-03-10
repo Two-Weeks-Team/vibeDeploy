@@ -29,12 +29,12 @@ async def code_generator(state: VibeDeployState) -> dict:
     frontend_llm = get_llm(
         model=frontend_model,
         temperature=0.3,
-        max_tokens=8000,
+        max_tokens=12000,
     )
     backend_llm = get_llm(
         model=backend_model,
         temperature=0.3,
-        max_tokens=8000,
+        max_tokens=10000,
     )
 
     context = json.dumps(

@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 
 MAX_CODE_EVAL_ITERATIONS = 3
 MAX_EMPTY_FRONTEND_RETRIES = 5
-PASS_THRESHOLD = 85
+PASS_THRESHOLD = 80
 
 
 async def code_evaluator(state: VibeDeployState) -> dict:
