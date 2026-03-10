@@ -20,18 +20,18 @@ _llm_semaphore: asyncio.Semaphore | None = None
 #   web_search: openai-gpt-5-mini
 #   image: openai-gpt-image-1
 MODEL_CONFIG = {
-    "council": "alibaba-qwen3-32b",
+    "council": "deepseek-r1-distill-llama-70b",
     "strategist": "deepseek-r1-distill-llama-70b",
     "cross_exam": "deepseek-r1-distill-llama-70b",
     "code_gen": "openai-gpt-oss-120b",
     "code_gen_frontend": "openai-gpt-oss-120b",
     "code_gen_backend": "openai-gpt-oss-120b",
-    "ci_repair": "alibaba-qwen3-32b",
-    "doc_gen": "alibaba-qwen3-32b",
+    "ci_repair": "deepseek-r1-distill-llama-70b",
+    "doc_gen": "deepseek-r1-distill-llama-70b",
     "image": "fal-ai/flux/schnell",
-    "brainstorm": "alibaba-qwen3-32b",
-    "brainstorm_synthesis": "alibaba-qwen3-32b",
-    "input": "alibaba-qwen3-32b",
+    "brainstorm": "deepseek-r1-distill-llama-70b",
+    "brainstorm_synthesis": "deepseek-r1-distill-llama-70b",
+    "input": "deepseek-r1-distill-llama-70b",
     "decision": "deepseek-r1-distill-llama-70b",
     "web_search": "mistral-nemo-instruct-2407",
 }
