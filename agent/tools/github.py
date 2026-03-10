@@ -180,13 +180,16 @@ async def push_files(
     repo: dict,
     files: dict[str, str],
     commit_message: str = "Update from vibeDeploy",
-    branch: str = "main",
+    branch: str | None = None,
 ) -> dict:
     from github import GithubException, InputGitTreeElement
 
     try:
         gh = _get_client()
         gh_repo = gh.get_repo(repo["full_name"])
+
+        if branch is None:
+            branch = gh_repo.default_branch
 
         ref = gh_repo.get_git_ref(f"heads/{branch}")
         base_sha = ref.object.sha
