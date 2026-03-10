@@ -224,6 +224,7 @@ def _normalize_frontend_files(files: dict[str, str]) -> dict[str, str]:
 
     if any(path.startswith("src/") for path in normalized):
         normalized = _normalize_frontend_import_aliases(normalized)
+        normalized = _normalize_frontend_invalid_next_imports(normalized)
         normalized = _normalize_frontend_use_client_directives(normalized)
         normalized = _normalize_frontend_state_types(normalized)
         normalized = _normalize_frontend_component_exports(normalized)
@@ -265,6 +266,21 @@ def _normalize_frontend_component_exports(files: dict[str, str]) -> dict[str, st
     return normalized
 
 
+def _normalize_frontend_invalid_next_imports(files: dict[str, str]) -> dict[str, str]:
+    normalized: dict[str, str] = {}
+    for path, content in files.items():
+        updated = content
+        if path.endswith((".ts", ".tsx")):
+            updated = re.sub(
+                r"^import\s+\{\s*API\s*\}\s+from\s+['\"]next/app['\"]\s*;?\n",
+                "",
+                updated,
+                flags=re.MULTILINE,
+            )
+        normalized[path] = updated
+    return normalized
+
+
 def _normalize_frontend_use_client_directives(files: dict[str, str]) -> dict[str, str]:
     normalized: dict[str, str] = {}
     client_signal = re.compile(
@@ -299,6 +315,14 @@ def _normalize_frontend_state_types(files: dict[str, str]) -> dict[str, str]:
             updated = re.sub(
                 r"(?<!<)React\.useState\(\s*\{\s*\}\s*\)",
                 "React.useState<Record<string, any>>({})",
+                updated,
+            )
+            updated = re.sub(r"(?<!<)useState\(\s*null\s*\)", "useState<any>(null)", updated)
+            updated = re.sub(r"(?<!<)React\.useState\(\s*null\s*\)", "React.useState<any>(null)", updated)
+            updated = re.sub(r"(?<!<)useState\(\s*undefined\s*\)", "useState<any>(undefined)", updated)
+            updated = re.sub(
+                r"(?<!<)React\.useState\(\s*undefined\s*\)",
+                "React.useState<any>(undefined)",
                 updated,
             )
         normalized[path] = updated

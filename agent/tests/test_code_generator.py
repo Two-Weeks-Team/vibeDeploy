@@ -6,9 +6,10 @@ from agent.nodes.code_generator import _normalize_frontend_files
 def test_normalize_frontend_files_patches_next_tsconfig_and_tailwind():
     files = {
         "src/app/page.tsx": (
+            "import { API } from 'next/app';\n"
             "import { useState } from 'react';\n"
             "import Form from '@/src/components/Form';\n"
-            "export default function Page() { const [items, setItems] = useState([]); return null; }"
+            "export default function Page() { const [items, setItems] = useState([]); const [selected, setSelected] = useState(null); return null; }"
         ),
         "src/components/Form.tsx": "export function Form() { return null; }",
         "tsconfig.json": json.dumps(
@@ -32,7 +33,9 @@ def test_normalize_frontend_files_patches_next_tsconfig_and_tailwind():
     assert "@/src/" not in normalized["src/app/page.tsx"]
     assert "@/components/Form" in normalized["src/app/page.tsx"]
     assert normalized["src/app/page.tsx"].startswith('"use client";')
+    assert "next/app" not in normalized["src/app/page.tsx"]
     assert "useState<any[]>([])" in normalized["src/app/page.tsx"]
+    assert "useState<any>(null)" in normalized["src/app/page.tsx"]
     assert "export default Form" in normalized["src/components/Form.tsx"]
     assert tsconfig["compilerOptions"]["moduleResolution"] == "bundler"
     assert tsconfig["compilerOptions"]["paths"] == {"@/*": ["./src/*"]}
