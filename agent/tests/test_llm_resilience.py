@@ -26,11 +26,8 @@ async def test_run_council_agent_uses_fallback_on_timeout(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_cross_examination_uses_fallback_on_timeout(monkeypatch):
-    import agent.llm as llm_mod
+async def test_cross_examination_uses_deterministic_fallback():
     from agent.nodes.vibe_council import cross_examination
-
-    monkeypatch.setattr(llm_mod, "get_llm", lambda *args, **kwargs: _TimeoutLLM())
 
     result = await cross_examination({"idea": {"name": "Test App"}, "council_analysis": {}})
 
@@ -39,7 +36,7 @@ async def test_cross_examination_uses_fallback_on_timeout(monkeypatch):
     assert debates["architect_vs_guardian"]["score_adjustments"] == {}
     assert debates["scout_vs_catalyst"]["score_adjustments"] == {}
     assert debates["advocate_challenges"]["score_adjustments"] == {}
-    assert "timed out" in debates["architect_vs_guardian"]["note"]
+    assert "Deterministic" in debates["architect_vs_guardian"]["note"]
 
 
 @pytest.mark.asyncio
@@ -85,3 +82,11 @@ async def test_scope_down_uses_fallback_mvp_on_timeout(monkeypatch):
     assert result["scoring"]["decision"] == "GO"
     assert result["idea"]["name"] == "Bookmark MVP"
     assert result["idea"]["key_features"] == ["Save links", "Tag links", "Search links"]
+
+
+def test_route_decision_scopes_down_after_second_conditional_failure():
+    from agent.nodes.decision_gate import route_decision
+
+    route = route_decision({"scoring": {"decision": "CONDITIONAL"}, "eval_iteration": 1})
+
+    assert route == "scope_down"

@@ -74,16 +74,12 @@ async def run_council_agent(input: dict) -> dict:
 
 
 async def cross_examination(state: VibeDeployState) -> dict:
-    from ..llm import MODEL_CONFIG, get_llm
-
     analyses = state.get("council_analysis", {})
     idea = state.get("idea", {})
-
-    llm = get_llm(model=MODEL_CONFIG["cross_exam"], temperature=0.6, max_tokens=16000)
     debates = {}
 
     debates["architect_vs_guardian"] = await _run_debate(
-        llm,
+        None,
         idea,
         analyses,
         agent_a="architect",
@@ -91,14 +87,14 @@ async def cross_examination(state: VibeDeployState) -> dict:
         topic="Technical feasibility vs potential risks",
     )
     debates["scout_vs_catalyst"] = await _run_debate(
-        llm,
+        None,
         idea,
         analyses,
         agent_a="scout",
         agent_b="catalyst",
         topic="Market reality vs innovation potential",
     )
-    debates["advocate_challenges"] = await _run_advocate_challenge(llm, idea, analyses)
+    debates["advocate_challenges"] = await _run_advocate_challenge(None, idea, analyses)
 
     return {
         "cross_examination": debates,
@@ -114,91 +110,56 @@ async def _run_debate(
     agent_b: str,
     topic: str,
 ) -> dict:
-    analysis_a = json.dumps(analyses.get(agent_a, {}), indent=2, ensure_ascii=False)
-    analysis_b = json.dumps(analyses.get(agent_b, {}), indent=2, ensure_ascii=False)
-    prompt = (
-        f"You are moderating a debate about: {topic}\n\n"
-        f"Idea: {json.dumps(idea, ensure_ascii=False)}\n\n"
-        f"{agent_a.title()}'s analysis:\n{analysis_a}\n\n"
-        f"{agent_b.title()}'s analysis:\n{analysis_b}\n\n"
-        "Generate a structured debate with 2 rounds of exchange. "
-        "Each agent should challenge the other's findings and defend their position. "
-        "Return JSON with keys: 'rounds' (list of exchanges), 'consensus' (areas of agreement), "
-        "'disagreements' (unresolved points), 'score_adjustments' (dict mapping agent names to "
-        "integer adjustments, e.g. {'architect': -5, 'guardian': +3})."
-    )
+    del llm
+    del idea
 
-    default = {
-        "rounds": [],
-        "consensus": [],
-        "disagreements": [],
+    analysis_a = analyses.get(agent_a, {}) or {}
+    analysis_b = analyses.get(agent_b, {}) or {}
+    findings_a = _top_items(analysis_a.get("findings"), fallback=f"{agent_a.title()} focuses on {topic.lower()}.")
+    findings_b = _top_items(analysis_b.get("findings"), fallback=f"{agent_b.title()} focuses on {topic.lower()}.")
+
+    return {
+        "rounds": [
+            {"speaker": agent_a, "point": findings_a[0]},
+            {"speaker": agent_b, "point": findings_b[0]},
+        ],
+        "consensus": _shared_points(findings_a, findings_b),
+        "disagreements": [findings_a[0], findings_b[0]],
         "score_adjustments": {},
+        "note": "Deterministic cross-examination used to avoid provider stalls.",
     }
-
-    try:
-        response = await asyncio.wait_for(
-            llm.ainvoke(
-                [
-                    {
-                        "role": "system",
-                        "content": "You simulate structured debates between AI council members. Return valid JSON only.",
-                    },
-                    {"role": "user", "content": prompt},
-                ]
-            ),
-            timeout=_COUNCIL_LLM_TIMEOUT_SECONDS,
-        )
-    except TimeoutError:
-        logger.warning("Cross-examination debate timed out: %s vs %s", agent_a, agent_b)
-        return {**default, "note": f"{agent_a}_vs_{agent_b} debate timed out"}
-    except Exception as exc:
-        logger.exception("Cross-examination debate failed: %s vs %s", agent_a, agent_b)
-        return {**default, "note": str(exc)[:200]}
-
-    return _parse_json_response(response.content, default)
 
 
 async def _run_advocate_challenge(llm, idea: dict, analyses: dict) -> dict:
-    all_analyses = json.dumps(analyses, indent=2, ensure_ascii=False)
-    prompt = (
-        "You are the Advocate (UX Champion) challenging all other council members.\n\n"
-        f"Idea: {json.dumps(idea, ensure_ascii=False)}\n\n"
-        f"All analyses:\n{all_analyses}\n\n"
-        "Challenge each agent's findings from the user's perspective. "
-        "Ask: Will real users actually benefit? Is the proposed tech stack user-friendly? "
-        "Are the risks relevant to end-users? "
-        "Return JSON with keys: 'challenges' (list of challenge objects with 'target_agent' and "
-        "'challenge' and 'response'), 'user_concerns' (list), 'score_adjustments' "
-        "(dict of agent name to int adjustment)."
+    del llm
+    del idea
+
+    advocate_analysis = analyses.get("advocate", {}) or {}
+    user_concerns = _top_items(
+        advocate_analysis.get("findings"),
+        fallback="Keep the user flow minimal and obvious from the first screen.",
     )
-
-    default = {
-        "challenges": [],
-        "user_concerns": [],
-        "score_adjustments": {},
-    }
-
-    try:
-        response = await asyncio.wait_for(
-            llm.ainvoke(
-                [
-                    {
-                        "role": "system",
-                        "content": "You are the Advocate, the voice of end users. Return valid JSON only.",
-                    },
-                    {"role": "user", "content": prompt},
-                ]
-            ),
-            timeout=_COUNCIL_LLM_TIMEOUT_SECONDS,
+    challenges = []
+    for target_agent in ("architect", "scout", "guardian", "catalyst"):
+        target_analysis = analyses.get(target_agent, {}) or {}
+        response_points = _top_items(
+            target_analysis.get("recommendations") or target_analysis.get("findings"),
+            fallback=f"{target_agent.title()} recommends keeping the MVP tightly scoped.",
         )
-    except TimeoutError:
-        logger.warning("Advocate challenge timed out")
-        return {**default, "note": "advocate challenge timed out"}
-    except Exception as exc:
-        logger.exception("Advocate challenge failed")
-        return {**default, "note": str(exc)[:200]}
+        challenges.append(
+            {
+                "target_agent": target_agent,
+                "challenge": user_concerns[0],
+                "response": response_points[0],
+            }
+        )
 
-    return _parse_json_response(response.content, default)
+    return {
+        "challenges": challenges,
+        "user_concerns": user_concerns,
+        "score_adjustments": {},
+        "note": "Deterministic advocate challenge used to avoid provider stalls.",
+    }
 
 
 def fan_out_scoring(state: VibeDeployState) -> list[Send]:
@@ -324,3 +285,20 @@ def _fallback_analysis(agent_name: str, reason: str) -> dict:
         "recommendations": [],
         "fallback": True,
     }
+
+
+def _top_items(values, fallback: str) -> list[str]:
+    if not isinstance(values, list):
+        return [fallback]
+    items = [str(value).strip() for value in values if str(value).strip()]
+    return items[:2] or [fallback]
+
+
+def _shared_points(findings_a: list[str], findings_b: list[str]) -> list[str]:
+    if not findings_a or not findings_b:
+        return []
+    first_a = findings_a[0].lower()
+    first_b = findings_b[0].lower()
+    if first_a == first_b:
+        return [findings_a[0]]
+    return ["Both agents agree the MVP should stay tightly scoped and deployable."]

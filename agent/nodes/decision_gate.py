@@ -15,7 +15,7 @@ def route_decision(state: VibeDeployState) -> str:
     if decision == "GO":
         return "doc_generator"
 
-    if iteration >= 2:
+    if iteration >= 1:
         return "scope_down"
 
     return "fix_storm"
