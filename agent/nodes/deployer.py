@@ -11,14 +11,17 @@ from urllib import error, request
 from ..state import VibeDeployState
 from ..tools.digitalocean import (
     build_app_spec,
+    delete_app,
     deploy_to_digitalocean,
     get_deploy_error_logs,
+    list_apps,
     redeploy_app,
     wait_for_deployment,
 )
 from ..tools.github import create_github_repo, get_ci_failure_logs, push_files, wait_for_ci
 
 logger = logging.getLogger(__name__)
+_DO_APP_LIMIT_ERROR_SNIPPET = "app count"
 
 
 async def deployer(state: VibeDeployState) -> dict:
@@ -122,7 +125,7 @@ async def deployer(state: VibeDeployState) -> dict:
         return result
 
     app_spec = build_app_spec(app_name, github_clone_url, has_frontend=has_frontend)
-    deploy_result = await deploy_to_digitalocean(github_clone_url, app_spec)
+    deploy_result = await _deploy_with_capacity_retry(app_name, github_clone_url, app_spec)
 
     if deploy_result.get("status") == "error":
         logger.error(
@@ -230,6 +233,67 @@ async def deployer(state: VibeDeployState) -> dict:
         },
         "phase": "deployed",
     }
+
+
+async def _deploy_with_capacity_retry(app_name: str, github_clone_url: str, app_spec: dict) -> dict:
+    deploy_result = await deploy_to_digitalocean(github_clone_url, app_spec)
+    cleanup_attempts = 0
+
+    while _is_do_app_limit_error(deploy_result) and cleanup_attempts < 3:
+        cleanup_result = await _reclaim_do_app_capacity(app_name)
+        if cleanup_result.get("status") != "deleted":
+            break
+        cleanup_attempts += 1
+        deploy_result = await deploy_to_digitalocean(github_clone_url, app_spec)
+
+    return deploy_result
+
+
+def _is_do_app_limit_error(deploy_result: dict) -> bool:
+    return deploy_result.get("status") == "error" and _DO_APP_LIMIT_ERROR_SNIPPET in deploy_result.get("error", "").lower()
+
+
+async def _reclaim_do_app_capacity(target_app_name: str) -> dict:
+    apps = await list_apps()
+    candidates = []
+
+    for app in apps:
+        app_id = app.get("id", "")
+        name = app.get("spec", {}).get("name", "")
+        live_url = app.get("live_url", "")
+        created_at = app.get("created_at", "")
+        phase = app.get("active_deployment", {}).get("phase", "UNKNOWN")
+
+        if not app_id or not name or name in {target_app_name, "vibedeploy"}:
+            continue
+        if live_url:
+            continue
+
+        candidates.append(
+            {
+                "id": app_id,
+                "name": name,
+                "created_at": created_at,
+                "phase": phase,
+            }
+        )
+
+    if not candidates:
+        logger.warning("[DEPLOYER] DO app limit reached but no failed apps were eligible for deletion")
+        return {"status": "no_candidate"}
+
+    candidates.sort(key=lambda app: (app.get("created_at", ""), app.get("name", "")))
+    candidate = candidates[0]
+    logger.warning(
+        "[DEPLOYER] Deleting failed DO app to free capacity: %s (%s, phase=%s)",
+        candidate["name"],
+        candidate["id"],
+        candidate["phase"],
+    )
+    delete_result = await delete_app(candidate["id"])
+    if delete_result.get("status") == "deleted":
+        await asyncio.sleep(10)
+    return delete_result
 
 
 _CI_REPAIR_PROMPT = """You are a CI/deploy repair engineer. Fix the failing code so the build and deployment succeed.

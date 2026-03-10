@@ -224,6 +224,7 @@ def _normalize_frontend_files(files: dict[str, str]) -> dict[str, str]:
 
     if any(path.startswith("src/") for path in normalized):
         normalized = _normalize_frontend_import_aliases(normalized)
+        normalized = _normalize_frontend_state_types(normalized)
         normalized = _normalize_frontend_component_exports(normalized)
         normalized.setdefault(
             "next-env.d.ts",
@@ -232,6 +233,7 @@ def _normalize_frontend_files(files: dict[str, str]) -> dict[str, str]:
 
         normalized["tsconfig.json"] = _normalize_next_tsconfig(normalized.get("tsconfig.json", ""))
         normalized["tailwind.config.ts"] = _normalize_tailwind_config(normalized.get("tailwind.config.ts", ""))
+        normalized["postcss.config.js"] = _normalize_postcss_config(normalized.get("postcss.config.js", ""))
 
     return normalized
 
@@ -257,6 +259,27 @@ def _normalize_frontend_component_exports(files: dict[str, str]) -> dict[str, st
             if match:
                 component_name = match.group(1)
                 updated = f"{content.rstrip()}\n\nexport default {component_name}\n"
+        normalized[path] = updated
+    return normalized
+
+
+def _normalize_frontend_state_types(files: dict[str, str]) -> dict[str, str]:
+    normalized: dict[str, str] = {}
+    for path, content in files.items():
+        updated = content
+        if path.endswith((".ts", ".tsx")):
+            updated = re.sub(r"(?<!<)useState\(\s*\[\s*\]\s*\)", "useState<any[]>([])", updated)
+            updated = re.sub(
+                r"(?<!<)React\.useState\(\s*\[\s*\]\s*\)",
+                "React.useState<any[]>([])",
+                updated,
+            )
+            updated = re.sub(r"(?<!<)useState\(\s*\{\s*\}\s*\)", "useState<Record<string, any>>({})", updated)
+            updated = re.sub(
+                r"(?<!<)React\.useState\(\s*\{\s*\}\s*\)",
+                "React.useState<Record<string, any>>({})",
+                updated,
+            )
         normalized[path] = updated
     return normalized
 
@@ -342,6 +365,20 @@ def _normalize_tailwind_config(raw: str) -> str:
         "  plugins: [],\n"
         "};\n\n"
         "export default config;\n"
+    )
+
+
+def _normalize_postcss_config(raw: str) -> str:
+    if "module.exports" in raw and "plugins" in raw:
+        return raw
+
+    return (
+        "module.exports = {\n"
+        "  plugins: {\n"
+        "    tailwindcss: {},\n"
+        "    autoprefixer: {},\n"
+        "  },\n"
+        "};\n"
     )
 
 

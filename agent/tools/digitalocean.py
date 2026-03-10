@@ -100,6 +100,35 @@ async def get_app_status(app_id: str) -> dict:
         return {"app_id": app_id, "phase": "ERROR", "error": str(e)[:200]}
 
 
+async def list_apps(per_page: int = 50) -> list[dict]:
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.get(
+                f"{DO_API_BASE}/apps",
+                params={"per_page": per_page},
+                headers=_headers(),
+            )
+            response.raise_for_status()
+            return response.json().get("apps", [])
+    except Exception:
+        return []
+
+
+async def delete_app(app_id: str) -> dict:
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.delete(
+                f"{DO_API_BASE}/apps/{app_id}",
+                headers=_headers(),
+            )
+            response.raise_for_status()
+            return {"status": "deleted", "app_id": app_id}
+    except httpx.HTTPStatusError as e:
+        return {"status": "error", "error": f"HTTP {e.response.status_code}: {e.response.text[:200]}"}
+    except Exception as e:
+        return {"status": "error", "error": str(e)[:200]}
+
+
 async def get_deploy_error_logs(app_id: str, deployment_id: str = "") -> str:
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
