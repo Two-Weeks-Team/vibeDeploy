@@ -1,6 +1,6 @@
 import json
 
-from agent.nodes.code_generator import _normalize_files_dict, _normalize_frontend_files
+from agent.nodes.code_generator import _normalize_cross_stack, _normalize_files_dict, _normalize_frontend_files
 
 
 def test_normalize_frontend_files_patches_next_tsconfig_and_tailwind():
@@ -60,3 +60,40 @@ def test_normalize_files_dict_stringifies_structured_file_bodies():
 
     assert '"name": "demo"' in normalized["package.json"]
     assert normalized["src/app/page.tsx"].startswith("export default")
+
+
+def test_normalize_cross_stack_fixes_api_prefix_and_payload_field_names():
+    frontend = {
+        "src/lib/api.ts": (
+            "export async function fetchSummaries(url) {\n"
+            "  return fetch(`${API_BASE}/summarize`, {\n"
+            "    method: 'POST',\n"
+            "    body: JSON.stringify({ url }),\n"
+            "  });\n"
+            "}\n"
+        )
+    }
+    backend = {
+        "main.py": (
+            "from fastapi import FastAPI\n"
+            "from routes import router\n\n"
+            "app = FastAPI()\n"
+            "app.include_router(router)\n"
+        ),
+        "routes.py": (
+            "from fastapi import APIRouter\n"
+            "from pydantic import BaseModel\n\n"
+            'router = APIRouter(prefix="/api")\n\n'
+            "class SummarizeRequest(BaseModel):\n"
+            "    content: str\n\n"
+            '@router.post("/summarize")\n'
+            "async def summarize(req: SummarizeRequest):\n"
+            "    return {\"summary\": req.content}\n"
+        ),
+    }
+
+    normalized_frontend, normalized_backend = _normalize_cross_stack(frontend, backend)
+
+    assert 'prefix="/api"' not in normalized_backend["routes.py"]
+    assert '@app.middleware("http")' in normalized_backend["main.py"]
+    assert 'JSON.stringify({ content: url })' in normalized_frontend["src/lib/api.ts"]

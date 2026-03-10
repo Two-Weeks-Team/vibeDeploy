@@ -62,6 +62,7 @@ async def code_generator(state: VibeDeployState) -> dict:
         eval_feedback=eval_feedback,
         fallback_models=get_rate_limit_fallback_models(backend_model),
     )
+    frontend_code, backend_code = _normalize_cross_stack(frontend_code, backend_code)
 
     generation_warnings = []
 
@@ -197,7 +198,7 @@ async def _generate_backend_files(
 
     parsed = _parse_json_response(response.content, {"files": {}}, label="backend")
     files = parsed.get("files", {})
-    return _normalize_files_dict(files)
+    return _normalize_backend_files(_normalize_files_dict(files))
 
 
 def _build_eval_feedback(code_eval_result: dict | None) -> str | None:
@@ -250,6 +251,18 @@ def _normalize_frontend_files(files: dict[str, str]) -> dict[str, str]:
     return normalized
 
 
+def _normalize_backend_files(files: dict[str, str]) -> dict[str, str]:
+    normalized = dict(files)
+    normalized = _normalize_backend_api_routes(normalized)
+    return normalized
+
+
+def _normalize_cross_stack(frontend_files: dict[str, str], backend_files: dict[str, str]) -> tuple[dict[str, str], dict[str, str]]:
+    normalized_backend = _normalize_backend_files(backend_files)
+    normalized_frontend = _normalize_frontend_request_payloads(frontend_files, normalized_backend)
+    return normalized_frontend, normalized_backend
+
+
 def _normalize_frontend_import_aliases(files: dict[str, str]) -> dict[str, str]:
     normalized: dict[str, str] = {}
     for path, content in files.items():
@@ -286,6 +299,37 @@ def _normalize_frontend_invalid_next_imports(files: dict[str, str]) -> dict[str,
                 updated,
                 flags=re.MULTILINE,
             )
+        normalized[path] = updated
+    return normalized
+
+
+def _normalize_frontend_request_payloads(
+    frontend_files: dict[str, str],
+    backend_files: dict[str, str],
+) -> dict[str, str]:
+    routes_source = backend_files.get("routes.py", "")
+    endpoint_fields = _extract_backend_request_fields(routes_source)
+    if not endpoint_fields:
+        return frontend_files
+
+    normalized: dict[str, str] = {}
+    for path, content in frontend_files.items():
+        updated = content
+        if path.endswith((".ts", ".tsx", ".js", ".jsx")):
+            for endpoint, fields in endpoint_fields.items():
+                if len(fields) != 1:
+                    continue
+                field = fields[0]
+                updated = re.sub(
+                    rf"({re.escape(endpoint)}[\s\S]*?JSON\.stringify\(\{{\s*)(\w+)(\s*\}}\))",
+                    lambda match: (
+                        match.group(0)
+                        if match.group(2) == field
+                        else f"{match.group(1)}{field}: {match.group(2)}{match.group(3)}"
+                    ),
+                    updated,
+                    count=1,
+                )
         normalized[path] = updated
     return normalized
 
@@ -416,6 +460,74 @@ def _normalize_next_config(raw: str) -> str:
         "  reactStrictMode: true,\n"
         "};\n"
     )
+
+
+def _normalize_backend_api_routes(files: dict[str, str]) -> dict[str, str]:
+    normalized = dict(files)
+
+    routes_content = normalized.get("routes.py", "")
+    if routes_content:
+        normalized["routes.py"] = _strip_api_prefix_from_router(routes_content)
+
+    main_content = normalized.get("main.py", "")
+    if main_content:
+        normalized["main.py"] = _inject_optional_api_prefix_middleware(main_content)
+
+    return normalized
+
+
+def _strip_api_prefix_from_router(content: str) -> str:
+    match = re.search(r"APIRouter\(([^)]*)\)", content)
+    if not match or "prefix" not in match.group(1):
+        return content
+
+    args = re.sub(r"\s*prefix\s*=\s*['\"]/api['\"]\s*,?", "", match.group(1))
+    args = re.sub(r"^\s*,\s*", "", args)
+    args = re.sub(r",\s*,", ", ", args).strip().strip(",")
+    replacement = f"APIRouter({args})" if args else "APIRouter()"
+    return f"{content[:match.start()]}{replacement}{content[match.end():]}"
+
+
+def _inject_optional_api_prefix_middleware(content: str) -> str:
+    if '@app.middleware("http")' in content or "@app.middleware('http')" in content:
+        return content
+
+    updated = content
+    if "from fastapi import FastAPI, Request" not in updated:
+        updated = updated.replace("from fastapi import FastAPI", "from fastapi import FastAPI, Request")
+
+    middleware = (
+        '\n@app.middleware("http")\n'
+        "async def normalize_api_prefix(request: Request, call_next):\n"
+        '    if request.scope.get("path", "").startswith("/api/"):\n'
+        '        request.scope["path"] = request.scope["path"][4:] or "/"\n'
+        "    return await call_next(request)\n"
+    )
+
+    marker = "app.include_router(router)"
+    if marker in updated:
+        return updated.replace(marker, f"{middleware}\n{marker}", 1)
+    return updated
+
+
+def _extract_backend_request_fields(routes_source: str) -> dict[str, list[str]]:
+    model_fields: dict[str, list[str]] = {}
+
+    for class_name, body in re.findall(r"class\s+(\w+)\(BaseModel\):\n((?:\s+.+\n)+)", routes_source):
+        fields = re.findall(r"^\s+(\w+)\s*:", body, flags=re.MULTILINE)
+        if fields:
+            model_fields[class_name] = fields
+
+    endpoint_fields: dict[str, list[str]] = {}
+    for endpoint, _param_name, model_name in re.findall(
+        r'@router\.(?:post|put|patch)\("([^"]+)"\)\nasync def \w+\((\w+):\s*(\w+)',
+        routes_source,
+    ):
+        fields = model_fields.get(model_name)
+        if fields:
+            endpoint_fields[endpoint] = fields
+
+    return endpoint_fields
 
 
 def _normalize_tailwind_config(raw: str) -> str:
