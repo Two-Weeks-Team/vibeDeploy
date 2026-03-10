@@ -153,9 +153,11 @@ def build_app_spec(
     }
 
     if has_frontend:
+        api_name = f"{name[:28]}-api"
+        web_name = f"{name[:28]}-web"
         spec["static_sites"] = [
             {
-                "name": f"{name[:28]}-web",
+                "name": web_name,
                 "github": {
                     "repo": github_parts,
                     "branch": branch,
@@ -167,5 +169,12 @@ def build_app_spec(
                 "environment_slug": "node-js",
             },
         ]
+        # Explicit ingress rules to avoid path conflict between API and static site
+        spec["ingress"] = {
+            "rules": [
+                {"match": {"path": {"prefix": "/api"}}, "component": {"name": api_name}},
+                {"match": {"path": {"prefix": "/"}}, "component": {"name": web_name}},
+            ]
+        }
 
     return spec
