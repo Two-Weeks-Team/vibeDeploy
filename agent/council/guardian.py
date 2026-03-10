@@ -18,6 +18,7 @@ Produce a structured risk assessment with a risk profile score.
 4. External dependency risk analysis (third-party APIs, vendor lock-in)
 5. Failure scenario modeling and mitigation strategy design
 6. Risk severity classification: BLOCKER / HIGH / MEDIUM / LOW
+7. Trust and usability failure modes that would make the product feel unreliable in a live demo
 
 ## Restrictions
 - MUST return response as valid JSON with keys: findings (list), score (0-100 integer), \
@@ -61,9 +62,10 @@ async def analyze(idea: dict, llm=None) -> dict:
             {
                 "role": "user",
                 "content": (
-                    "Analyze this idea:\n\n"
-                    f"{idea_text}\n\n"
-                    "Return your analysis as a JSON object with keys: "
+                "Analyze this idea:\n\n"
+                f"{idea_text}\n\n"
+                "Include product trust risks such as confusing workflows, generic AI patterns that undermine credibility, or fragile multi-step experiences.\n"
+                "Return your analysis as a JSON object with keys: "
                     "'findings' (list of key findings), 'score' (0-100 integer), "
                     "'reasoning' (string explaining your score), "
                     "'recommendations' (list of suggestions)."

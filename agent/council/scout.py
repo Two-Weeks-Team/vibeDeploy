@@ -16,6 +16,7 @@ and product-market fit. Produce a structured market assessment with a viability 
 4. Differentiation and positioning opportunities
 5. Revenue model viability assessment
 6. Growth potential and market trend analysis
+7. User expectations set by competitor product quality and visual trust signals
 
 ## Restrictions
 - MUST return response as valid JSON with keys: findings (list), score (0-100 integer), \
@@ -48,6 +49,7 @@ async def analyze(idea: dict, llm=None) -> dict:
                 "Analyze this idea:\n\n"
                 f"{idea_text}\n\n"
                 "You have access to tools for market research. Use them if helpful.\n"
+                "Factor in whether the product concept can look differentiated and trustworthy compared with existing category leaders.\n"
                 "Return your analysis as a JSON object with keys: "
                 "'findings' (list of key findings), 'score' (0-100 integer), "
                 "'reasoning' (string explaining your score), "

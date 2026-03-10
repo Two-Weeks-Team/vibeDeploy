@@ -17,6 +17,7 @@ BRAINSTORM_PROMPTS = {
         "- 3 innovative tech stack combinations that could make this shine\n"
         "- 2 unconventional architecture approaches (edge computing, serverless, event-driven, etc.)\n"
         "- 1 moonshot technical feature that would wow users\n"
+        "- 1 frontend system choice that would make the product feel premium without hurting build reliability\n"
         "- Key technical enablers that exist today but most people don't know about\n\n"
         "Focus on POSSIBILITIES, not limitations. Be creative and specific."
     ),
@@ -35,6 +36,7 @@ BRAINSTORM_PROMPTS = {
         "- 3 ways to make this 10x more disruptive\n"
         "- 2 adjacent problems this solution could also solve\n"
         "- 1 'what if' scenario that would redefine the category\n"
+        "- 1 signature product moment or interface behavior that would be unforgettable in a demo\n"
         "- Analogies from other industries that could inspire breakthrough features\n\n"
         "Think bold, unconventional, boundary-pushing. No idea is too wild."
     ),
@@ -53,6 +55,7 @@ BRAINSTORM_PROMPTS = {
         "- 3 delightful UX micro-interactions that would make users smile\n"
         "- 2 accessibility features that expand the addressable market\n"
         "- 1 viral loop mechanism built into the core experience\n"
+        "- 1 concrete visual direction that feels current and specific to the domain\n"
         "- 'Day in the life' scenario showing how this transforms a user's workflow\n\n"
         "Think from the user's heart, not just their hands. Make it human."
     ),
@@ -146,6 +149,8 @@ async def synthesize_brainstorm(state: dict) -> dict:
                     "- 'top_ideas' (list of 5 best ideas ranked, each with "
                     "'title', 'description', 'source_agent')\n"
                     "- 'synergies' (list of idea combinations that are stronger together)\n"
+                    "- 'experience_principles' (list of 3 concise UX or visual principles)\n"
+                    "- 'demo_hook' (string describing the best 30-second wow moment)\n"
                     "- 'recommended_direction' (string — one paragraph strategic recommendation)\n"
                     "- 'quick_wins' (list of 3 things to implement first)\n"
                     "Return ONLY valid JSON."

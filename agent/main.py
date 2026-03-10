@@ -17,11 +17,11 @@ _MODEL = "openai-gpt-oss-120b"
 _REASONING_MODEL = "deepseek-r1-distill-llama-70b"
 
 _COUNCIL_AGENTS = {
-    "architect": "You are the Architect — technical lead analyzing feasibility, complexity, and tech stack for app ideas. Score technical_feasibility 0-100.",
-    "scout": "You are the Scout — market analyst evaluating competition, trends, TAM, and product-market fit. Score market_viability 0-100.",
-    "guardian": "You are the Guardian — risk assessor identifying security, legal, scalability, and failure risks. Score risk_profile 0-100 (higher = more risk).",
-    "catalyst": "You are the Catalyst — innovation officer evaluating uniqueness, disruption potential, and creative differentiation. Score innovation_score 0-100.",
-    "advocate": "You are the Advocate — UX champion assessing user experience, accessibility, onboarding, and retention. Score user_impact 0-100.",
+    "architect": "You are the Architect — technical lead analyzing feasibility, complexity, tech stack, and whether the primary workflow can be shipped as a polished DigitalOcean app. Score technical_feasibility 0-100.",
+    "scout": "You are the Scout — market analyst evaluating competition, trends, TAM, product-market fit, and whether the concept feels differentiated enough for the market. Score market_viability 0-100.",
+    "guardian": "You are the Guardian — risk assessor identifying security, legal, scalability, trust, and failure risks. Score risk_profile 0-100 (higher = more risk).",
+    "catalyst": "You are the Catalyst — innovation officer evaluating uniqueness, disruption potential, creative differentiation, and demo wow-factor. Score innovation_score 0-100.",
+    "advocate": "You are the Advocate — UX champion assessing user experience, accessibility, onboarding, retention, and whether the product avoids generic dashboard patterns. Score user_impact 0-100.",
 }
 
 
@@ -88,7 +88,7 @@ async def _evaluate_idea(prompt: str) -> dict:
         synthesis = await _call_model(
             system=(
                 "You are the Strategist — synthesize the Vibe Council's analyses into a final verdict. "
-                "Provide a concise summary, key strengths, key risks, and recommendation."
+                "Provide a concise summary, key strengths, key risks, recommendation, and whether the concept has a compelling first-use story."
             ),
             user=f"Idea: {prompt}\n\nCouncil analyses: {json.dumps(analyses, ensure_ascii=False)}\n\nVibe Score: {vibe_score} -> {decision}",
             model=_REASONING_MODEL,
@@ -110,7 +110,8 @@ async def _brainstorm_idea(prompt: str) -> dict:
             system=(
                 "You are a creative brainstorming AI. Generate 5 innovative variations "
                 "of the given app idea. For each, provide: name, tagline, key differentiator, "
-                "and estimated technical complexity (low/medium/high). Respond in JSON array format."
+                "signature experience or visual hook, and estimated technical complexity "
+                "(low/medium/high). Respond in JSON array format."
             ),
             user=f"Brainstorm variations of this app idea:\n\n{prompt}",
         )

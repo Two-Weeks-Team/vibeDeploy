@@ -13,7 +13,9 @@ FIX_STORM_PROMPT = (
     "You are an expert product fixer. An app idea was evaluated by The Vibe Council "
     "and scored below 70 (threshold for GO).\n\n"
     "Your job: Analyze the weak scoring axes and propose CONCRETE fixes that will "
-    "raise the score above 70. Focus ONLY on the weaknesses.\n\n"
+    "raise the score above 70. Focus ONLY on the weaknesses. If the idea feels bland, "
+    "generic, or visually forgettable, sharpen the product story and UX identity instead "
+    "of adding random features.\n\n"
     "For each weak axis, provide:\n"
     "1. Root cause of the low score\n"
     "2. Specific modification to the idea that fixes it\n"
@@ -31,9 +33,10 @@ SCOPE_DOWN_PROMPT = (
     "Your job: Strip it down to the ABSOLUTE MINIMUM viable product that:\n"
     "1. Solves ONE core problem extremely well\n"
     "2. Has 2-3 features maximum\n"
-    "3. Can be built with a simple tech stack (FastAPI + static HTML)\n"
+    "3. Can be built with a simple tech stack (FastAPI + lightweight Next.js)\n"
     "4. Has minimal risk (no external APIs, no payments, no auth)\n"
-    "5. Is guaranteed to be deployable\n\n"
+    "5. Is guaranteed to be deployable\n"
+    "6. Still feels coherent and polished in a hackathon demo\n\n"
     "Return JSON with:\n"
     "- 'mvp_idea': dict with name, tagline, problem, solution, key_features (2-3 max), "
     "tech_hints\n"
@@ -182,8 +185,8 @@ def _fallback_fix_storm_result(weak_axes: dict, reason: str) -> dict:
         fixes.append(
             {
                 "axis": axis_name,
-                "fix_description": "Reduce scope and keep the implementation to core CRUD plus one differentiator.",
-                "expected_improvement": "Lower complexity and deployment risk while preserving the main value proposition.",
+                "fix_description": "Reduce scope, sharpen the core workflow, and add one memorable differentiator instead of extra surface area.",
+                "expected_improvement": "Lower complexity and deployment risk while making the product clearer and more demo-worthy.",
             }
         )
     return {

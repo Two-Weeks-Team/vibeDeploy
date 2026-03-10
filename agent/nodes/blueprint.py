@@ -14,6 +14,13 @@ Given: PRD, Tech Spec, API Spec, and DB Schema documents.
 Output a JSON object with this exact structure:
 {
   "app_name": "short-kebab-name",
+  "design_system": {
+    "visual_direction": "brief phrase",
+    "color_tokens": ["background", "primary", "accent"],
+    "typography": "headline/body pairing",
+    "motion_principles": ["staggered reveal", "soft hover lift"],
+    "ui_constraints": ["avoid generic admin templates"]
+  },
   "frontend_files": {
     "package.json": {"purpose": "npm manifest", "imports_from": [], "exports": []},
     "src/app/layout.tsx": {"purpose": "root layout", "imports_from": ["src/app/globals.css"], "exports": ["RootLayout"]},
@@ -30,19 +37,23 @@ Output a JSON object with this exact structure:
   },
   "shared_constants": {
     "api_base_url": "/api",
-    "env_vars": ["DATABASE_URL", "DIGITALOCEAN_INFERENCE_KEY"]
+    "env_vars": ["DATABASE_URL", "DIGITALOCEAN_INFERENCE_KEY"],
+    "theme_tokens": ["background", "foreground", "primary", "accent", "card"]
   },
   "frontend_backend_contract": [
-    {"frontend_file": "src/lib/api.ts", "calls": "GET /api/items", "backend_file": "routes.py"}
+    {"frontend_file": "src/lib/api.ts", "calls": "GET /api/items", "backend_file": "routes.py", "request_fields": [], "response_fields": ["items"]}
   ]
 }
 
 Rules:
-- Frontend: Next.js 16 App Router. Required: package.json, src/app/layout.tsx, src/app/page.tsx, src/app/globals.css, src/lib/api.ts, 2-3 domain components.
+- Frontend: Next.js 15 App Router. Required: package.json, src/app/layout.tsx, src/app/page.tsx, src/app/globals.css, src/lib/api.ts, 2-3 domain components.
+- The frontend manifest must include a primary workflow shell, a result/list/detail component, and at least one explicit state or feedback component when relevant.
 - Backend: FastAPI. Required: requirements.txt, main.py, models.py, routes.py, ai_service.py.
 - All backend files are FLAT in project root (no packages, no relative imports).
 - Every file must have a clear purpose and list its dependencies.
 - Include at least 2 AI-powered business endpoints in the contract.
+- The contract should make request body field names explicit when a POST or PUT endpoint is involved.
+- Reflect the visual direction from the PRD and tech spec in the manifest so code generation can carry it through.
 - Return ONLY the JSON object, no markdown wrapping."""
 
 

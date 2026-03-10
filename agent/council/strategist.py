@@ -16,6 +16,7 @@ You do NOT score any individual axis.
 2. Vibe Score calculation using the weighted formula
 3. Strategic verdict delivery with actionable recommendations
 4. Conflict resolution when agents disagree
+5. Identifying whether the concept will read as compelling and polished in a hackathon demo
 
 ## Restrictions
 - Vibe Score = (Tech * 0.25) + (Market * 0.20) + (Innovation * 0.20) \
@@ -49,10 +50,11 @@ async def analyze(idea: dict, llm=None) -> dict:
                 "role": "user",
                 "content": (
                     f"Idea to evaluate:\n\n{idea_text}\n\n"
-                    "Provide your strategic synthesis. Return JSON with keys: "
-                    "'key_themes' (list), 'critical_concerns' (list), "
-                    "'strategic_recommendations' (list), 'overall_assessment' (string)."
-                ),
+                "Provide your strategic synthesis. Return JSON with keys: "
+                "'key_themes' (list), 'critical_concerns' (list), "
+                "'strategic_recommendations' (list), 'overall_assessment' (string). "
+                "Explicitly call out if the concept feels visually generic or lacks a strong first-use story."
+            ),
             },
         ],
         fallback_models=get_rate_limit_fallback_models(strategist_model),

@@ -16,6 +16,7 @@ technical assessment with a feasibility score.
 3. DigitalOcean service mapping (App Platform, Managed DB, Spaces, Serverless Inference)
 4. Complexity assessment and MVP timeline estimation
 5. Technical risk identification and dependency analysis
+6. Frontend architecture choices that support a fast, polished primary workflow
 
 ## Restrictions
 - MUST return response as valid JSON with keys: findings (list), score (0-100 integer), \
@@ -48,6 +49,7 @@ async def analyze(idea: dict, llm=None) -> dict:
                 "Analyze this idea:\n\n"
                 f"{idea_text}\n\n"
                 "You have access to tools for tech research and DO docs. Use them if helpful.\n"
+                "Consider whether the architecture can support a credible, responsive, demo-worthy user experience without fragile complexity.\n"
                 "Return your analysis as a JSON object with keys: "
                 "'findings' (list of key findings), 'score' (0-100 integer), "
                 "'reasoning' (string explaining your score), "

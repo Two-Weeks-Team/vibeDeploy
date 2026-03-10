@@ -11,6 +11,7 @@ Rules:
 - System architecture target: Next.js 15 frontend + FastAPI backend + PostgreSQL + DigitalOcean Serverless Inference API.
 - Outputs must align with each other (features, endpoints, schema, and deployment).
 - Be specific to the given business domain and users.
+- Make the product feel demo-worthy: a distinctive user journey, clear value density, and a concrete visual direction should appear across the documents.
 """.strip()
 
 
@@ -24,11 +25,14 @@ Include:
 4) Domain-specific AI integration points (minimum 3)
 5) Success metrics (activation, retention, task efficiency, model quality)
 6) Risks and mitigation plan
+7) Design direction and brand personality
+8) Key screens, UX states, and the primary demo moment
 
 Style:
 - Concrete and implementation-oriented
 - Include acceptance criteria bullets for each MVP feature
 - Avoid buzzwords and generic filler
+- Make the design direction explicit: describe tone, hierarchy, interaction style, and what the first impression should feel like.
 """.strip()
 
 
@@ -46,10 +50,13 @@ Include:
 4) Model usage plan (which model/task and why)
 5) Reliability/performance/security considerations
 6) Deployment/runtime assumptions on DigitalOcean App Platform
+7) Frontend experience architecture: page hierarchy, state model, loading/error/empty states
+8) Design system guidance: tokens, typography, motion budget, responsive behavior
 
 Style:
 - Engineering-focused
 - Explicitly map each feature to backend/frontend components
+- Call out any API path, request-body, or naming contracts that the frontend and backend must share exactly.
 """.strip()
 
 
@@ -62,6 +69,7 @@ Include:
 3) Validation rules and error response format
 4) At least 2 AI-powered endpoints where AI is core business logic
 5) Auth assumptions (if needed) and rate-limit guidance
+6) Frontend/backend contract notes for request body field names, expected status codes, and `/api` ingress behavior
 
 The API should be directly implementable in FastAPI.
 """.strip()

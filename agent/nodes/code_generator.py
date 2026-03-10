@@ -82,6 +82,7 @@ async def code_generator(state: VibeDeployState) -> dict:
             retry=True,
             fallback_models=get_rate_limit_fallback_models(frontend_model),
         )
+        frontend_code, backend_code = _normalize_cross_stack(frontend_code, backend_code)
 
         if len(frontend_code) < _MIN_FRONTEND_FILES:
             retry_warning = (
@@ -149,7 +150,15 @@ async def _generate_frontend_files(
             },
             {
                 "role": "user",
-                "content": f"Generate frontend files from this product context:\n\n{context}",
+                "content": (
+                    "Generate frontend files from this product context.\n\n"
+                    "### Product Context\n"
+                    f"{context}\n\n"
+                    "### Execution Notes\n"
+                    "- Convert the PRD, tech spec, and blueprint into a visually distinctive product, not a generic dashboard.\n"
+                    "- Treat any design_direction, visual_style_hints, ux_highlights, and demo_story as hard requirements.\n"
+                    "- Build the first-run experience for judges seeing the app for the first time in a live demo.\n"
+                ),
             },
         ],
         fallback_models=fallback_models,
@@ -188,8 +197,12 @@ async def _generate_backend_files(
                 "role": "user",
                 "content": (
                     "Generate backend files from this product context. "
-                    "AI features must be integral to business endpoints:\n\n"
-                    f"{context}"
+                    "AI features must be integral to business endpoints.\n\n"
+                    "### Product Context\n"
+                    f"{context}\n\n"
+                    "### Execution Notes\n"
+                    "- Preserve the frontend/backend contract exactly for endpoint paths and request field names.\n"
+                    "- Keep routes robust behind DigitalOcean ingress by avoiding APIRouter(prefix='/api').\n"
                 ),
             },
         ],

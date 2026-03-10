@@ -18,6 +18,7 @@ Produce a structured innovation assessment with an innovation score.
 4. Competitive moat strength evaluation
 5. Demo and pitch "wow factor" assessment
 6. Creative enhancement suggestions to increase innovation score
+7. Signature workflow or interface moments that make the idea memorable
 
 ## Restrictions
 - MUST return response as valid JSON with keys: findings (list), score (0-100 integer), \
@@ -38,6 +39,7 @@ change how people interact with technology.
 - Look for innovation in the WHOLE, not just the parts. \
 An idea that creatively integrates AI, targets a specific pain point, \
 and offers a unique workflow deserves 70+.
+- Distinctive UX and presentation count. A familiar feature set with a sharply better experience can still score high.
 
 ## Limitations
 - Analysis is based on the provided idea description only
@@ -61,9 +63,10 @@ async def analyze(idea: dict, llm=None) -> dict:
             {
                 "role": "user",
                 "content": (
-                    "Analyze this idea:\n\n"
-                    f"{idea_text}\n\n"
-                    "Return your analysis as a JSON object with keys: "
+                "Analyze this idea:\n\n"
+                f"{idea_text}\n\n"
+                "Pay attention to whether the app has a memorable demo moment or a differentiated interface, not just novel backend logic.\n"
+                "Return your analysis as a JSON object with keys: "
                     "'findings' (list of key findings), 'score' (0-100 integer), "
                     "'reasoning' (string explaining your score), "
                     "'recommendations' (list of suggestions)."

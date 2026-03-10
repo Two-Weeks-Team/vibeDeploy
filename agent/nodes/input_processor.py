@@ -6,8 +6,9 @@ from ..state import VibeDeployState
 from ..tools.youtube import extract_youtube_transcript, is_youtube_url
 
 IDEA_EXTRACTION_PROMPT = (
-    "You are an expert product analyst. Given the user's raw input (and optionally a YouTube transcript), "
-    "extract a structured idea description.\n\n"
+    "You are an expert product and experience strategist. Given the user's raw input "
+    "(and optionally a YouTube transcript), extract a structured idea description that "
+    "preserves product intent, user workflow, and any visual cues.\n\n"
     "Return a JSON object with these fields:\n"
     "- name: A short, catchy app name suggestion (2-3 words)\n"
     "- tagline: One-line elevator pitch\n"
@@ -17,6 +18,11 @@ IDEA_EXTRACTION_PROMPT = (
     "- key_features: List of 3-5 core features\n"
     "- tech_hints: Any technology preferences mentioned\n"
     "- monetization_hints: Any revenue model hints\n\n"
+    "- visual_style_hints: List of any brand, mood, design, or aesthetic cues implied by the input\n"
+    "- primary_user_flow: One sentence describing the core before/after journey\n"
+    "- differentiation_hook: Why this should feel distinct from a generic dashboard or chatbot\n"
+    "- demo_story_hints: What moment should feel impressive in a live demo\n\n"
+    "If the user did not specify a field, infer cautiously from the domain and keep it concise.\n"
     "Return ONLY valid JSON, no markdown fences."
 )
 
@@ -95,5 +101,9 @@ def _parse_idea_json(content) -> dict:
             "key_features": [],
             "tech_hints": [],
             "monetization_hints": [],
+            "visual_style_hints": [],
+            "primary_user_flow": "",
+            "differentiation_hook": "",
+            "demo_story_hints": "",
             "raw_response": content[:500],
         }

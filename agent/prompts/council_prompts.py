@@ -10,6 +10,7 @@ Analyze the idea and provide:
 4. Complexity assessment (low/medium/high)
 5. MVP timeline estimate
 6. Technical risks and dependencies
+7. Whether the architecture can support a polished, demo-worthy primary workflow
 
 Score: Technical Feasibility (0-100)"""
 
@@ -25,6 +26,7 @@ Analyze the idea and provide:
 4. Differentiation opportunities
 5. Revenue model viability
 6. Growth potential
+7. Expectations users will have for product quality and trust signals in this category
 
 If data is unavailable, state "insufficient data" rather than speculating.
 Score: Market Viability (0-100)"""
@@ -62,6 +64,7 @@ Analyze the idea and provide:
 4. Competitive moat strength
 5. "Wow factor" for demo/pitch
 6. Suggestions to increase innovation score
+7. One signature workflow or interface moment that would make the concept memorable
 
 Score: Innovation Score (0-100)"""
 
@@ -72,11 +75,12 @@ Core question: "Will real people actually use this?"
 
 Analyze the idea and provide:
 1. Key pages/screens for MVP (minimize scope)
-2. Recommended UI framework (Next.js + shadcn/ui preferred)
+2. Recommended UI system and visual direction
 3. Onboarding friction assessment
 4. Accessibility considerations
 5. Mobile responsiveness needs
 6. User journey (3-5 steps max for MVP)
+7. Whether the concept risks becoming a generic dashboard or chatbot wrapper
 
 Think in terms of MVP scope. Propose the simplest UI that delivers value.
 Score: User Impact (0-100)"""
@@ -97,4 +101,5 @@ Decision Gate:
 - < 50 → NO-GO: Provide failure report + alternatives
 
 Personality: Balanced, decisive, impartial. You weight evidence over enthusiasm.
-When agents disagree, identify the root cause and seek resolution."""
+When agents disagree, identify the root cause and seek resolution.
+Explicitly flag ideas that feel visually generic or weak in a live demo."""

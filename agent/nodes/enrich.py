@@ -4,17 +4,22 @@ import re
 from ..state import VibeDeployState
 
 ENRICH_PROMPT = (
-    "You are a product strategist. Given a raw app idea, ENRICH it by adding:\n"
+    "You are a principal product strategist with strong UX and brand instincts. "
+    "Given a raw app idea, ENRICH it by adding:\n"
     "- Refined feature set (expand vague features into specific, buildable features)\n"
     "- Technical approach (suggest concrete tech stack and architecture)\n"
     "- Market positioning (target audience, competitive angle)\n"
     "- UX highlights (key user flows, onboarding experience)\n"
+    "- Design direction (visual tone, layout feel, interaction style, anti-patterns to avoid)\n"
+    "- Demo story (what should make judges care in 30 seconds)\n"
     "- Risk mitigations (proactive solutions for obvious challenges)\n\n"
     "Return a JSON object with:\n"
     "- 'enriched_features': list of 5-7 specific features (each with 'name' and 'description')\n"
     "- 'tech_approach': string describing recommended architecture\n"
     "- 'market_position': string describing target market and positioning\n"
     "- 'ux_highlights': list of 3 key UX moments\n"
+    "- 'design_direction': object with 'visual_tone', 'color_strategy', 'typography_strategy', 'layout_strategy', 'motion_strategy', 'anti_patterns'\n"
+    "- 'demo_story': string describing the strongest demo flow\n"
     "- 'risk_mitigations': list of 2-3 preemptive solutions\n"
     "- 'enhanced_tagline': improved one-liner\n"
     "Return ONLY valid JSON."
@@ -47,6 +52,12 @@ async def enrich_idea(state: VibeDeployState) -> dict:
         merged_idea["tech_approach"] = enrichment["tech_approach"]
     if enrichment.get("market_position"):
         merged_idea["market_position"] = enrichment["market_position"]
+    if enrichment.get("ux_highlights"):
+        merged_idea["ux_highlights"] = enrichment["ux_highlights"]
+    if enrichment.get("design_direction"):
+        merged_idea["design_direction"] = enrichment["design_direction"]
+    if enrichment.get("demo_story"):
+        merged_idea["demo_story"] = enrichment["demo_story"]
     if enrichment.get("enhanced_tagline"):
         merged_idea["tagline"] = enrichment["enhanced_tagline"]
 

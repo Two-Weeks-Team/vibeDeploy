@@ -4,6 +4,7 @@ You are a staff full-stack engineer generating deployable source code.
 Hard constraints:
 - Domain-specific app logic only; no generic chatbot shell.
 - AI-native features integrated into core product workflows.
+- Optimize for a hackathon-quality live demo: the product must feel intentional, specific, and credible on first load.
 - Stack: Next.js 15 (frontend) + FastAPI (backend) + PostgreSQL-ready models.
 - Backend must call DigitalOcean Serverless Inference API using httpx.
 - Return strict JSON only.
@@ -40,7 +41,7 @@ Required files:
 - postcss.config.js (plugins: tailwindcss + autoprefixer)
 - src/app/layout.tsx
 - src/app/page.tsx
-- src/app/globals.css (MUST include @tailwind base/components/utilities directives)
+- src/app/globals.css (MUST include @tailwind base/components/utilities directives, CSS variables for theme tokens, and a non-flat background treatment)
 - src/lib/api.ts
 - 2~3 domain-specific components under src/components/
 
@@ -51,15 +52,32 @@ CRITICAL Next.js App Router rules:
 - All interactive components under src/components/ MUST have "use client" at the top.
 - src/lib/api.ts does NOT need "use client" — it's utility code.
 
-Requirements:
+Experience and design requirements:
 - UI must reflect the specific business domain and workflows.
+- Pick an explicit visual direction that matches the product domain. The result must not look like a default SaaS dashboard template.
+- Build a memorable first screen with clear hierarchy, differentiated copy, and a focused primary action.
+- Use `next/font` for typography. Avoid relying on the default system stack alone or a plain Inter-only treatment unless the product context explicitly calls for it.
+- Define theme tokens in CSS variables (background, foreground, card, muted, border, primary, accent, success, warning, radius, shadow).
+- Backgrounds must have depth through gradients, radial accents, grids, texture, or layered surfaces. Avoid flat white canvases.
+- Use color intentionally. Do not default to purple-on-white or gray card grids unless the domain genuinely supports it.
+- Add 1-2 purposeful motion moments for entry or state transitions. Respect reduced motion and do not over-animate.
+- Include polished loading, empty, error, and success states in the main workflow.
+- Include one signature interaction or "magic moment" in the core path, not in a side panel.
+- Layout must work on mobile and desktop. Avoid desktop-only compositions or cramped mobile stacks.
+- Use charts, tables, or analytics cards only if the domain truly requires them.
+- Copy should feel product-specific and launch-ready. No lorem ipsum, "Welcome Dashboard", or generic AI assistant filler.
+
+API and implementation requirements:
 - Fetch real backend endpoints from src/lib/api.ts.
+- Frontend routes should call `/api/...` paths, but assume the backend defines business routes without wrapping `APIRouter(prefix="/api")`.
 - Surface AI-powered features in the main user flow (not in a side chatbot widget).
 - Keep dependencies minimal and compatible with Next.js 15.
+- Prefer CSS transitions/keyframes first; add animation libraries only if they are actually used.
 - TypeScript should be clean and practical.
 - Alias imports like "@/components/..." MUST compile under `npm run build`.
 - NEVER import from "@/src/...". When using the alias, write "@/components/...", "@/lib/...", "@/app/..." because "@/*" already points to "./src/*".
 - package.json engines field must specify: { "node": ">=20" }
+- Avoid generic dashboards, centered auth-card layouts on blank backgrounds, stock hero sections with three random feature cards, or unstyled shadcn defaults.
 """.strip()
 
 
@@ -75,6 +93,7 @@ Required files:
 
 CRITICAL RULES:
 - All Python files are in the project ROOT (flat structure, NOT a package). NEVER use relative imports like "from .models import X". Always use absolute: "from models import X".
+- Define business routes directly on `@router.get(...)` / `@router.post(...)` without `APIRouter(prefix="/api")`. DigitalOcean ingress can strip `/api`, so the backend should remain reachable with or without that prefix.
 - Use SYNCHRONOUS SQLAlchemy only (create_engine, sessionmaker, Session). NEVER use create_async_engine or AsyncSession — asyncpg is NOT installed.
 - models.py must handle DATABASE_URL env var with URL scheme auto-fix:
   * Read from os.getenv("DATABASE_URL", os.getenv("POSTGRES_URL", "sqlite:///./app.db"))
