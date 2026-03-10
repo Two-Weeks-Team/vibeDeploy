@@ -43,6 +43,13 @@ Required files:
 - src/lib/api.ts
 - 2~3 domain-specific components under src/components/
 
+CRITICAL Next.js App Router rules:
+- Any file using React hooks (useState, useEffect, useRef, useCallback, etc.) or event handlers (onClick, onChange, onSubmit) MUST start with "use client" as the FIRST line.
+- src/app/layout.tsx is a Server Component — do NOT add "use client" unless it uses hooks.
+- src/app/page.tsx almost always needs "use client" since it typically uses hooks for state management.
+- All interactive components under src/components/ MUST have "use client" at the top.
+- src/lib/api.ts does NOT need "use client" — it's utility code.
+
 Requirements:
 - UI must reflect the specific business domain and workflows.
 - Fetch real backend endpoints from src/lib/api.ts.
