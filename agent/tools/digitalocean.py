@@ -44,7 +44,7 @@ async def deploy_to_digitalocean(repo_url: str, app_spec: dict) -> dict:
 
 async def wait_for_deployment(
     app_id: str,
-    timeout_seconds: int = 300,
+    timeout_seconds: int = 420,
     poll_interval: int = 10,
 ) -> str:
     if not app_id:
@@ -98,6 +98,89 @@ async def get_app_status(app_id: str) -> dict:
 
     except Exception as e:
         return {"app_id": app_id, "phase": "ERROR", "error": str(e)[:200]}
+
+
+async def get_deploy_error_logs(app_id: str, deployment_id: str = "") -> str:
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            if not deployment_id:
+                resp = await client.get(
+                    f"{DO_API_BASE}/apps/{app_id}/deployments?per_page=1",
+                    headers=_headers(),
+                )
+                resp.raise_for_status()
+                deployments = resp.json().get("deployments", [])
+                if not deployments:
+                    return ""
+                deployment_id = deployments[0]["id"]
+                deploy_data = deployments[0]
+            else:
+                resp = await client.get(
+                    f"{DO_API_BASE}/apps/{app_id}/deployments/{deployment_id}",
+                    headers=_headers(),
+                )
+                resp.raise_for_status()
+                deploy_data = resp.json().get("deployment", {})
+
+            if deploy_data.get("phase") not in ("ERROR", "FAILED"):
+                return ""
+
+            spec = deploy_data.get("spec", {})
+            components = [s.get("name", "") for s in spec.get("services", [])]
+            components += [s.get("name", "") for s in spec.get("static_sites", [])]
+            if not components:
+                app_resp = await client.get(f"{DO_API_BASE}/apps/{app_id}", headers=_headers())
+                app_resp.raise_for_status()
+                app_spec = app_resp.json().get("app", {}).get("spec", {})
+                components = [s.get("name", "") for s in app_spec.get("services", [])]
+
+            logs_parts = []
+            for comp in components:
+                if not comp:
+                    continue
+                for log_type in ("BUILD", "DEPLOY"):
+                    try:
+                        log_resp = await client.get(
+                            f"{DO_API_BASE}/apps/{app_id}/deployments/{deployment_id}/logs",
+                            params={"type": log_type, "component_name": comp},
+                            headers=_headers(),
+                        )
+                        log_resp.raise_for_status()
+                        log_data = log_resp.json()
+                        urls = log_data.get("historic_urls", [])
+                        if urls:
+                            content_resp = await client.get(urls[0], follow_redirects=True, timeout=30.0)
+                            if content_resp.status_code == 200:
+                                text = content_resp.text
+                                if text and len(text) > 100:
+                                    logs_parts.append(f"=== {comp} {log_type} ===\n{text[-2000:]}")
+                    except Exception:
+                        continue
+
+            combined = "\n\n".join(logs_parts)
+            return combined[:4000] if combined else ""
+    except Exception:
+        return ""
+
+
+async def redeploy_app(app_id: str) -> dict:
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(
+                f"{DO_API_BASE}/apps/{app_id}/deployments",
+                headers=_headers(),
+                json={},
+            )
+            resp.raise_for_status()
+            deployment = resp.json().get("deployment", {})
+            return {
+                "deployment_id": deployment.get("id", ""),
+                "status": "deploying",
+            }
+    except httpx.HTTPStatusError as e:
+        return {"status": "error", "error": f"HTTP {e.response.status_code}: {e.response.text[:200]}"}
+    except Exception as e:
+        return {"status": "error", "error": str(e)[:200]}
 
 
 def build_app_spec(

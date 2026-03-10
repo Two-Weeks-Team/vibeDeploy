@@ -9,7 +9,13 @@ from pathlib import Path
 from urllib import error, request
 
 from ..state import VibeDeployState
-from ..tools.digitalocean import build_app_spec, deploy_to_digitalocean, wait_for_deployment
+from ..tools.digitalocean import (
+    build_app_spec,
+    deploy_to_digitalocean,
+    get_deploy_error_logs,
+    redeploy_app,
+    wait_for_deployment,
+)
 from ..tools.github import create_github_repo, get_ci_failure_logs, push_files, wait_for_ci
 
 logger = logging.getLogger(__name__)
@@ -120,7 +126,7 @@ async def deployer(state: VibeDeployState) -> dict:
 
     if deploy_result.get("status") == "error":
         logger.error(
-            "[DEPLOYER] DO deploy failed: %s",
+            "[DEPLOYER] DO app creation failed: %s",
             deploy_result.get("error", "unknown"),
         )
         result = await _local_fallback_deploy(
@@ -134,15 +140,61 @@ async def deployer(state: VibeDeployState) -> dict:
         return result
 
     app_id = deploy_result.get("app_id", "")
-    live_url = await wait_for_deployment(app_id) if app_id else ""
+    live_url = ""
+    deploy_repair_attempts = 0
 
-    url_verification = {}
-    if live_url:
-        url_verification = _verify_live_url(live_url)
-        if url_verification.get("root_ok"):
-            logger.info("[DEPLOYER] Live URL verified: %s → %s", live_url, url_verification)
-        else:
-            logger.warning("[DEPLOYER] Live URL verification failed: %s → %s", live_url, url_verification)
+    for attempt in range(3):
+        live_url = await wait_for_deployment(app_id) if app_id else ""
+        if live_url:
+            break
+
+        error_logs = await get_deploy_error_logs(app_id)
+        if not error_logs:
+            logger.warning("[DEPLOYER] Deploy failed but no error logs available (attempt %d)", attempt + 1)
+            break
+
+        logger.warning("[DEPLOYER] Deploy attempt %d failed. Repairing from error logs.", attempt + 1)
+        fixed_files = await _repair_code_from_errors(all_files, error_logs)
+        if fixed_files == all_files:
+            logger.warning("[DEPLOYER] LLM could not fix deploy errors (attempt %d)", attempt + 1)
+            break
+
+        all_files = fixed_files
+        push_result = await push_files(
+            {"full_name": github_full_name},
+            all_files,
+            commit_message=f"fix: deploy repair attempt {attempt + 1}",
+        )
+        if not push_result.get("commit_sha"):
+            logger.warning("[DEPLOYER] Failed to push repair (attempt %d)", attempt + 1)
+            break
+
+        await asyncio.sleep(5)
+        redeploy_result = await redeploy_app(app_id)
+        if redeploy_result.get("status") == "error":
+            logger.warning("[DEPLOYER] Redeploy trigger failed: %s", redeploy_result.get("error", ""))
+            break
+
+        deploy_repair_attempts = attempt + 1
+
+    ci_meta["deploy_repair_attempts"] = deploy_repair_attempts
+
+    if not live_url:
+        result = await _local_fallback_deploy(
+            app_name,
+            all_files,
+            github_repo_url,
+            f"do_deploy_failed_after_{deploy_repair_attempts}_repairs",
+            app_id=app_id,
+        )
+        result["deploy_result"].update(ci_meta)
+        return result
+
+    url_verification = _verify_live_url(live_url)
+    if url_verification.get("root_ok"):
+        logger.info("[DEPLOYER] Live URL verified: %s → %s", live_url, url_verification)
+    else:
+        logger.warning("[DEPLOYER] Live URL verification failed: %s → %s", live_url, url_verification)
 
     homepage = live_url or github_repo_url
     if github_full_name:
@@ -164,13 +216,12 @@ async def deployer(state: VibeDeployState) -> dict:
         except Exception:
             logger.warning("[DEPLOYER] Failed to update README with live URL")
 
-    status = "deployed" if live_url else "deployment_started"
     return {
         "deploy_result": {
             "app_id": app_id,
             "live_url": live_url,
             "github_repo": github_repo_url,
-            "status": status,
+            "status": "deployed",
             "frontend_files": frontend_file_count,
             "backend_files": backend_file_count,
             "url_verification": url_verification,
@@ -180,15 +231,21 @@ async def deployer(state: VibeDeployState) -> dict:
     }
 
 
-_CI_REPAIR_PROMPT = """You are a CI repair engineer. Fix the failing code so CI passes.
+_CI_REPAIR_PROMPT = """You are a CI/deploy repair engineer. Fix the failing code so the build and deployment succeed.
 
 Rules:
-- Only fix files that caused the CI failure. Do NOT rewrite working files.
-- For Python: fix imports, dependency names in requirements.txt, syntax errors.
+- Only fix files that caused the failure. Do NOT rewrite working files.
+- For Python: fix imports, dependency names in requirements.txt, syntax errors, Pydantic model errors.
 - For Node/TypeScript: fix package.json deps, type errors, build errors.
 - Return ONLY the corrected files as JSON: { "files": { "path": "content" } }
 - If a file doesn't need changes, do NOT include it.
 - Keep all existing functionality — minimal fixes only.
+
+Common DO App Platform errors and fixes:
+- "use client" missing: Any Next.js file using useState/useEffect/useRef/event handlers MUST start with "use client" as the first line.
+- PydanticUserError: Simplify Pydantic model field annotations. Use basic types only. Avoid clashing field/type names.
+- "container exited with non-zero": Check Python imports, missing modules, Pydantic/SQLAlchemy compatibility with Python 3.13.
+- "Failed to compile" / "npm run build failed": Fix TypeScript errors, missing imports, incorrect module paths.
 """
 
 

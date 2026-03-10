@@ -80,6 +80,7 @@ CRITICAL RULES:
   * Add connect_args={"sslmode": "require"} when not localhost and not sqlite
 - TABLE NAME PREFIXING (CRITICAL — shared database): All table names MUST be prefixed with a short app-specific prefix (e.g. "qb_" for queuebite, "ss_" for spendsense). This prevents collisions when multiple apps share the same PostgreSQL database. ForeignKey references must also use the prefixed table names.
 - RELATIONSHIP TYPE ANNOTATIONS: Do NOT add Python type annotations to SQLAlchemy relationship() declarations. Write `transactions = relationship("Transaction", ...)` NOT `transactions: List["Transaction"] = relationship(...)`. The Mapped[] annotation style causes ArgumentError on Python 3.13.
+- PYDANTIC MODELS (CRITICAL): Keep Pydantic model definitions simple. Use basic types (str, int, float, bool, Optional[str], List[str]). Do NOT use complex or self-referencing annotations. Do NOT use `validator` or `field_validator` with clashing field names. If a field has a default value, use `= None` or `= Field(default=...)`, NOT bare annotations that shadow type names. Test: every Pydantic model must be instantiatable without errors on Python 3.13 + Pydantic 2.9.
 - main.py must include a GET /health endpoint returning {"status": "ok"}
 - main.py must include a GET / root route returning an HTMLResponse landing page that shows: app name, description, all API endpoints with methods, tech stack info, and links to /docs and /redoc. Use inline CSS for dark-themed styling. Import HTMLResponse from fastapi.responses.
 - ai_service.py must call DO Serverless Inference at https://inference.do-ai.run/v1/chat/completions via httpx.
@@ -100,5 +101,5 @@ CRITICAL RULES:
   * STRUCTURE: Create one reusable async _call_inference(messages, max_tokens=512) method that handles the HTTP call, timeout, response parsing, JSON extraction, and error fallback in a single place. All AI endpoints must use this method.
 - Include at least 2 AI-powered business endpoints.
 - Keep backend runnable with: uvicorn main:app --host 0.0.0.0 --port 8080
-- Python 3.12 compatible.
+- Python 3.13 compatible (DO App Platform uses Python 3.13). Test all Pydantic models and SQLAlchemy models for compatibility.
 """.strip()
