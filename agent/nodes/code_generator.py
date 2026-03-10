@@ -24,8 +24,13 @@ async def code_generator(state: VibeDeployState) -> dict:
     blueprint = state.get("blueprint", {}) or {}
     code_eval_result = state.get("code_eval_result")
 
-    llm = get_llm(
-        model=MODEL_CONFIG["code_gen"],
+    frontend_llm = get_llm(
+        model=MODEL_CONFIG.get("code_gen_frontend", MODEL_CONFIG["code_gen"]),
+        temperature=0.3,
+        max_tokens=8000,
+    )
+    backend_llm = get_llm(
+        model=MODEL_CONFIG.get("code_gen_backend", MODEL_CONFIG["code_gen"]),
         temperature=0.3,
         max_tokens=8000,
     )
@@ -42,9 +47,9 @@ async def code_generator(state: VibeDeployState) -> dict:
 
     eval_feedback = _build_eval_feedback(code_eval_result)
 
-    frontend_code = await _generate_frontend_files(llm, context, eval_feedback=eval_feedback)
-    await asyncio.sleep(2)
-    backend_code = await _generate_backend_files(llm, context, eval_feedback=eval_feedback)
+    frontend_code = await _generate_frontend_files(frontend_llm, context, eval_feedback=eval_feedback)
+    await asyncio.sleep(8)
+    backend_code = await _generate_backend_files(backend_llm, context, eval_feedback=eval_feedback)
 
     generation_warnings = []
 
@@ -58,7 +63,7 @@ async def code_generator(state: VibeDeployState) -> dict:
         generation_warnings.append(warning)
 
         logger.info("[CODE_GEN] Retrying frontend generation (attempt 2)...")
-        frontend_code = await _generate_frontend_files(llm, context, retry=True)
+        frontend_code = await _generate_frontend_files(frontend_llm, context, retry=True)
 
         if len(frontend_code) < _MIN_FRONTEND_FILES:
             retry_warning = (
