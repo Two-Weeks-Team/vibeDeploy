@@ -33,7 +33,8 @@ Generate a Next.js 15 App Router frontend as JSON map: { "files": { "path": "con
 
 Required files:
 - package.json (MUST use: next@15.1.6, react@19.0.0, react-dom@19.0.0, typescript@5.7.3, tailwindcss@3.4.17, @types/node@20.17.12, @types/react@19.0.7, postcss@8.4.49, autoprefixer@10.4.20)
-- tsconfig.json (MUST include compilerOptions with paths: {"@/*": ["./src/*"]}, baseUrl: ".")
+- tsconfig.json (MUST include compilerOptions with paths: {"@/*": ["./src/*"]}, baseUrl: ".", moduleResolution: "bundler", jsx: "preserve", plugins: [{ "name": "next" }], and include: ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"])
+- next-env.d.ts
 - next.config.js (minimal: module.exports = {})
 - tailwind.config.ts (content paths: ["./src/**/*.{js,ts,jsx,tsx,mdx}"])
 - postcss.config.js (plugins: tailwindcss + autoprefixer)
@@ -56,6 +57,7 @@ Requirements:
 - Surface AI-powered features in the main user flow (not in a side chatbot widget).
 - Keep dependencies minimal and compatible with Next.js 15.
 - TypeScript should be clean and practical.
+- Alias imports like "@/components/..." MUST compile under `npm run build`.
 - package.json engines field must specify: { "node": ">=20" }
 """.strip()
 
