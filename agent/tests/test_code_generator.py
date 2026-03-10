@@ -22,6 +22,7 @@ def test_normalize_frontend_files_patches_next_tsconfig_and_tailwind():
         ),
         "tailwind.config.ts": "export default {};",
         "postcss.config.js": "export default { plugins: { tailwindcss: {}, autoprefixer: {} } };",
+        "next.config.js": "module.exports = { reactStrictMode: true, swcMinify: true, experimental: { serverComponents: true } };",
     }
 
     normalized = _normalize_frontend_files(files)
@@ -30,13 +31,17 @@ def test_normalize_frontend_files_patches_next_tsconfig_and_tailwind():
     assert normalized["next-env.d.ts"].startswith("/// <reference types=\"next\" />")
     assert "@/src/" not in normalized["src/app/page.tsx"]
     assert "@/components/Form" in normalized["src/app/page.tsx"]
+    assert normalized["src/app/page.tsx"].startswith('"use client";')
     assert "useState<any[]>([])" in normalized["src/app/page.tsx"]
     assert "export default Form" in normalized["src/components/Form.tsx"]
     assert tsconfig["compilerOptions"]["moduleResolution"] == "bundler"
     assert tsconfig["compilerOptions"]["paths"] == {"@/*": ["./src/*"]}
     assert tsconfig["compilerOptions"]["baseUrl"] == "."
+    assert tsconfig["compilerOptions"]["lib"] == ["DOM", "DOM.Iterable", "ES2022"]
     assert {"name": "next"} in tsconfig["compilerOptions"]["plugins"]
     assert ".next/types/**/*.ts" in tsconfig["include"]
+    assert "swcMinify" not in normalized["next.config.js"]
+    assert "serverComponents" not in normalized["next.config.js"]
     assert "./src/**/*.{js,ts,jsx,tsx,mdx}" in normalized["tailwind.config.ts"]
     assert "module.exports" in normalized["postcss.config.js"]
     assert "plugins" in normalized["postcss.config.js"]

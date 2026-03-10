@@ -224,6 +224,7 @@ def _normalize_frontend_files(files: dict[str, str]) -> dict[str, str]:
 
     if any(path.startswith("src/") for path in normalized):
         normalized = _normalize_frontend_import_aliases(normalized)
+        normalized = _normalize_frontend_use_client_directives(normalized)
         normalized = _normalize_frontend_state_types(normalized)
         normalized = _normalize_frontend_component_exports(normalized)
         normalized.setdefault(
@@ -232,6 +233,7 @@ def _normalize_frontend_files(files: dict[str, str]) -> dict[str, str]:
         )
 
         normalized["tsconfig.json"] = _normalize_next_tsconfig(normalized.get("tsconfig.json", ""))
+        normalized["next.config.js"] = _normalize_next_config(normalized.get("next.config.js", ""))
         normalized["tailwind.config.ts"] = _normalize_tailwind_config(normalized.get("tailwind.config.ts", ""))
         normalized["postcss.config.js"] = _normalize_postcss_config(normalized.get("postcss.config.js", ""))
 
@@ -259,6 +261,25 @@ def _normalize_frontend_component_exports(files: dict[str, str]) -> dict[str, st
             if match:
                 component_name = match.group(1)
                 updated = f"{content.rstrip()}\n\nexport default {component_name}\n"
+        normalized[path] = updated
+    return normalized
+
+
+def _normalize_frontend_use_client_directives(files: dict[str, str]) -> dict[str, str]:
+    normalized: dict[str, str] = {}
+    client_signal = re.compile(
+        r"\b(useState|useEffect|useRef|useReducer|useTransition|useDeferredValue)\b|"
+        r"\bstartTransition\b|"
+        r"on[A-Z][A-Za-z]+\s*=|"
+        r"\bdocument\.|\bwindow\.",
+    )
+
+    for path, content in files.items():
+        updated = content
+        stripped = content.lstrip()
+        if path.endswith(".tsx") and not stripped.startswith('"use client"') and not stripped.startswith("'use client'"):
+            if client_signal.search(content):
+                updated = f'"use client";\n\n{content.lstrip()}'
         normalized[path] = updated
     return normalized
 
@@ -323,6 +344,8 @@ def _normalize_next_tsconfig(raw: str) -> str:
     merged_compiler["moduleResolution"] = "bundler"
     merged_compiler["jsx"] = "preserve"
     merged_compiler["paths"] = {"@/*": ["./src/*"]}
+    if not isinstance(merged_compiler.get("lib"), list):
+        merged_compiler["lib"] = default["compilerOptions"]["lib"]
 
     plugins = merged_compiler.get("plugins", [])
     if not isinstance(plugins, list):
@@ -349,6 +372,17 @@ def _normalize_next_tsconfig(raw: str) -> str:
         "exclude": exclude,
     }
     return json.dumps(normalized, indent=2)
+
+
+def _normalize_next_config(raw: str) -> str:
+    if raw.strip() and "serverComponents" not in raw and "swcMinify" not in raw:
+        return raw
+
+    return (
+        "module.exports = {\n"
+        "  reactStrictMode: true,\n"
+        "};\n"
+    )
 
 
 def _normalize_tailwind_config(raw: str) -> str:
