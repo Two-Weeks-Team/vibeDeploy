@@ -201,16 +201,22 @@ export function HistoryList({ results, brainstorms }: HistoryListProps) {
                               >
                                 <Github className="w-4 h-4" />
                               </a>
-                              <a
-                                href={item.data.deployment.liveUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="p-2 rounded-full hover:bg-accent text-muted-foreground hover:text-primary transition-colors"
-                                onClick={(e) => e.stopPropagation()}
-                                title="View Live App"
-                              >
-                                <Rocket className="w-4 h-4" />
-                              </a>
+                              {item.data.deployment.liveUrl && !item.data.deployment.liveUrl.includes("vibedeploy") ? (
+                                <a
+                                  href={item.data.deployment.liveUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="p-2 rounded-full hover:bg-accent text-muted-foreground hover:text-primary transition-colors"
+                                  onClick={(e) => e.stopPropagation()}
+                                  title="View Live App"
+                                >
+                                  <Rocket className="w-4 h-4" />
+                                </a>
+                              ) : (
+                                <span className="p-2 rounded-full text-muted-foreground/30 cursor-not-allowed" title="Not yet deployed">
+                                  <Rocket className="w-4 h-4" />
+                                </span>
+                              )}
                             </div>
                           )}
                         </>
@@ -281,11 +287,17 @@ export function HistoryList({ results, brainstorms }: HistoryListProps) {
                     <div>
                       <h3 className="text-lg font-semibold mb-4">Deployment</h3>
                       <div className="flex gap-4">
-                        <Button asChild variant="outline" className="flex-1">
-                          <a href={selectedItem.data.deployment.liveUrl} target="_blank" rel="noreferrer">
-                            <Rocket className="w-4 h-4 mr-2" /> Live App
-                          </a>
-                        </Button>
+                        {selectedItem.data.deployment.liveUrl && !selectedItem.data.deployment.liveUrl.includes("vibedeploy") ? (
+                          <Button asChild variant="outline" className="flex-1">
+                            <a href={selectedItem.data.deployment.liveUrl} target="_blank" rel="noreferrer">
+                              <Rocket className="w-4 h-4 mr-2" /> Live App
+                            </a>
+                          </Button>
+                        ) : (
+                          <Button variant="outline" className="flex-1 text-muted-foreground" disabled>
+                            <Rocket className="w-4 h-4 mr-2" /> Deploying...
+                          </Button>
+                        )}
                         <Button asChild variant="outline" className="flex-1">
                           <a href={selectedItem.data.deployment.repoUrl} target="_blank" rel="noreferrer">
                             <Code className="w-4 h-4 mr-2" /> Repository

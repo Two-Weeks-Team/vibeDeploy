@@ -89,16 +89,27 @@ export function DeployedApps({ deployments }: { deployments: DeployedApp[] }) {
                   })}
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <Button
-                    variant="default"
-                    className="w-full bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20"
-                    asChild
-                  >
-                    <a href={app.deployment.liveUrl} target="_blank" rel="noopener noreferrer">
+                  {app.deployment.liveUrl && !app.deployment.liveUrl.includes("vibedeploy") ? (
+                    <Button
+                      variant="default"
+                      className="w-full bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20"
+                      asChild
+                    >
+                      <a href={app.deployment.liveUrl} target="_blank" rel="noopener noreferrer">
+                        <Rocket className="mr-2 h-4 w-4" />
+                        Live App
+                      </a>
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="default"
+                      className="w-full bg-muted/30 text-muted-foreground cursor-not-allowed border border-border/20"
+                      disabled
+                    >
                       <Rocket className="mr-2 h-4 w-4" />
-                      Live App
-                    </a>
-                  </Button>
+                      Deploying...
+                    </Button>
+                  )}
                   <Button
                     variant="outline"
                     className="w-full border-border/50 hover:bg-muted/50"
