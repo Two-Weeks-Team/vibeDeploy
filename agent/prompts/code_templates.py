@@ -64,6 +64,10 @@ Experience and design requirements:
 - Include polished loading, empty, error, and success states in the main workflow.
 - Include one signature interaction or "magic moment" in the core path, not in a side panel.
 - Layout must work on mobile and desktop. Avoid desktop-only compositions or cramped mobile stacks.
+- A single centered form with one result card is unacceptable unless the product is literally a one-step utility.
+- If the idea mentions saving, favorites, history, library, dashboard, analytics, workspace, or management, the first screen MUST include those surfaces or credible empty states.
+- Compose the page from at least three domain components: hero/header, primary workspace, and secondary insight/history/library surface.
+- Treat any blueprint `experience_contract`, `must_have_surfaces`, `proof_points`, and `experience_non_negotiables` as hard requirements, not inspiration.
 - Use charts, tables, or analytics cards only if the domain truly requires them.
 - Copy should feel product-specific and launch-ready. No lorem ipsum, "Welcome Dashboard", or generic AI assistant filler.
 

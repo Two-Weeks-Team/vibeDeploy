@@ -156,7 +156,8 @@ async def _generate_frontend_files(
                     f"{context}\n\n"
                     "### Execution Notes\n"
                     "- Convert the PRD, tech spec, and blueprint into a visually distinctive product, not a generic dashboard.\n"
-                    "- Treat any design_direction, visual_style_hints, ux_highlights, and demo_story as hard requirements.\n"
+                    "- Treat any design_direction, visual_style_hints, ux_highlights, demo_story, and blueprint experience_contract as hard requirements.\n"
+                    "- The generated src/app/page.tsx must compose multiple domain components from the blueprint manifest, not only a hero form.\n"
                     "- Build the first-run experience for judges seeing the app for the first time in a live demo.\n"
                 ),
             },
@@ -202,6 +203,7 @@ async def _generate_backend_files(
                     f"{context}\n\n"
                     "### Execution Notes\n"
                     "- Preserve the frontend/backend contract exactly for endpoint paths and request field names.\n"
+                    "- Preserve the frontend/backend contract for response field names too, so the frontend can safely render returned data.\n"
                     "- Keep routes robust behind DigitalOcean ingress by avoiding APIRouter(prefix='/api').\n"
                 ),
             },
@@ -250,6 +252,8 @@ def _normalize_frontend_files(files: dict[str, str]) -> dict[str, str]:
         normalized = _normalize_frontend_invalid_next_imports(normalized)
         normalized = _normalize_frontend_use_client_directives(normalized)
         normalized = _normalize_frontend_state_types(normalized)
+        normalized = _normalize_frontend_error_parsing(normalized)
+        normalized = _normalize_frontend_partial_ai_requests(normalized)
         normalized = _normalize_frontend_component_exports(normalized)
         normalized.setdefault(
             "next-env.d.ts",
@@ -267,6 +271,7 @@ def _normalize_frontend_files(files: dict[str, str]) -> dict[str, str]:
 def _normalize_backend_files(files: dict[str, str]) -> dict[str, str]:
     normalized = dict(files)
     normalized = _normalize_backend_api_routes(normalized)
+    normalized = _normalize_backend_ai_fallbacks(normalized)
     return normalized
 
 
@@ -389,6 +394,84 @@ def _normalize_frontend_state_types(files: dict[str, str]) -> dict[str, str]:
             updated = re.sub(
                 r"(?<!<)React\.useState\(\s*undefined\s*\)",
                 "React.useState<any>(undefined)",
+                updated,
+            )
+        normalized[path] = updated
+    return normalized
+
+
+def _normalize_frontend_error_parsing(files: dict[str, str]) -> dict[str, str]:
+    normalized: dict[str, str] = {}
+    for path, content in files.items():
+        updated = content
+        if path.endswith("api.ts"):
+            pattern = re.compile(
+                r"if \(!res\.ok\) \{\s*const err = await res\.json\(\);\s*throw new Error\(([^)]+)\);\s*\}",
+                flags=re.DOTALL,
+            )
+
+            def repl(match: re.Match[str]) -> str:
+                expr = match.group(1)
+                literals = re.findall(r'["\']([^"\']+)["\']', expr)
+                fallback = literals[-1] if literals else "Request failed"
+                return f'if (!res.ok) {{\n    await throwApiError(res, {json.dumps(fallback)});\n  }}'
+
+            updated, replacements = pattern.subn(repl, updated)
+            if replacements and "async function throwApiError" not in updated:
+                helper = (
+                    "async function throwApiError(res: Response, fallback: string): Promise<never> {\n"
+                    "  const raw = await res.text();\n"
+                    "  const parsed = raw ? safeParseJson(raw) : null;\n"
+                    "  const message = parsed?.error?.message ?? parsed?.detail ?? parsed?.message ?? raw ?? fallback;\n"
+                    "  throw new Error(message || fallback);\n"
+                    "}\n\n"
+                    "function safeParseJson(raw: string): any {\n"
+                    "  try {\n"
+                    "    return JSON.parse(raw);\n"
+                    "  } catch {\n"
+                    "    return null;\n"
+                    "  }\n"
+                    "}\n\n"
+                )
+                import_block = re.match(r"((?:import[^\n]*\n)+)", updated)
+                if import_block:
+                    updated = f"{import_block.group(1)}\n{helper}{updated[import_block.end():]}"
+                else:
+                    updated = f"{helper}{updated}"
+        normalized[path] = updated
+    return normalized
+
+
+def _normalize_frontend_partial_ai_requests(files: dict[str, str]) -> dict[str, str]:
+    normalized: dict[str, str] = {}
+    pattern = re.compile(
+        r"const \[(?P<summary_var>\w+),\s*(?P<tags_var>\w+)\] = await Promise\.all\(\[\s*"
+        r"summarize\((?P<arg>[^)]+)\),\s*generateTags\((?P=arg)\)\s*"
+        r"\]\);\s*setSummary\((?P=summary_var)\);\s*setTags\((?P=tags_var)\);",
+        flags=re.DOTALL,
+    )
+
+    for path, content in files.items():
+        updated = content
+        if path.endswith(".tsx") and "summarize(" in content and "generateTags(" in content and "Promise.all([" in content:
+            updated = pattern.sub(
+                lambda match: (
+                    f'const [summaryResult, tagsResult] = await Promise.allSettled([\n'
+                    f'        summarize({match.group("arg")}),\n'
+                    f'        generateTags({match.group("arg")}),\n'
+                    "      ]);\n"
+                    '      if (summaryResult.status === "fulfilled") {\n'
+                    "        setSummary(summaryResult.value);\n"
+                    "      } else {\n"
+                    '        throw new Error(summaryResult.reason?.message ?? "Summarization failed");\n'
+                    "      }\n"
+                    '      if (tagsResult.status === "fulfilled") {\n'
+                    "        setTags(tagsResult.value);\n"
+                    "      } else {\n"
+                    '        setError(tagsResult.reason?.message ?? "Tag generation failed, but the summary is available.");\n'
+                    "        setTags([]);\n"
+                    "      }"
+                ),
                 updated,
             )
         normalized[path] = updated
@@ -521,6 +604,42 @@ def _inject_optional_api_prefix_middleware(content: str) -> str:
     if marker in updated:
         return updated.replace(marker, f"{middleware}\n{marker}", 1)
     return updated
+
+
+def _normalize_backend_ai_fallbacks(files: dict[str, str]) -> dict[str, str]:
+    normalized: dict[str, str] = {}
+    for path, content in files.items():
+        updated = content
+        if path.endswith("ai_service.py"):
+            updated = updated.replace(
+                'return {"note": "Failed to parse JSON from AI response", "raw": raw_json}',
+                "return _coerce_unstructured_payload(raw_json)",
+            )
+            updated = updated.replace(
+                "return {'note': 'Failed to parse JSON from AI response', 'raw': raw_json}",
+                "return _coerce_unstructured_payload(raw_json)",
+            )
+
+            if "_coerce_unstructured_payload" not in updated:
+                helper = (
+                    "def _coerce_unstructured_payload(raw_text: str) -> Dict[str, Any]:\n"
+                    "    compact = raw_text.strip()\n"
+                    "    tags = [part.strip(\" -•\\t\") for part in re.split(r\",|\\\\n\", compact) if part.strip(\" -•\\t\")]\n"
+                    "    return {\n"
+                    '        "note": "Model returned plain text instead of JSON",\n'
+                    '        "raw": compact,\n'
+                    '        "text": compact,\n'
+                    '        "summary": compact,\n'
+                    '        "tags": tags[:6],\n'
+                    "    }\n"
+                )
+                marker = "async def _call_inference"
+                if marker in updated:
+                    updated = updated.replace(marker, f"{helper}\n\n{marker}", 1)
+                else:
+                    updated = f"{helper}\n\n{updated}"
+        normalized[path] = updated
+    return normalized
 
 
 def _extract_backend_request_fields(routes_source: str) -> dict[str, list[str]]:

@@ -22,6 +22,9 @@ IDEA_EXTRACTION_PROMPT = (
     "- primary_user_flow: One sentence describing the core before/after journey\n"
     "- differentiation_hook: Why this should feel distinct from a generic dashboard or chatbot\n"
     "- demo_story_hints: What moment should feel impressive in a live demo\n\n"
+    "- must_have_surfaces: List of 3-5 concrete first-screen surfaces the product should show (examples: analysis workbench, saved library, recent activity, insights rail)\n"
+    "- proof_points: List of trust, credibility, or proof elements users would expect before believing the product\n"
+    "- experience_non_negotiables: List of UX constraints or anti-patterns the product must respect\n\n"
     "If the user did not specify a field, infer cautiously from the domain and keep it concise.\n"
     "Return ONLY valid JSON, no markdown fences."
 )
@@ -105,5 +108,8 @@ def _parse_idea_json(content) -> dict:
             "primary_user_flow": "",
             "differentiation_hook": "",
             "demo_story_hints": "",
+            "must_have_surfaces": [],
+            "proof_points": [],
+            "experience_non_negotiables": [],
             "raw_response": content[:500],
         }

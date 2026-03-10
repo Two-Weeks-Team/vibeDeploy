@@ -822,21 +822,25 @@ def _verify_live_url(live_url: str) -> dict:
     base = live_url.rstrip("/")
     result = {"root_ok": False, "health_ok": False, "root_bytes": 0, "endpoint_results": {}}
 
-    for path, key in [("/", "root"), ("/health", "health")]:
-        try:
-            req = request.Request(
-                f"{base}{path}",
-                headers={"User-Agent": "vibeDeploy-verifier/1.0"},
-            )
-            with request.urlopen(req, timeout=15) as resp:
-                body = resp.read()
-                if key == "root":
-                    result["root_ok"] = resp.status == 200 and len(body) > 100
-                    result["root_bytes"] = len(body)
-                else:
-                    result["health_ok"] = resp.status == 200
-        except (error.HTTPError, error.URLError, OSError):
-            pass
+    for _ in range(6):
+        for path, key in [("/", "root"), ("/health", "health"), ("/api/health", "health")]:
+            try:
+                req = request.Request(
+                    f"{base}{path}",
+                    headers={"User-Agent": "vibeDeploy-verifier/1.0"},
+                )
+                with request.urlopen(req, timeout=15) as resp:
+                    body = resp.read()
+                    if key == "root":
+                        result["root_ok"] = resp.status == 200 and len(body) > 100
+                        result["root_bytes"] = max(result["root_bytes"], len(body))
+                    else:
+                        result["health_ok"] = resp.status == 200
+            except (error.HTTPError, error.URLError, OSError):
+                continue
+        if result["root_ok"] and result["health_ok"]:
+            break
+        time.sleep(10)
 
     openapi_endpoints = _discover_endpoints_from_openapi(base)
     for ep in openapi_endpoints:

@@ -12,6 +12,7 @@ Rules:
 - Outputs must align with each other (features, endpoints, schema, and deployment).
 - Be specific to the given business domain and users.
 - Make the product feel demo-worthy: a distinctive user journey, clear value density, and a concrete visual direction should appear across the documents.
+- Carry through any must-have first-screen surfaces, proof points, and UX non-negotiables so downstream agents can validate them.
 """.strip()
 
 
@@ -27,6 +28,7 @@ Include:
 6) Risks and mitigation plan
 7) Design direction and brand personality
 8) Key screens, UX states, and the primary demo moment
+9) First-screen surface inventory and proof/trust elements
 
 Style:
 - Concrete and implementation-oriented
@@ -52,6 +54,7 @@ Include:
 6) Deployment/runtime assumptions on DigitalOcean App Platform
 7) Frontend experience architecture: page hierarchy, state model, loading/error/empty states
 8) Design system guidance: tokens, typography, motion budget, responsive behavior
+9) Experience contract: required first-screen surfaces, supporting panels, and proof points
 
 Style:
 - Engineering-focused
@@ -70,6 +73,7 @@ Include:
 4) At least 2 AI-powered endpoints where AI is core business logic
 5) Auth assumptions (if needed) and rate-limit guidance
 6) Frontend/backend contract notes for request body field names, expected status codes, and `/api` ingress behavior
+7) For each endpoint, list the frontend-visible response fields the UI depends on
 
 The API should be directly implementable in FastAPI.
 """.strip()

@@ -23,7 +23,7 @@ FIX_STORM_PROMPT = (
     "Return JSON with:\n"
     "- 'diagnosis': dict mapping axis_name to root cause string\n"
     "- 'fixes': list of fix objects, each with 'axis', 'fix_description', 'expected_improvement'\n"
-    "- 'improved_idea': dict with updated fields (name, tagline, key_features, problem, solution, etc.)\n"
+    "- 'improved_idea': dict with updated fields (name, tagline, key_features, problem, solution, must_have_surfaces, proof_points, experience_non_negotiables, etc.)\n"
     "- 'improved_summary': one-line summary of the improved idea\n"
     "Return ONLY valid JSON."
 )
@@ -39,7 +39,7 @@ SCOPE_DOWN_PROMPT = (
     "6. Still feels coherent and polished in a hackathon demo\n\n"
     "Return JSON with:\n"
     "- 'mvp_idea': dict with name, tagline, problem, solution, key_features (2-3 max), "
-    "tech_hints\n"
+    "tech_hints, must_have_surfaces, proof_points\n"
     "- 'removed_features': list of what was cut and why\n"
     "- 'mvp_rationale': why this minimal version still delivers value\n"
     "Return ONLY valid JSON."
@@ -216,6 +216,8 @@ def _fallback_scope_down_result(idea: dict, reason: str) -> dict:
             "solution": idea.get("solution") or "Ship a minimal web app focused on one core use case.",
             "key_features": core_features,
             "tech_hints": ["FastAPI backend", "Next.js frontend", "Simple persistence only"],
+            "must_have_surfaces": ["clear hero", "primary workbench", "saved or recent results"],
+            "proof_points": ["visible output quality", "recent activity or saved artifacts"],
         },
         "removed_features": ["Fallback scope reduction applied because the scope-down model was unavailable."],
         "mvp_rationale": f"Fallback MVP used to keep the pipeline moving ({reason}).",

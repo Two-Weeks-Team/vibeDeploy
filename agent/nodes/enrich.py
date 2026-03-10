@@ -12,6 +12,8 @@ ENRICH_PROMPT = (
     "- UX highlights (key user flows, onboarding experience)\n"
     "- Design direction (visual tone, layout feel, interaction style, anti-patterns to avoid)\n"
     "- Demo story (what should make judges care in 30 seconds)\n"
+    "- First-screen surface plan (what must be visible immediately, not hidden behind tabs)\n"
+    "- Proof and trust signals (what makes the product feel credible at a glance)\n"
     "- Risk mitigations (proactive solutions for obvious challenges)\n\n"
     "Return a JSON object with:\n"
     "- 'enriched_features': list of 5-7 specific features (each with 'name' and 'description')\n"
@@ -20,6 +22,9 @@ ENRICH_PROMPT = (
     "- 'ux_highlights': list of 3 key UX moments\n"
     "- 'design_direction': object with 'visual_tone', 'color_strategy', 'typography_strategy', 'layout_strategy', 'motion_strategy', 'anti_patterns'\n"
     "- 'demo_story': string describing the strongest demo flow\n"
+    "- 'must_have_surfaces': list of 3-5 concrete first-screen surfaces or panels\n"
+    "- 'proof_points': list of 2-4 proof/trust signals\n"
+    "- 'experience_non_negotiables': list of 3-5 UX guardrails\n"
     "- 'risk_mitigations': list of 2-3 preemptive solutions\n"
     "- 'enhanced_tagline': improved one-liner\n"
     "Return ONLY valid JSON."
@@ -58,6 +63,12 @@ async def enrich_idea(state: VibeDeployState) -> dict:
         merged_idea["design_direction"] = enrichment["design_direction"]
     if enrichment.get("demo_story"):
         merged_idea["demo_story"] = enrichment["demo_story"]
+    if enrichment.get("must_have_surfaces"):
+        merged_idea["must_have_surfaces"] = enrichment["must_have_surfaces"]
+    if enrichment.get("proof_points"):
+        merged_idea["proof_points"] = enrichment["proof_points"]
+    if enrichment.get("experience_non_negotiables"):
+        merged_idea["experience_non_negotiables"] = enrichment["experience_non_negotiables"]
     if enrichment.get("enhanced_tagline"):
         merged_idea["tagline"] = enrichment["enhanced_tagline"]
 

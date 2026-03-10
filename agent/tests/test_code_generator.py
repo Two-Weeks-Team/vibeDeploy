@@ -1,6 +1,11 @@
 import json
 
-from agent.nodes.code_generator import _normalize_cross_stack, _normalize_files_dict, _normalize_frontend_files
+from agent.nodes.code_generator import (
+    _normalize_backend_files,
+    _normalize_cross_stack,
+    _normalize_files_dict,
+    _normalize_frontend_files,
+)
 
 
 def test_normalize_frontend_files_patches_next_tsconfig_and_tailwind():
@@ -97,3 +102,64 @@ def test_normalize_cross_stack_fixes_api_prefix_and_payload_field_names():
     assert 'prefix="/api"' not in normalized_backend["routes.py"]
     assert '@app.middleware("http")' in normalized_backend["main.py"]
     assert 'JSON.stringify({ content: url })' in normalized_frontend["src/lib/api.ts"]
+
+
+def test_normalize_frontend_files_adds_resilient_api_error_handling_and_partial_success():
+    files = {
+        "src/lib/api.ts": (
+            "export async function summarize(url) {\n"
+            "  const res = await fetch('/api/summarize', { method: 'POST' });\n"
+            "  if (!res.ok) {\n"
+            "    const err = await res.json();\n"
+            "    throw new Error(err.error?.message ?? 'Summarization failed');\n"
+            "  }\n"
+            "  return (await res.json()).summary;\n"
+            "}\n"
+            "export async function generateTags(url) {\n"
+            "  const res = await fetch('/api/generate-tags', { method: 'POST' });\n"
+            "  if (!res.ok) {\n"
+            "    const err = await res.json();\n"
+            "    throw new Error(err.error?.message ?? 'Tag generation failed');\n"
+            "  }\n"
+            "  return (await res.json()).tags;\n"
+            "}\n"
+        ),
+        "src/components/Hero.tsx": (
+            "\"use client\";\n"
+            "export default async function Hero(url) {\n"
+            "  const [generatedSummary, generatedTags] = await Promise.all([\n"
+            "    summarize(url),\n"
+            "    generateTags(url)\n"
+            "  ]);\n"
+            "  setSummary(generatedSummary);\n"
+            "  setTags(generatedTags);\n"
+            "}\n"
+        ),
+    }
+
+    normalized = _normalize_frontend_files(files)
+
+    assert "throwApiError" in normalized["src/lib/api.ts"]
+    assert 'await throwApiError(res, "Tag generation failed");' in normalized["src/lib/api.ts"]
+    assert "Promise.allSettled" in normalized["src/components/Hero.tsx"]
+    assert "Tag generation failed, but the summary is available." in normalized["src/components/Hero.tsx"]
+
+
+def test_normalize_backend_files_coerces_plain_text_ai_responses():
+    files = {
+        "ai_service.py": (
+            "import re\n"
+            "from typing import Any, Dict\n\n"
+            "async def _call_inference(messages):\n"
+            "    try:\n"
+            "        raw_json = 'hello, world'\n"
+            "        return {\"note\": \"Failed to parse JSON from AI response\", \"raw\": raw_json}\n"
+            "    except Exception:\n"
+            "        return {\"note\": \"AI unavailable\"}\n"
+        )
+    }
+
+    normalized = _normalize_backend_files(files)
+
+    assert "_coerce_unstructured_payload" in normalized["ai_service.py"]
+    assert "return _coerce_unstructured_payload(raw_json)" in normalized["ai_service.py"]

@@ -20,10 +20,12 @@ def test_backend_prompt_documents_api_prefix_constraint():
 
 
 def test_upstream_prompts_capture_design_direction_and_contracts():
-    assert "visual_style_hints" in IDEA_EXTRACTION_PROMPT
-    assert "design_direction" in ENRICH_PROMPT
-    assert "Design direction and brand personality" in PRD_SYSTEM_PROMPT
-    assert "Frontend experience architecture" in TECH_SPEC_SYSTEM_PROMPT
-    assert "request body field names" in API_SPEC_SYSTEM_PROMPT
+    assert "must_have_surfaces" in IDEA_EXTRACTION_PROMPT
+    assert "proof_points" in IDEA_EXTRACTION_PROMPT
+    assert "experience_non_negotiables" in ENRICH_PROMPT
+    assert "First-screen surface inventory" in PRD_SYSTEM_PROMPT
+    assert "Experience contract" in TECH_SPEC_SYSTEM_PROMPT
+    assert "response fields" in API_SPEC_SYSTEM_PROMPT
     assert "design_system" in BLUEPRINT_SYSTEM_PROMPT
+    assert "experience_contract" in BLUEPRINT_SYSTEM_PROMPT
     assert "lightweight Next.js" in SCOPE_DOWN_PROMPT

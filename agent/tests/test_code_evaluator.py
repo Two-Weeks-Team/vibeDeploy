@@ -1,4 +1,4 @@
-from agent.nodes.code_evaluator import _check_consistency, _check_runnability
+from agent.nodes.code_evaluator import _check_consistency, _check_experience, _check_runnability
 
 
 def test_check_consistency_matches_contract_calls_across_generated_files():
@@ -32,6 +32,48 @@ def test_check_consistency_matches_contract_calls_across_generated_files():
     assert _check_consistency(frontend_code, backend_code, blueprint) >= 80.0
 
 
+def test_check_consistency_uses_request_and_response_field_contracts():
+    blueprint = {
+        "frontend_backend_contract": [
+            {
+                "frontend_file": "src/lib/api.ts",
+                "backend_file": "routes.py",
+                "calls": ["POST /api/summarize"],
+                "request_fields": ["url"],
+                "response_fields": ["summary"],
+            }
+        ]
+    }
+    frontend_code = {
+        "src/lib/api.ts": (
+            "export async function summarize(url) {\n"
+            "  const res = await fetch('/api/summarize', {\n"
+            "    method: 'POST',\n"
+            "    body: JSON.stringify({ url }),\n"
+            "  });\n"
+            "  const data = await res.json();\n"
+            "  return data.summary;\n"
+            "}\n"
+        )
+    }
+    backend_code = {
+        "routes.py": (
+            "from fastapi import APIRouter\n"
+            "from pydantic import BaseModel\n\n"
+            "router = APIRouter()\n\n"
+            "class SummarizeRequest(BaseModel):\n"
+            "    url: str\n\n"
+            "class SummarizeResponse(BaseModel):\n"
+            "    summary: str\n\n"
+            "@router.post('/summarize', response_model=SummarizeResponse)\n"
+            "async def summarize(req: SummarizeRequest):\n"
+            "    return SummarizeResponse(summary=req.url)\n"
+        )
+    }
+
+    assert _check_consistency(frontend_code, backend_code, blueprint) >= 85.0
+
+
 def test_check_runnability_accepts_server_component_with_direct_fetch():
     frontend_code = {
         "package.json": '{"dependencies":{"next":"15.0.0"}}',
@@ -52,3 +94,52 @@ def test_check_runnability_accepts_server_component_with_direct_fetch():
     }
 
     assert _check_runnability(frontend_code, backend_code) >= 80.0
+
+
+def test_check_consistency_penalizes_misaligned_endpoint_names():
+    blueprint = {
+        "frontend_backend_contract": [
+            {
+                "frontend_file": "src/lib/api.ts",
+                "backend_file": "routes.py",
+                "calls": ["GET /api/bookmarks"],
+            }
+        ]
+    }
+    frontend_code = {
+        "src/lib/api.ts": "export async function fetchItems() { return fetch('/api/links'); }",
+    }
+    backend_code = {
+        "routes.py": (
+            "from fastapi import APIRouter\n"
+            "router = APIRouter()\n"
+            "@router.get('/bookmarks')\n"
+            "async def list_bookmarks():\n"
+            "    return {'items': []}\n"
+        )
+    }
+
+    assert _check_consistency(frontend_code, backend_code, blueprint) < 70.0
+
+
+def test_check_experience_rewards_multi_panel_ui_and_resilient_api_patterns():
+    blueprint = {
+        "frontend_files": {
+            "src/components/Hero.tsx": {},
+            "src/components/InsightPanel.tsx": {},
+            "src/components/CollectionPanel.tsx": {},
+            "src/components/StatePanel.tsx": {},
+        }
+    }
+    frontend_code = {
+        "src/app/page.tsx": (
+            "export default function Page(){ return <main><Hero /><InsightPanel /><CollectionPanel /><StatePanel /></main>; }"
+        ),
+        "src/components/Hero.tsx": "export default function Hero(){ return <section>Analyze</section>; }",
+        "src/components/InsightPanel.tsx": "export default function InsightPanel(){ return <section>Summary result</section>; }",
+        "src/components/CollectionPanel.tsx": "export default function CollectionPanel(){ return <section>Saved bookmarks history</section>; }",
+        "src/components/StatePanel.tsx": "export default function StatePanel(){ return <div>Loading error empty state</div>; }",
+        "src/lib/api.ts": "async function throwApiError(){} async function x(){ await Promise.allSettled([]); }",
+    }
+
+    assert _check_experience(frontend_code, blueprint) >= 80.0

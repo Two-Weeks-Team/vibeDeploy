@@ -6,6 +6,20 @@ from ..llm import MODEL_CONFIG, ainvoke_with_retry, content_to_str, get_llm, get
 from ..state import VibeDeployState
 
 logger = logging.getLogger(__name__)
+_COLLECTION_UI_HINTS = (
+    "save",
+    "saved",
+    "bookmark",
+    "favorite",
+    "library",
+    "dashboard",
+    "history",
+    "collection",
+    "organize",
+    "manage",
+    "review",
+    "track",
+)
 
 BLUEPRINT_SYSTEM_PROMPT = """You are a senior software architect creating a file manifest for a full-stack application.
 
@@ -40,6 +54,12 @@ Output a JSON object with this exact structure:
     "env_vars": ["DATABASE_URL", "DIGITALOCEAN_INFERENCE_KEY"],
     "theme_tokens": ["background", "foreground", "primary", "accent", "card"]
   },
+  "experience_contract": {
+    "required_surfaces": ["hero", "primary workspace", "saved library"],
+    "required_states": ["loading", "empty", "error", "success"],
+    "proof_points": ["visible recent activity", "credible output framing"],
+    "interaction_style": "brief phrase"
+  },
   "frontend_backend_contract": [
     {"frontend_file": "src/lib/api.ts", "calls": "GET /api/items", "backend_file": "routes.py", "request_fields": [], "response_fields": ["items"]}
   ]
@@ -48,6 +68,7 @@ Output a JSON object with this exact structure:
 Rules:
 - Frontend: Next.js 15 App Router. Required: package.json, src/app/layout.tsx, src/app/page.tsx, src/app/globals.css, src/lib/api.ts, 2-3 domain components.
 - The frontend manifest must include a primary workflow shell, a result/list/detail component, and at least one explicit state or feedback component when relevant.
+- Include an experience_contract that states which surfaces, states, and proof points must be visible in the generated UI.
 - Backend: FastAPI. Required: requirements.txt, main.py, models.py, routes.py, ai_service.py.
 - All backend files are FLAT in project root (no packages, no relative imports).
 - Every file must have a clear purpose and list its dependencies.
@@ -104,4 +125,190 @@ async def blueprint_generator(state: VibeDeployState) -> dict:
         len(blueprint.get("backend_files", {})),
     )
 
+    blueprint = _normalize_blueprint(blueprint, idea)
+
     return {"blueprint": blueprint, "phase": "blueprint"}
+
+
+def _normalize_blueprint(blueprint: dict, idea: dict) -> dict:
+    if not isinstance(blueprint, dict):
+        return blueprint
+
+    normalized = dict(blueprint)
+    frontend_files = dict(normalized.get("frontend_files") or {})
+    backend_files = dict(normalized.get("backend_files") or {})
+
+    frontend_files.setdefault("package.json", {"purpose": "npm manifest", "imports_from": [], "exports": []})
+    frontend_files.setdefault(
+        "src/app/layout.tsx",
+        {"purpose": "root layout", "imports_from": ["src/app/globals.css"], "exports": ["RootLayout"]},
+    )
+    frontend_files.setdefault(
+        "src/app/page.tsx",
+        {"purpose": "main landing page", "imports_from": ["src/components/Hero.tsx"], "exports": ["default"]},
+    )
+    frontend_files.setdefault("src/app/globals.css", {"purpose": "global styles", "imports_from": [], "exports": []})
+    frontend_files.setdefault("src/lib/api.ts", {"purpose": "API client", "imports_from": [], "exports": ["fetchItems"]})
+
+    page_meta = frontend_files.get("src/app/page.tsx")
+    if not isinstance(page_meta, dict):
+        page_meta = {"purpose": "main landing page", "imports_from": [], "exports": ["default"]}
+    imports_from = page_meta.get("imports_from", [])
+    if not isinstance(imports_from, list):
+        imports_from = []
+
+    idea_text = json.dumps(idea, ensure_ascii=False).lower()
+    wants_collection_ui = any(token in idea_text for token in _COLLECTION_UI_HINTS)
+    must_have_surfaces = _coerce_string_list(idea.get("must_have_surfaces"))
+    proof_points = _coerce_string_list(idea.get("proof_points"))
+    experience_non_negotiables = _coerce_string_list(idea.get("experience_non_negotiables"))
+
+    component_specs = {
+        "src/components/Hero.tsx": {
+            "purpose": "hero and product positioning",
+            "imports_from": ["src/lib/api.ts"],
+            "exports": ["default"],
+        },
+        "src/components/InsightPanel.tsx": {
+            "purpose": "primary AI result or detail panel",
+            "imports_from": ["src/lib/api.ts"],
+            "exports": ["default"],
+        },
+        "src/components/StatePanel.tsx": {
+            "purpose": "loading, empty, error, and success states",
+            "imports_from": [],
+            "exports": ["default"],
+        },
+    }
+    if wants_collection_ui:
+        component_specs["src/components/CollectionPanel.tsx"] = {
+            "purpose": "saved items, history, favorites, or dashboard surface",
+            "imports_from": ["src/lib/api.ts"],
+            "exports": ["default"],
+        }
+        component_specs["src/components/StatsStrip.tsx"] = {
+            "purpose": "high-level metrics or quick status chips",
+            "imports_from": [],
+            "exports": ["default"],
+        }
+    else:
+        component_specs["src/components/WorkspacePanel.tsx"] = {
+            "purpose": "primary workbench or input workspace",
+            "imports_from": ["src/lib/api.ts"],
+            "exports": ["default"],
+        }
+        component_specs["src/components/FeaturePanel.tsx"] = {
+            "purpose": "secondary feature or proof surface",
+            "imports_from": [],
+            "exports": ["default"],
+        }
+
+    for path, meta in component_specs.items():
+        frontend_files.setdefault(path, meta)
+        if path not in imports_from:
+            imports_from.append(path)
+
+    page_meta["imports_from"] = imports_from
+    page_meta.setdefault("exports", ["default"])
+    frontend_files["src/app/page.tsx"] = page_meta
+
+    shared_constants = dict(normalized.get("shared_constants") or {})
+    shared_constants.setdefault("api_base_url", "/api")
+    shared_constants.setdefault("env_vars", ["DATABASE_URL", "DIGITALOCEAN_INFERENCE_KEY"])
+    theme_tokens = shared_constants.get("theme_tokens", [])
+    if not isinstance(theme_tokens, list):
+        theme_tokens = []
+    for token in ["background", "foreground", "primary", "accent", "card", "muted"]:
+        if token not in theme_tokens:
+            theme_tokens.append(token)
+    shared_constants["theme_tokens"] = theme_tokens
+
+    design_system = dict(normalized.get("design_system") or {})
+    design_system.setdefault(
+        "visual_direction",
+        "editorial product surface with a clear hero, workbench, and supporting panels",
+    )
+    design_system.setdefault("color_tokens", ["background", "primary", "accent", "card", "muted"])
+    design_system.setdefault("typography", "expressive headline paired with readable body copy")
+    design_system.setdefault("motion_principles", ["staggered reveal", "soft state transitions"])
+    constraints = design_system.get("ui_constraints", [])
+    if not isinstance(constraints, list):
+        constraints = []
+    if "avoid generic admin templates" not in constraints:
+        constraints.append("avoid generic admin templates")
+    if "avoid single centered forms without secondary surfaces" not in constraints:
+        constraints.append("avoid single centered forms without secondary surfaces")
+    for rule in experience_non_negotiables:
+        if rule not in constraints:
+            constraints.append(rule)
+    design_system["ui_constraints"] = constraints
+
+    experience_contract = dict(normalized.get("experience_contract") or {})
+    required_surfaces = _merge_unique_strings(
+        _coerce_string_list(experience_contract.get("required_surfaces")),
+        [
+            "hero header",
+            "primary workspace",
+            "insight or result panel",
+            "saved library and recent activity" if wants_collection_ui else "secondary supporting panel",
+        ],
+        must_have_surfaces,
+    )
+    required_states = _merge_unique_strings(
+        _coerce_string_list(experience_contract.get("required_states")),
+        ["loading", "empty", "error", "success"],
+    )
+    merged_proof_points = _merge_unique_strings(
+        _coerce_string_list(experience_contract.get("proof_points")),
+        [
+            "domain-specific output framing",
+            "clear feedback after the primary action",
+            "visible saved history or proof of work" if wants_collection_ui else "clear supporting evidence or detail",
+        ],
+        proof_points,
+    )
+    interaction_style = experience_contract.get("interaction_style")
+    if not isinstance(interaction_style, str) or not interaction_style.strip():
+        interaction_style = design_system.get("visual_direction", "")
+    experience_contract["required_surfaces"] = required_surfaces
+    experience_contract["required_states"] = required_states
+    experience_contract["proof_points"] = merged_proof_points
+    experience_contract["interaction_style"] = interaction_style
+
+    normalized["frontend_files"] = frontend_files
+    normalized["backend_files"] = backend_files
+    normalized["shared_constants"] = shared_constants
+    normalized["design_system"] = design_system
+    normalized["experience_contract"] = experience_contract
+    normalized.setdefault("frontend_backend_contract", [])
+    return normalized
+
+
+def _coerce_string_list(value: object) -> list[str]:
+    if isinstance(value, str):
+        cleaned = value.strip()
+        return [cleaned] if cleaned else []
+    if not isinstance(value, list):
+        return []
+
+    normalized: list[str] = []
+    for item in value:
+        if not isinstance(item, str):
+            continue
+        cleaned = item.strip()
+        if cleaned:
+            normalized.append(cleaned)
+    return normalized
+
+
+def _merge_unique_strings(*groups: list[str]) -> list[str]:
+    merged: list[str] = []
+    seen: set[str] = set()
+    for group in groups:
+        for item in group:
+            key = item.strip().lower()
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            merged.append(item.strip())
+    return merged
