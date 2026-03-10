@@ -50,10 +50,21 @@ def _register_pipeline(thread_id: str, pipeline_type: str, prompt: str):
         "started_at": time.time(),
         "prompt_preview": prompt[:120],
     }
+    asyncio.ensure_future(_broadcast_active_pipelines())
 
 
 def _deregister_pipeline(thread_id: str):
     _active_pipelines.pop(thread_id, None)
+    asyncio.ensure_future(_broadcast_active_pipelines())
+
+
+async def _broadcast_active_pipelines():
+    await _broadcast_event(
+        {
+            "type": "active_pipelines",
+            "pipelines": list(_active_pipelines.values()),
+        }
+    )
 
 
 async def _broadcast_event(event_data: dict):
@@ -788,6 +799,13 @@ async def dashboard_events():
 
     async def event_stream() -> AsyncGenerator[str, None]:
         try:
+            yield _sse(
+                "active_pipelines",
+                {
+                    "type": "active_pipelines",
+                    "pipelines": list(_active_pipelines.values()),
+                },
+            )
             while True:
                 try:
                     event = await asyncio.wait_for(queue.get(), timeout=30)

@@ -7,7 +7,7 @@ const AGENT_URL = process.env.NEXT_PUBLIC_AGENT_URL ?? "http://localhost:8080";
 const DASHBOARD_API_URL = AGENT_URL.includes("ondigitalocean.app")
   ? `${AGENT_URL}/api`
   : AGENT_URL;
-const ACTIVE_POLL_MS = 2_000;
+const ACTIVE_POLL_MS = 30_000;
 const MAX_EVENTS = 200;
 
 const NODE_NAME_TO_VIZ_ID: Record<string, string> = {
@@ -92,6 +92,11 @@ export function usePipelineMonitor() {
             try {
               const data: DashboardEvent = JSON.parse(trimmed.slice(6));
               if (data.type === "heartbeat") continue;
+
+              if (data.type === "active_pipelines") {
+                setActivePipelines(data.pipelines ?? []);
+                continue;
+              }
 
               data._uid = `evt-${++_eventSeq}`;
               data._timestamp = Date.now();
