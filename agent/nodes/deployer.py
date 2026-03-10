@@ -288,23 +288,26 @@ async def _ci_repair_loop(
 
 
 async def _repair_code_from_errors(files: dict[str, str], error_logs: str) -> dict[str, str]:
-    from ..llm import MODEL_CONFIG, content_to_str, get_llm
+    from ..llm import MODEL_CONFIG, ainvoke_with_retry, content_to_str, get_llm, get_rate_limit_fallback_models
 
-    llm = get_llm(model=MODEL_CONFIG["ci_repair"], temperature=0.1, max_tokens=8000)
+    repair_model = MODEL_CONFIG["ci_repair"]
+    llm = get_llm(model=repair_model, temperature=0.1, max_tokens=8000)
 
     file_listing = "\n\n".join(
         f"=== {path} ===\n{content}" for path, content in sorted(files.items()) if isinstance(content, str)
     )
 
     try:
-        response = await llm.ainvoke(
+        response = await ainvoke_with_retry(
+            llm,
             [
                 {"role": "system", "content": _CI_REPAIR_PROMPT},
                 {
                     "role": "user",
                     "content": f"CI ERROR LOG:\n{error_logs[:4000]}\n\nCURRENT FILES:\n{file_listing}",
                 },
-            ]
+            ],
+            fallback_models=get_rate_limit_fallback_models(repair_model),
         )
     except Exception:
         return files

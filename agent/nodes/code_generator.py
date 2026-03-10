@@ -3,7 +3,7 @@ import json
 import logging
 import re
 
-from ..llm import MODEL_CONFIG, ainvoke_with_retry, get_llm
+from ..llm import MODEL_CONFIG, ainvoke_with_retry, get_llm, get_rate_limit_fallback_models
 from ..prompts.code_templates import (
     BACKEND_SYSTEM_PROMPT,
     CODE_GENERATION_BASE_SYSTEM_PROMPT,
@@ -23,14 +23,16 @@ async def code_generator(state: VibeDeployState) -> dict:
     idea = state.get("idea", {})
     blueprint = state.get("blueprint", {}) or {}
     code_eval_result = state.get("code_eval_result")
+    frontend_model = MODEL_CONFIG.get("code_gen_frontend", MODEL_CONFIG["code_gen"])
+    backend_model = MODEL_CONFIG.get("code_gen_backend", MODEL_CONFIG["code_gen"])
 
     frontend_llm = get_llm(
-        model=MODEL_CONFIG.get("code_gen_frontend", MODEL_CONFIG["code_gen"]),
+        model=frontend_model,
         temperature=0.3,
         max_tokens=8000,
     )
     backend_llm = get_llm(
-        model=MODEL_CONFIG.get("code_gen_backend", MODEL_CONFIG["code_gen"]),
+        model=backend_model,
         temperature=0.3,
         max_tokens=8000,
     )
@@ -47,9 +49,19 @@ async def code_generator(state: VibeDeployState) -> dict:
 
     eval_feedback = _build_eval_feedback(code_eval_result)
 
-    frontend_code = await _generate_frontend_files(frontend_llm, context, eval_feedback=eval_feedback)
+    frontend_code = await _generate_frontend_files(
+        frontend_llm,
+        context,
+        eval_feedback=eval_feedback,
+        fallback_models=get_rate_limit_fallback_models(frontend_model),
+    )
     await asyncio.sleep(8)
-    backend_code = await _generate_backend_files(backend_llm, context, eval_feedback=eval_feedback)
+    backend_code = await _generate_backend_files(
+        backend_llm,
+        context,
+        eval_feedback=eval_feedback,
+        fallback_models=get_rate_limit_fallback_models(backend_model),
+    )
 
     generation_warnings = []
 
@@ -63,7 +75,12 @@ async def code_generator(state: VibeDeployState) -> dict:
         generation_warnings.append(warning)
 
         logger.info("[CODE_GEN] Retrying frontend generation (attempt 2)...")
-        frontend_code = await _generate_frontend_files(frontend_llm, context, retry=True)
+        frontend_code = await _generate_frontend_files(
+            frontend_llm,
+            context,
+            retry=True,
+            fallback_models=get_rate_limit_fallback_models(frontend_model),
+        )
 
         if len(frontend_code) < _MIN_FRONTEND_FILES:
             retry_warning = (
@@ -102,6 +119,7 @@ async def _generate_frontend_files(
     context: str,
     retry: bool = False,
     eval_feedback: str | None = None,
+    fallback_models: list[str] | None = None,
 ) -> dict[str, str]:
     extra_instruction = ""
     if retry:
@@ -130,6 +148,7 @@ async def _generate_frontend_files(
                 "content": f"Generate frontend files from this product context:\n\n{context}",
             },
         ],
+        fallback_models=fallback_models,
     )
 
     parsed = _parse_json_response(response.content, {"files": {}}, label="frontend")
@@ -141,6 +160,7 @@ async def _generate_backend_files(
     llm,
     context: str,
     eval_feedback: str | None = None,
+    fallback_models: list[str] | None = None,
 ) -> dict[str, str]:
     extra_instruction = ""
     if eval_feedback:
@@ -167,6 +187,7 @@ async def _generate_backend_files(
                 ),
             },
         ],
+        fallback_models=fallback_models,
     )
 
     parsed = _parse_json_response(response.content, {"files": {}}, label="backend")

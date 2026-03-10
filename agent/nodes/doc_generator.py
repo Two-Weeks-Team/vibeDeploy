@@ -2,7 +2,7 @@ import asyncio
 import json
 import re
 
-from ..llm import MODEL_CONFIG, get_llm
+from ..llm import MODEL_CONFIG, ainvoke_with_retry, get_llm, get_rate_limit_fallback_models
 from ..prompts.doc_templates import (
     API_SPEC_SYSTEM_PROMPT,
     APP_SPEC_SYSTEM_PROMPT,
@@ -20,8 +20,10 @@ async def doc_generator(state: VibeDeployState) -> dict:
     council_analysis = state.get("council_analysis", {})
     scoring = state.get("scoring", {})
 
+    doc_model = MODEL_CONFIG["doc_gen"]
+    fallback_models = get_rate_limit_fallback_models(doc_model)
     llm = get_llm(
-        model=MODEL_CONFIG["doc_gen"],
+        model=doc_model,
         temperature=0.3,
         max_tokens=16000,
     )
@@ -29,11 +31,11 @@ async def doc_generator(state: VibeDeployState) -> dict:
     context = _build_context(idea, council_analysis, scoring)
 
     prd, tech_spec, api_spec, db_schema, app_spec_yaml = await asyncio.gather(
-        _generate_markdown_doc(llm, PRD_SYSTEM_PROMPT, context),
-        _generate_markdown_doc(llm, TECH_SPEC_SYSTEM_PROMPT, context),
-        _generate_markdown_doc(llm, API_SPEC_SYSTEM_PROMPT, context),
-        _generate_markdown_doc(llm, DB_SCHEMA_SYSTEM_PROMPT, context),
-        _generate_app_spec_yaml_doc(llm, context, idea),
+        _generate_markdown_doc(llm, PRD_SYSTEM_PROMPT, context, fallback_models),
+        _generate_markdown_doc(llm, TECH_SPEC_SYSTEM_PROMPT, context, fallback_models),
+        _generate_markdown_doc(llm, API_SPEC_SYSTEM_PROMPT, context, fallback_models),
+        _generate_markdown_doc(llm, DB_SCHEMA_SYSTEM_PROMPT, context, fallback_models),
+        _generate_app_spec_yaml_doc(llm, context, idea, fallback_models),
     )
 
     return {
@@ -60,8 +62,9 @@ def _build_context(idea: dict, council_analysis: dict, scoring: dict) -> str:
     )
 
 
-async def _generate_markdown_doc(llm, doc_system_prompt: str, context: str) -> str:
-    response = await llm.ainvoke(
+async def _generate_markdown_doc(llm, doc_system_prompt: str, context: str, fallback_models: list[str]) -> str:
+    response = await ainvoke_with_retry(
+        llm,
         [
             {
                 "role": "system",
@@ -75,7 +78,8 @@ async def _generate_markdown_doc(llm, doc_system_prompt: str, context: str) -> s
                 "role": "user",
                 "content": f"Create the document from this planning context:\n\n{context}",
             },
-        ]
+        ],
+        fallback_models=fallback_models,
     )
 
     parsed = _parse_json_response(response.content, {"content": ""})
@@ -83,12 +87,13 @@ async def _generate_markdown_doc(llm, doc_system_prompt: str, context: str) -> s
     return content if isinstance(content, str) else ""
 
 
-async def _generate_app_spec_yaml_doc(llm, context: str, idea: dict) -> str:
+async def _generate_app_spec_yaml_doc(llm, context: str, idea: dict, fallback_models: list[str]) -> str:
     app_name = _slugify(idea.get("name") or idea.get("tagline") or "vibedeploy-app")
     repo_placeholder = f"https://github.com/example/{app_name}.git"
     baseline_spec = build_app_spec(app_name, repo_placeholder)
 
-    response = await llm.ainvoke(
+    response = await ainvoke_with_retry(
+        llm,
         [
             {
                 "role": "system",
@@ -107,7 +112,8 @@ async def _generate_app_spec_yaml_doc(llm, context: str, idea: dict) -> str:
                     f"{json.dumps(baseline_spec, indent=2, ensure_ascii=False)}"
                 ),
             },
-        ]
+        ],
+        fallback_models=fallback_models,
     )
 
     parsed = _parse_json_response(response.content, {"content": ""})

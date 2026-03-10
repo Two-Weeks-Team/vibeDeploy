@@ -1,4 +1,5 @@
 import logging
+import re
 
 from ..state import VibeDeployState
 
@@ -65,17 +66,22 @@ async def code_evaluator(state: VibeDeployState) -> dict:
 
 def _check_consistency(frontend_code: dict | None, backend_code: dict | None, blueprint: dict) -> float:
     contract = blueprint.get("frontend_backend_contract", [])
+    fe = frontend_code or {}
+    be = backend_code or {}
+    frontend_endpoints = _extract_frontend_endpoints(fe)
+    backend_endpoints = _extract_backend_endpoints(be)
+
     if not contract:
-        fe = frontend_code or {}
         api_file = _find_file_fuzzy(fe, "api.ts")
+        if frontend_endpoints and backend_endpoints:
+            overlap = len(frontend_endpoints & backend_endpoints) / max(len(backend_endpoints), 1)
+            return max(75.0, min(95.0, 75.0 + overlap * 20.0))
         if api_file and ("fetch" in fe[api_file] or "axios" in fe[api_file]):
             return 85.0
         return 75.0 if fe else 50.0
 
     score = 0
     checks = 0
-    fe = frontend_code or {}
-    be = backend_code or {}
     all_fe_content = "\n".join(fe.values())
     all_be_content = "\n".join(be.values())
 
@@ -83,28 +89,45 @@ def _check_consistency(frontend_code: dict | None, backend_code: dict | None, bl
         checks += 1
         fe_file = item.get("frontend_file", "")
         be_file = item.get("backend_file", "")
-        endpoint = item.get("calls", "")
+        expected_endpoints = _normalize_contract_calls(item.get("calls", ""))
 
         fe_match = _find_file_fuzzy(fe, fe_file)
         be_match = _find_file_fuzzy(be, be_file)
+        item_score = 0.0
 
-        endpoint_path = endpoint.split(" ")[-1] if " " in endpoint else endpoint
-        endpoint_stem = endpoint_path.strip("/").replace("api/", "")
+        if fe_match:
+            item_score += 0.2
+        if be_match:
+            item_score += 0.2
 
-        if fe_match and be_match:
-            fe_content = fe[fe_match]
-            be_content = be[be_match]
-            if endpoint_path in fe_content or endpoint_stem in fe_content:
-                score += 1
-            elif endpoint_path in be_content or endpoint_stem in be_content:
-                score += 0.7
-            else:
-                score += 0.4
-        elif fe_match or be_match:
-            if endpoint_stem in all_fe_content or endpoint_stem in all_be_content:
-                score += 0.6
-            else:
-                score += 0.3
+        if expected_endpoints:
+            fe_specific = _extract_frontend_endpoints({fe_match: fe[fe_match]}) if fe_match else set()
+            be_specific = _extract_backend_endpoints({be_match: be[be_match]}) if be_match else set()
+            fe_hit = bool(expected_endpoints & (fe_specific or frontend_endpoints))
+            be_hit = bool(expected_endpoints & (be_specific or backend_endpoints))
+
+            if fe_hit and be_hit:
+                item_score = max(item_score, 1.0)
+            elif fe_hit or be_hit:
+                item_score = max(item_score, 0.75)
+            elif any(endpoint in all_fe_content or endpoint in all_be_content for endpoint in expected_endpoints):
+                item_score = max(item_score, 0.55 if fe_match and be_match else 0.4)
+            elif fe_match and be_match:
+                item_score = max(item_score, 0.45)
+            elif fe_match or be_match:
+                item_score = max(item_score, 0.3)
+        else:
+            if fe_match and be_match:
+                item_score = max(item_score, 0.8)
+            elif fe_match or be_match:
+                item_score = max(item_score, 0.5)
+
+        score += min(item_score, 1.0)
+
+    if frontend_endpoints and backend_endpoints:
+        overlap_bonus = len(frontend_endpoints & backend_endpoints) / max(len(backend_endpoints), 1)
+        score += min(overlap_bonus, 0.5)
+        checks += 0.5
 
     return (score / max(checks, 1)) * 100
 
@@ -155,17 +178,25 @@ def _check_runnability(frontend_code: dict | None, backend_code: dict | None) ->
             score += 1
         if any("page" in f for f in frontend_code):
             score += 0.5
-        if _find_file_fuzzy(frontend_code, "api.ts"):
+        has_api_client = _find_file_fuzzy(frontend_code, "api.ts") or any(
+            "fetch(" in (content or "") or "axios." in (content or "") for content in frontend_code.values()
+        )
+        if has_api_client:
             score += 0.5
         if any("globals.css" in f for f in frontend_code):
             score += 0.5
+        needs_use_client = any(
+            re.search(r"\b(useState|useEffect|useRef|useReducer|useTransition|onClick=|onSubmit=|onChange=)\b", content)
+            for f, content in frontend_code.items()
+            if f.endswith(".tsx") and "layout" not in f
+        )
         has_use_client = any(
             (frontend_code.get(f, "") or "").lstrip().startswith('"use client"')
             or (frontend_code.get(f, "") or "").lstrip().startswith("'use client'")
             for f in frontend_code
             if f.endswith(".tsx") and "layout" not in f
         )
-        if has_use_client:
+        if has_use_client or not needs_use_client:
             score += 0.5
 
     return (score / max(total, 1)) * 100
@@ -191,6 +222,87 @@ def _build_fix_instructions(eval_result: dict) -> str:
             'interactive .tsx files must start with "use client".'
         )
     return "\n".join(issues) if issues else "General quality improvement needed"
+
+
+def _normalize_contract_calls(calls: object) -> set[str]:
+    if isinstance(calls, str):
+        values = [calls]
+    elif isinstance(calls, list):
+        values = [value for value in calls if isinstance(value, str)]
+    else:
+        return set()
+
+    normalized = set()
+    for value in values:
+        endpoint = _normalize_endpoint_path(value)
+        if endpoint:
+            normalized.add(endpoint)
+    return normalized
+
+
+def _normalize_endpoint_path(value: str) -> str:
+    raw = value.strip()
+    if not raw:
+        return ""
+
+    parts = raw.split(" ", 1)
+    if len(parts) == 2 and parts[0].upper() in {"GET", "POST", "PUT", "PATCH", "DELETE"}:
+        raw = parts[1]
+
+    raw = re.sub(r"^https?://[^/]+", "", raw)
+    raw = raw.split("?", 1)[0].split("#", 1)[0].strip()
+
+    api_index = raw.find("/api/")
+    if api_index >= 0:
+        raw = raw[api_index:]
+
+    if not raw.startswith("/"):
+        return ""
+
+    raw = re.sub(r"/+", "/", raw).rstrip("/")
+    if raw == "/api":
+        return "root"
+
+    if raw.startswith("/api/"):
+        raw = raw[len("/api/") :]
+    else:
+        raw = raw.lstrip("/")
+
+    return raw.strip("/") or "root"
+
+
+def _extract_frontend_endpoints(files: dict[str, str]) -> set[str]:
+    endpoints: set[str] = set()
+    for content in files.values():
+        for raw in re.findall(r"['\"`](/api/[^'\"`?#)]+)", content):
+            normalized = _normalize_endpoint_path(raw)
+            if normalized:
+                endpoints.add(normalized)
+    return endpoints
+
+
+def _extract_backend_endpoints(files: dict[str, str]) -> set[str]:
+    endpoints: set[str] = set()
+    route_pattern = re.compile(r"@\w+\.(?:get|post|put|patch|delete)\(\s*['\"]([^'\"]+)['\"]")
+    prefix_pattern = re.compile(r"APIRouter\([^)]*prefix\s*=\s*['\"]([^'\"]+)['\"]")
+
+    for content in files.values():
+        prefixes = prefix_pattern.findall(content)
+        prefix = prefixes[0] if prefixes else ""
+
+        for route in route_pattern.findall(content):
+            combined = route
+            if prefix and route.startswith("/") and not route.startswith("/api/"):
+                combined = f"{prefix.rstrip('/')}/{route.lstrip('/')}"
+            normalized = _normalize_endpoint_path(combined)
+            if normalized:
+                endpoints.add(normalized)
+
+        for raw in re.findall(r"['\"](/api/[^'\"]+)['\"]", content):
+            normalized = _normalize_endpoint_path(raw)
+            if normalized:
+                endpoints.add(normalized)
+    return endpoints
 
 
 def route_code_eval(state: VibeDeployState) -> str:

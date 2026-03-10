@@ -6,7 +6,9 @@ import os
 
 DO_INFERENCE_BASE_URL = "https://inference.do-ai.run/v1"
 DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS = float(os.getenv("LLM_REQUEST_TIMEOUT_SECONDS", "90"))
+DEFAULT_LLM_MAX_CONCURRENCY = max(1, int(os.getenv("LLM_MAX_CONCURRENCY", "2")))
 logger = logging.getLogger(__name__)
+_llm_semaphore: asyncio.Semaphore | None = None
 
 # Open-source models via DO Serverless Inference (no subscription tier restrictions)
 # Commercial models (Anthropic/OpenAI) temporarily unavailable — DO Support ticket pending.
@@ -18,7 +20,7 @@ logger = logging.getLogger(__name__)
 #   web_search: openai-gpt-5-mini
 #   image: openai-gpt-image-1
 MODEL_CONFIG = {
-    "council": "openai-gpt-oss-120b",
+    "council": "alibaba-qwen3-32b",
     "strategist": "deepseek-r1-distill-llama-70b",
     "cross_exam": "deepseek-r1-distill-llama-70b",
     "code_gen": "openai-gpt-oss-120b",
@@ -27,9 +29,9 @@ MODEL_CONFIG = {
     "ci_repair": "alibaba-qwen3-32b",
     "doc_gen": "alibaba-qwen3-32b",
     "image": "fal-ai/flux/schnell",
-    "brainstorm": "openai-gpt-oss-120b",
-    "brainstorm_synthesis": "deepseek-r1-distill-llama-70b",
-    "input": "openai-gpt-oss-120b",
+    "brainstorm": "alibaba-qwen3-32b",
+    "brainstorm_synthesis": "alibaba-qwen3-32b",
+    "input": "alibaba-qwen3-32b",
     "decision": "deepseek-r1-distill-llama-70b",
     "web_search": "mistral-nemo-instruct-2407",
 }
@@ -49,35 +51,120 @@ def content_to_str(content) -> str:
     return str(content) if not isinstance(content, str) else content
 
 
+def _get_llm_semaphore() -> asyncio.Semaphore:
+    global _llm_semaphore
+    if _llm_semaphore is None:
+        _llm_semaphore = asyncio.Semaphore(DEFAULT_LLM_MAX_CONCURRENCY)
+    return _llm_semaphore
+
+
+def _get_llm_model_name(llm) -> str:
+    for attr in ("model_name", "model"):
+        value = getattr(llm, attr, "")
+        if isinstance(value, str) and value:
+            return value
+
+    bound = getattr(llm, "bound", None)
+    if bound is not None and bound is not llm:
+        return _get_llm_model_name(bound)
+
+    return ""
+
+
+def _clone_llm_with_model(llm, model: str):
+    temperature = getattr(llm, "temperature", 0.5)
+    max_tokens = getattr(llm, "max_tokens", 3000)
+    request_timeout = getattr(llm, "request_timeout", None)
+
+    if not isinstance(temperature, (int, float)):
+        temperature = 0.5
+    if not isinstance(max_tokens, int) or max_tokens <= 0:
+        max_tokens = 3000
+    if not isinstance(request_timeout, (int, float)) or request_timeout <= 0:
+        request_timeout = None
+
+    return get_llm(
+        model=model,
+        temperature=float(temperature),
+        max_tokens=max_tokens,
+        request_timeout=request_timeout,
+    )
+
+
+def get_rate_limit_fallback_models(model: str) -> list[str]:
+    fallbacks = {
+        "openai-gpt-oss-120b": ["alibaba-qwen3-32b", "deepseek-r1-distill-llama-70b"],
+        "deepseek-r1-distill-llama-70b": ["alibaba-qwen3-32b", "openai-gpt-oss-120b"],
+        "alibaba-qwen3-32b": ["deepseek-r1-distill-llama-70b", "openai-gpt-oss-120b"],
+    }
+    return list(fallbacks.get(model, []))
+
+
+async def _ainvoke_with_semaphore(llm, messages: list[dict]):
+    async with _get_llm_semaphore():
+        return await llm.ainvoke(messages)
+
+
 async def ainvoke_with_retry(
     llm,
     messages: list[dict],
     *,
     max_attempts: int = 6,
     initial_delay_seconds: float = 5.0,
+    fallback_models: list[str] | None = None,
 ):
-    delay = initial_delay_seconds
     last_exc = None
 
-    for attempt in range(1, max_attempts + 1):
-        try:
-            return await llm.ainvoke(messages)
-        except Exception as exc:
-            last_exc = exc
-            if attempt >= max_attempts or not _is_rate_limit_error(exc):
+    llms_to_try = [llm]
+    primary_model = _get_llm_model_name(llm)
+    seen_models = {primary_model} if primary_model else set()
+    for fallback_model in fallback_models or []:
+        if not fallback_model or fallback_model in seen_models:
+            continue
+        llms_to_try.append(_clone_llm_with_model(llm, fallback_model))
+        seen_models.add(fallback_model)
+
+    for llm_index, target_llm in enumerate(llms_to_try):
+        model_name = _get_llm_model_name(target_llm) or f"llm-{llm_index + 1}"
+        delay = initial_delay_seconds
+        attempts_for_model = max_attempts if llm_index == 0 else max(3, max_attempts // 2)
+
+        for attempt in range(1, attempts_for_model + 1):
+            try:
+                return await _ainvoke_with_semaphore(target_llm, messages)
+            except Exception as exc:
+                last_exc = exc
+                if not _is_rate_limit_error(exc):
+                    raise
+
+                if attempt < attempts_for_model:
+                    logger.warning(
+                        "LLM rate limit hit on %s; retrying in %.1fs (attempt %d/%d): %s",
+                        model_name,
+                        delay,
+                        attempt,
+                        attempts_for_model,
+                        exc,
+                    )
+                    await asyncio.sleep(delay)
+                    delay = min(delay * 2, 15.0)
+                    continue
+
+                if llm_index < len(llms_to_try) - 1:
+                    next_model = _get_llm_model_name(llms_to_try[llm_index + 1]) or f"llm-{llm_index + 2}"
+                    logger.warning(
+                        "LLM rate limit persisted on %s after %d attempts; switching to %s",
+                        model_name,
+                        attempts_for_model,
+                        next_model,
+                    )
+                    break
+
                 raise
 
-            logger.warning(
-                "LLM rate limit hit; retrying in %.1fs (attempt %d/%d): %s",
-                delay,
-                attempt,
-                max_attempts,
-                exc,
-            )
-            await asyncio.sleep(delay)
-            delay = min(delay * 2, 15.0)
-
-    raise last_exc
+    if last_exc:
+        raise last_exc
+    raise RuntimeError("LLM invocation failed without an exception")
 
 
 def _is_rate_limit_error(exc: Exception) -> bool:

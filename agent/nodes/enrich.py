@@ -22,17 +22,20 @@ ENRICH_PROMPT = (
 
 
 async def enrich_idea(state: VibeDeployState) -> dict:
-    from ..llm import MODEL_CONFIG, get_llm
+    from ..llm import MODEL_CONFIG, ainvoke_with_retry, get_llm, get_rate_limit_fallback_models
 
     idea = state.get("idea", {})
-    llm = get_llm(model=MODEL_CONFIG["brainstorm"], temperature=0.7, max_tokens=4000)
+    brainstorm_model = MODEL_CONFIG["brainstorm"]
+    llm = get_llm(model=brainstorm_model, temperature=0.7, max_tokens=4000)
 
     idea_text = json.dumps(idea, indent=2, ensure_ascii=False)
-    response = await llm.ainvoke(
+    response = await ainvoke_with_retry(
+        llm,
         [
             {"role": "system", "content": ENRICH_PROMPT},
             {"role": "user", "content": f"Enrich this app idea:\n\n{idea_text}"},
-        ]
+        ],
+        fallback_models=get_rate_limit_fallback_models(brainstorm_model),
     )
 
     enrichment = _parse_json(response.content)

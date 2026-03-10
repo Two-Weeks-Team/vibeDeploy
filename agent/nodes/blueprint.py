@@ -2,7 +2,7 @@ import json
 import logging
 import re
 
-from ..llm import MODEL_CONFIG, content_to_str, get_llm
+from ..llm import MODEL_CONFIG, ainvoke_with_retry, content_to_str, get_llm, get_rate_limit_fallback_models
 from ..state import VibeDeployState
 
 logger = logging.getLogger(__name__)
@@ -50,7 +50,8 @@ async def blueprint_generator(state: VibeDeployState) -> dict:
     generated_docs = state.get("generated_docs", {})
     idea = state.get("idea", {})
 
-    llm = get_llm(model=MODEL_CONFIG["doc_gen"], temperature=0.2, max_tokens=4000)
+    doc_model = MODEL_CONFIG["doc_gen"]
+    llm = get_llm(model=doc_model, temperature=0.2, max_tokens=4000)
 
     context = json.dumps(
         {"idea": idea, "generated_docs": generated_docs},
@@ -58,11 +59,13 @@ async def blueprint_generator(state: VibeDeployState) -> dict:
         ensure_ascii=False,
     )
 
-    response = await llm.ainvoke(
+    response = await ainvoke_with_retry(
+        llm,
         [
             {"role": "system", "content": BLUEPRINT_SYSTEM_PROMPT},
             {"role": "user", "content": f"Create a file manifest for this application:\n\n{context}"},
-        ]
+        ],
+        fallback_models=get_rate_limit_fallback_models(doc_model),
     )
 
     raw = content_to_str(response.content).strip()

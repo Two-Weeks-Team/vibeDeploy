@@ -74,7 +74,7 @@ def fan_out_brainstorm(state: dict) -> list[Send]:
 
 
 async def run_brainstorm_agent(input: dict) -> dict:
-    from ..llm import MODEL_CONFIG, get_llm
+    from ..llm import MODEL_CONFIG, ainvoke_with_retry, get_llm, get_rate_limit_fallback_models
 
     agent_name = input.get("agent_name", "unknown")
     idea = input.get("idea", {})
@@ -83,10 +83,12 @@ async def run_brainstorm_agent(input: dict) -> dict:
     if not prompt:
         return {"brainstorm_insights": {agent_name: {"ideas": [], "raw": f"Unknown agent: {agent_name}"}}}
 
-    llm = get_llm(model=MODEL_CONFIG["brainstorm"], temperature=0.8, max_tokens=16000)
+    brainstorm_model = MODEL_CONFIG["brainstorm"]
+    llm = get_llm(model=brainstorm_model, temperature=0.8, max_tokens=16000)
     idea_text = json.dumps(idea, indent=2, ensure_ascii=False)
 
-    response = await llm.ainvoke(
+    response = await ainvoke_with_retry(
+        llm,
         [
             {"role": "system", "content": prompt},
             {
@@ -101,7 +103,8 @@ async def run_brainstorm_agent(input: dict) -> dict:
                     "Return ONLY valid JSON."
                 ),
             },
-        ]
+        ],
+        fallback_models=get_rate_limit_fallback_models(brainstorm_model),
     )
 
     return {
@@ -110,17 +113,19 @@ async def run_brainstorm_agent(input: dict) -> dict:
 
 
 async def synthesize_brainstorm(state: dict) -> dict:
-    from ..llm import MODEL_CONFIG, get_llm
+    from ..llm import MODEL_CONFIG, ainvoke_with_retry, get_llm, get_rate_limit_fallback_models
 
     insights = state.get("brainstorm_insights", {})
     idea = state.get("idea", {})
 
-    llm = get_llm(model=MODEL_CONFIG["brainstorm_synthesis"], temperature=0.6, max_tokens=16000)
+    synthesis_model = MODEL_CONFIG["brainstorm_synthesis"]
+    llm = get_llm(model=synthesis_model, temperature=0.6, max_tokens=16000)
 
     insights_text = json.dumps(insights, indent=2, ensure_ascii=False)
     idea_text = json.dumps(idea, indent=2, ensure_ascii=False)
 
-    response = await llm.ainvoke(
+    response = await ainvoke_with_retry(
+        llm,
         [
             {
                 "role": "system",
@@ -146,7 +151,8 @@ async def synthesize_brainstorm(state: dict) -> dict:
                     "Return ONLY valid JSON."
                 ),
             },
-        ]
+        ],
+        fallback_models=get_rate_limit_fallback_models(synthesis_model),
     )
 
     return {

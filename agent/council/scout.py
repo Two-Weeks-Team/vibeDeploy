@@ -32,7 +32,7 @@ reasoning (string), recommendations (list)
 
 async def analyze(idea: dict, llm=None) -> dict:
     """Run analysis for this council member."""
-    from ..llm import MODEL_CONFIG, get_llm
+    from ..llm import MODEL_CONFIG, ainvoke_with_retry, get_llm
     from ..tools.function_tools import SCOUT_TOOLS
 
     if llm is None:
@@ -56,7 +56,7 @@ async def analyze(idea: dict, llm=None) -> dict:
         },
     ]
 
-    response = await llm_with_tools.ainvoke(messages)
+    response = await ainvoke_with_retry(llm_with_tools, messages)
 
     if response.tool_calls:
         messages.append(response)
@@ -65,7 +65,7 @@ async def analyze(idea: dict, llm=None) -> dict:
             if tool_fn:
                 result = await tool_fn.ainvoke(tool_call["args"])
                 messages.append({"role": "tool", "tool_call_id": tool_call["id"], "content": str(result)})
-        response = await llm_with_tools.ainvoke(messages)
+        response = await ainvoke_with_retry(llm_with_tools, messages)
 
     return _parse_analysis(response.content)
 

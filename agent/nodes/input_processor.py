@@ -1,7 +1,7 @@
 import json
 import re
 
-from ..llm import MODEL_CONFIG, get_llm
+from ..llm import MODEL_CONFIG, ainvoke_with_retry, get_llm, get_rate_limit_fallback_models
 from ..state import VibeDeployState
 from ..tools.youtube import extract_youtube_transcript, is_youtube_url
 
@@ -40,17 +40,20 @@ async def input_processor(state: VibeDeployState) -> dict:
         else:
             idea_context = f"YouTube URL (content unavailable): {raw_input}"
 
+    input_model = MODEL_CONFIG["input"]
     llm = get_llm(
-        model=MODEL_CONFIG["input"],
+        model=input_model,
         temperature=0.4,
         max_tokens=2000,
     )
 
-    response = await llm.ainvoke(
+    response = await ainvoke_with_retry(
+        llm,
         [
             {"role": "system", "content": IDEA_EXTRACTION_PROMPT},
             {"role": "user", "content": idea_context},
-        ]
+        ],
+        fallback_models=get_rate_limit_fallback_models(input_model),
     )
 
     idea = _parse_idea_json(response.content)

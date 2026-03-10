@@ -44,7 +44,7 @@ SCOPE_DOWN_PROMPT = (
 
 
 async def fix_storm(state: VibeDeployState) -> dict:
-    from ..llm import MODEL_CONFIG, get_llm
+    from ..llm import MODEL_CONFIG, ainvoke_with_retry, get_llm, get_rate_limit_fallback_models
 
     scoring = state.get("scoring", {})
     idea = state.get("idea", {})
@@ -58,11 +58,13 @@ async def fix_storm(state: VibeDeployState) -> dict:
                 "reasoning": axis_data.get("reasoning", ""),
             }
 
-    llm = get_llm(model=MODEL_CONFIG["brainstorm"], temperature=0.7, max_tokens=8000)
+    brainstorm_model = MODEL_CONFIG["brainstorm"]
+    llm = get_llm(model=brainstorm_model, temperature=0.7, max_tokens=8000)
 
     try:
         response = await asyncio.wait_for(
-            llm.ainvoke(
+            ainvoke_with_retry(
+                llm,
                 [
                     {"role": "system", "content": FIX_STORM_PROMPT},
                     {
@@ -78,7 +80,8 @@ async def fix_storm(state: VibeDeployState) -> dict:
                             ensure_ascii=False,
                         ),
                     },
-                ]
+                ],
+                fallback_models=get_rate_limit_fallback_models(brainstorm_model),
             ),
             timeout=_FIX_STORM_TIMEOUT_SECONDS,
         )
@@ -103,16 +106,18 @@ async def fix_storm(state: VibeDeployState) -> dict:
 
 
 async def scope_down(state: VibeDeployState) -> dict:
-    from ..llm import MODEL_CONFIG, get_llm
+    from ..llm import MODEL_CONFIG, ainvoke_with_retry, get_llm, get_rate_limit_fallback_models
 
     idea = state.get("idea", {})
     scoring = state.get("scoring", {})
 
-    llm = get_llm(model=MODEL_CONFIG["brainstorm"], temperature=0.5, max_tokens=4000)
+    brainstorm_model = MODEL_CONFIG["brainstorm"]
+    llm = get_llm(model=brainstorm_model, temperature=0.5, max_tokens=4000)
 
     try:
         response = await asyncio.wait_for(
-            llm.ainvoke(
+            ainvoke_with_retry(
+                llm,
                 [
                     {"role": "system", "content": SCOPE_DOWN_PROMPT},
                     {
@@ -123,7 +128,8 @@ async def scope_down(state: VibeDeployState) -> dict:
                             ensure_ascii=False,
                         ),
                     },
-                ]
+                ],
+                fallback_models=get_rate_limit_fallback_models(brainstorm_model),
             ),
             timeout=_FIX_STORM_TIMEOUT_SECONDS,
         )

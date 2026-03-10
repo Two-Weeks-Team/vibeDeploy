@@ -47,13 +47,15 @@ Most standard web/mobile apps with proven stacks fall here.
 
 async def analyze(idea: dict, llm=None) -> dict:
     """Run analysis for this council member."""
-    from ..llm import MODEL_CONFIG, get_llm
+    from ..llm import MODEL_CONFIG, ainvoke_with_retry, get_llm, get_rate_limit_fallback_models
 
+    council_model = MODEL_CONFIG["council"]
     if llm is None:
-        llm = get_llm(model=MODEL_CONFIG["council"], temperature=0.5, max_tokens=16000)
+        llm = get_llm(model=council_model, temperature=0.5, max_tokens=16000)
 
     idea_text = json.dumps(idea, indent=2, ensure_ascii=False)
-    response = await llm.ainvoke(
+    response = await ainvoke_with_retry(
+        llm,
         [
             {"role": "system", "content": SYSTEM_PROMPT},
             {
@@ -67,7 +69,8 @@ async def analyze(idea: dict, llm=None) -> dict:
                     "'recommendations' (list of suggestions)."
                 ),
             },
-        ]
+        ],
+        fallback_models=get_rate_limit_fallback_models(council_model),
     )
 
     return _parse_analysis(response.content)
