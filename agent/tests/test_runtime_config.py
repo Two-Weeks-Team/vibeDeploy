@@ -1,6 +1,7 @@
 import asyncpg
 import pytest
 
+from agent.db.store import ResultStore
 from agent.db import connection
 from agent.run_server import _read_worker_count
 
@@ -66,3 +67,53 @@ def test_read_worker_count_prefers_explicit_env(monkeypatch):
     monkeypatch.setenv("WEB_CONCURRENCY", "3")
 
     assert _read_worker_count() == 3
+
+
+@pytest.mark.asyncio
+async def test_result_store_initializes_on_first_use():
+    store = ResultStore(":memory:")
+
+    assert store._initialized is False
+    assert store._db is None
+
+    await store.save_meeting("thread-1", {"score": 91, "verdict": "GO"})
+
+    assert store._initialized is True
+    assert await store.get_meeting("thread-1") == {"score": 91, "verdict": "GO"}
+
+    await store.close()
+
+
+@pytest.mark.asyncio
+async def test_server_lifespan_defers_store_init(monkeypatch):
+    import agent.server as srv
+
+    created: dict[str, object] = {}
+
+    class FakeStore:
+        def __init__(self, *args, **kwargs):
+            created["args"] = args
+            created["kwargs"] = kwargs
+            created["instance"] = self
+            self.init_called = False
+            self.close_called = False
+
+        async def init(self):
+            self.init_called = True
+
+        async def close(self):
+            self.close_called = True
+
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.setenv("DB_PATH", "/tmp/vibedeploy-test.db")
+    monkeypatch.setattr(srv, "ResultStore", FakeStore)
+
+    async with srv.lifespan(srv.app):
+        instance = created["instance"]
+        assert created["kwargs"] == {"db_path": "/tmp/vibedeploy-test.db"}
+        assert srv._store is instance
+        assert instance.init_called is False
+
+    instance = created["instance"]
+    assert instance.close_called is True
+    assert srv._store is None

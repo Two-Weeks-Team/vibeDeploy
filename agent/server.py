@@ -110,7 +110,6 @@ async def lifespan(app: FastAPI):
     else:
         db_path = os.environ.get("DB_PATH", str(_AGENT_DIR / "vibedeploy.db"))
         _store = ResultStore(db_path=db_path)
-    await _store.init()
     yield
     await _store.close()
     _store = None

@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 from typing import Optional
@@ -44,6 +45,8 @@ class ResultStore:
         self._db_url = db_url
         self._db: Optional[aiosqlite.Connection] = None
         self._pool = None
+        self._initialized = False
+        self._init_lock = asyncio.Lock()
 
         if db_path == ":memory:":
             self._use_pg = False
@@ -62,6 +65,8 @@ class ResultStore:
                 self._db_path = "vibedeploy.db"
 
     async def init(self):
+        if self._initialized:
+            return
         if self._use_pg:
             from .connection import get_pool
 
@@ -77,6 +82,15 @@ class ResultStore:
             if self._db_path and self._db_path != ":memory:":
                 await self._db.execute("PRAGMA journal_mode=WAL")
             await self._db.commit()
+        self._initialized = True
+
+    async def _ensure_ready(self):
+        if self._initialized:
+            return
+        async with self._init_lock:
+            if self._initialized:
+                return
+            await self.init()
 
     async def close(self):
         if self._use_pg:
@@ -88,8 +102,10 @@ class ResultStore:
             if self._db:
                 await self._db.close()
                 self._db = None
+        self._initialized = False
 
     async def save_meeting(self, thread_id: str, result: dict):
+        await self._ensure_ready()
         if self._use_pg:
             async with self._pool.acquire() as conn:
                 await conn.execute(
@@ -108,6 +124,7 @@ class ResultStore:
             await self._db.commit()
 
     async def get_meeting(self, thread_id: str) -> Optional[dict]:
+        await self._ensure_ready()
         if self._use_pg:
             async with self._pool.acquire() as conn:
                 row = await conn.fetchrow(
@@ -127,6 +144,7 @@ class ResultStore:
             return json.loads(row[0]) if row else None
 
     async def save_brainstorm(self, thread_id: str, result: dict):
+        await self._ensure_ready()
         if self._use_pg:
             async with self._pool.acquire() as conn:
                 await conn.execute(
@@ -145,6 +163,7 @@ class ResultStore:
             await self._db.commit()
 
     async def get_brainstorm(self, thread_id: str) -> Optional[dict]:
+        await self._ensure_ready()
         if self._use_pg:
             async with self._pool.acquire() as conn:
                 row = await conn.fetchrow(
@@ -164,6 +183,7 @@ class ResultStore:
             return json.loads(row[0]) if row else None
 
     async def list_meetings(self, limit: int = 50) -> list[dict]:
+        await self._ensure_ready()
         if self._use_pg:
             async with self._pool.acquire() as conn:
                 rows = await conn.fetch(
@@ -190,6 +210,7 @@ class ResultStore:
             return [{"thread_id": r[0], **json.loads(r[1]), "created_at": r[2]} for r in rows]
 
     async def list_brainstorms(self, limit: int = 50) -> list[dict]:
+        await self._ensure_ready()
         if self._use_pg:
             async with self._pool.acquire() as conn:
                 rows = await conn.fetch(
@@ -216,6 +237,7 @@ class ResultStore:
             return [{"thread_id": r[0], **json.loads(r[1]), "created_at": r[2]} for r in rows]
 
     async def get_stats(self) -> dict:
+        await self._ensure_ready()
         if self._use_pg:
             async with self._pool.acquire() as conn:
                 m_count = await conn.fetchval("SELECT COUNT(*) FROM meeting_results")
