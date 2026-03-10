@@ -24,7 +24,7 @@ MODEL_CONFIG = {
     "strategist": "deepseek-r1-distill-llama-70b",
     "cross_exam": "deepseek-r1-distill-llama-70b",
     "code_gen": "openai-gpt-oss-120b",
-    "code_gen_frontend": "alibaba-qwen3-32b",
+    "code_gen_frontend": "openai-gpt-oss-120b",
     "code_gen_backend": "openai-gpt-oss-120b",
     "ci_repair": "alibaba-qwen3-32b",
     "doc_gen": "alibaba-qwen3-32b",

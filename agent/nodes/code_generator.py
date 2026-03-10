@@ -139,7 +139,10 @@ async def _generate_frontend_files(
                 "content": (
                     f"{CODE_GENERATION_BASE_SYSTEM_PROMPT}\n\n"
                     f"{FRONTEND_SYSTEM_PROMPT}\n\n"
-                    "Return JSON object with exactly one top-level key: 'files'."
+                    "Return JSON object with exactly one top-level key: 'files'. "
+                    "EVERY files[path] value must be a string containing the full file contents. "
+                    "For JSON files like package.json or tsconfig.json, embed the file body as a JSON string, "
+                    "not as a nested object."
                     f"{extra_instruction}"
                 ),
             },
@@ -174,7 +177,9 @@ async def _generate_backend_files(
                 "content": (
                     f"{CODE_GENERATION_BASE_SYSTEM_PROMPT}\n\n"
                     f"{BACKEND_SYSTEM_PROMPT}\n\n"
-                    "Return JSON object with exactly one top-level key: 'files'."
+                    "Return JSON object with exactly one top-level key: 'files'. "
+                    "EVERY files[path] value must be a string containing the full file contents. "
+                    "For JSON files, return the file body as a JSON string, not as a nested object."
                     f"{extra_instruction}"
                 ),
             },
@@ -214,8 +219,12 @@ def _normalize_files_dict(files: object) -> dict[str, str]:
 
     normalized: dict[str, str] = {}
     for key, value in files.items():
-        if isinstance(key, str) and isinstance(value, str):
+        if not isinstance(key, str):
+            continue
+        if isinstance(value, str):
             normalized[key] = value
+        elif isinstance(value, (dict, list)):
+            normalized[key] = json.dumps(value, indent=2, ensure_ascii=False)
     return normalized
 
 

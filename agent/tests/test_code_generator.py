@@ -1,6 +1,6 @@
 import json
 
-from agent.nodes.code_generator import _normalize_frontend_files
+from agent.nodes.code_generator import _normalize_files_dict, _normalize_frontend_files
 
 
 def test_normalize_frontend_files_patches_next_tsconfig_and_tailwind():
@@ -48,3 +48,15 @@ def test_normalize_frontend_files_patches_next_tsconfig_and_tailwind():
     assert "./src/**/*.{js,ts,jsx,tsx,mdx}" in normalized["tailwind.config.ts"]
     assert "module.exports" in normalized["postcss.config.js"]
     assert "plugins" in normalized["postcss.config.js"]
+
+
+def test_normalize_files_dict_stringifies_structured_file_bodies():
+    normalized = _normalize_files_dict(
+        {
+            "package.json": {"name": "demo", "private": True},
+            "src/app/page.tsx": "export default function Page() { return null; }",
+        }
+    )
+
+    assert '"name": "demo"' in normalized["package.json"]
+    assert normalized["src/app/page.tsx"].startswith("export default")
