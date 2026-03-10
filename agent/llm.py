@@ -51,8 +51,8 @@ async def ainvoke_with_retry(
     llm,
     messages: list[dict],
     *,
-    max_attempts: int = 4,
-    initial_delay_seconds: float = 2.0,
+    max_attempts: int = 6,
+    initial_delay_seconds: float = 5.0,
 ):
     delay = initial_delay_seconds
     last_exc = None
