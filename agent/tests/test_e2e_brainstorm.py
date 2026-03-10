@@ -71,3 +71,23 @@ async def test_brainstorm_insight_format(app_client, mock_brainstorm_graph):
         assert "opportunities" in ie["data"]
         assert "wild_card" in ie["data"]
         assert "action_items" in ie["data"]
+
+
+@pytest.mark.asyncio
+async def test_brainstorm_stores_result_before_complete_event(mock_brainstorm_graph, monkeypatch):
+    import agent.server as srv
+
+    stored = {"called": False}
+
+    async def fake_store_brainstorm_result(_thread_id: str, _state: dict):
+        stored["called"] = True
+
+    monkeypatch.setattr(srv, "_store_brainstorm_result", fake_store_brainstorm_result)
+
+    async for chunk in srv._stream_brainstorm("Ordering test", "bs-ordering"):
+        for event in parse_sse_events(chunk):
+            if event["event"] == "brainstorm.phase.complete":
+                assert stored["called"] is True
+                return
+
+    pytest.fail("brainstorm.phase.complete event was not emitted")

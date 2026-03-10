@@ -82,6 +82,10 @@ def _github_api_get(path: str, token: str) -> dict | list | None:
 
 
 def _get_job_log(full_name: str, job_id: int, token: str) -> str:
+    class _NoRedirect(request.HTTPRedirectHandler):
+        def redirect_request(self, req, fp, code, msg, headers, newurl):
+            return None
+
     req = request.Request(
         url=f"https://api.github.com/repos/{full_name}/actions/jobs/{job_id}/logs",
         headers={
@@ -91,10 +95,22 @@ def _get_job_log(full_name: str, job_id: int, token: str) -> str:
         },
     )
     try:
-        with request.urlopen(req, timeout=20) as resp:
+        opener = request.build_opener(_NoRedirect)
+        with opener.open(req, timeout=20) as resp:
             raw = resp.read().decode("utf-8", errors="replace")
             return raw[-3000:]
-    except (error.HTTPError, error.URLError):
+    except error.HTTPError as e:
+        location = e.headers.get("Location")
+        if e.code in (301, 302, 303, 307, 308) and location:
+            try:
+                redirected_req = request.Request(location, headers={"User-Agent": "vibeDeploy-ci-log/1.0"})
+                with request.urlopen(redirected_req, timeout=20) as redirected_resp:
+                    raw = redirected_resp.read().decode("utf-8", errors="replace")
+                    return raw[-3000:]
+            except (error.HTTPError, error.URLError):
+                return ""
+        return ""
+    except error.URLError:
         return ""
 
 

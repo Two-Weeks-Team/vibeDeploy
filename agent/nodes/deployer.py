@@ -3,7 +3,9 @@ import json
 import logging
 import os
 import re
+import shutil
 import socket
+import tempfile
 import time
 from pathlib import Path
 from urllib import error, request
@@ -52,6 +54,9 @@ async def deployer(state: VibeDeployState) -> dict:
         if "main.py" in all_files and '@app.get("/")' not in all_files.get("main.py", ""):
             all_files["main.py"] = _inject_landing_page(all_files["main.py"], idea)
             logger.info("[DEPLOYER] Injected HTML landing page into main.py")
+
+    all_files = _ensure_unique_backend_table_prefix(all_files, app_name)
+    all_files = await _prepare_files_for_push(all_files)
 
     all_files.update(
         {
@@ -163,7 +168,7 @@ async def deployer(state: VibeDeployState) -> dict:
             logger.warning("[DEPLOYER] LLM could not fix deploy errors (attempt %d)", attempt + 1)
             break
 
-        all_files = fixed_files
+        all_files = await _prepare_files_for_push(fixed_files)
         push_result = await push_files(
             {"full_name": github_full_name},
             all_files,
@@ -255,37 +260,45 @@ def _is_do_app_limit_error(deploy_result: dict) -> bool:
 
 async def _reclaim_do_app_capacity(target_app_name: str) -> dict:
     apps = await list_apps()
-    candidates = []
+    failed_candidates = []
+    live_candidates = []
 
     for app in apps:
         app_id = app.get("id", "")
         name = app.get("spec", {}).get("name", "")
         live_url = app.get("live_url", "")
         created_at = app.get("created_at", "")
-        phase = app.get("active_deployment", {}).get("phase", "UNKNOWN")
+        active_phase = app.get("active_deployment", {}).get("phase", "")
+        in_progress_phase = app.get("in_progress_deployment", {}).get("phase", "")
+        phase = in_progress_phase or active_phase or "UNKNOWN"
 
         if not app_id or not name or name in {target_app_name, "vibedeploy"}:
             continue
-        if live_url:
+        if in_progress_phase or phase in {"PENDING", "BUILDING", "DEPLOYING"}:
             continue
+        candidate = {
+            "id": app_id,
+            "name": name,
+            "created_at": created_at,
+            "phase": phase,
+            "live_url": live_url,
+        }
+        if live_url:
+            live_candidates.append(candidate)
+        else:
+            failed_candidates.append(candidate)
 
-        candidates.append(
-            {
-                "id": app_id,
-                "name": name,
-                "created_at": created_at,
-                "phase": phase,
-            }
-        )
-
+    candidates = failed_candidates or live_candidates
     if not candidates:
-        logger.warning("[DEPLOYER] DO app limit reached but no failed apps were eligible for deletion")
+        logger.warning("[DEPLOYER] DO app limit reached but no generated apps were eligible for deletion")
         return {"status": "no_candidate"}
 
     candidates.sort(key=lambda app: (app.get("created_at", ""), app.get("name", "")))
     candidate = candidates[0]
+    candidate_kind = "failed" if not candidate.get("live_url") else "oldest live"
     logger.warning(
-        "[DEPLOYER] Deleting failed DO app to free capacity: %s (%s, phase=%s)",
+        "[DEPLOYER] Deleting %s DO app to free capacity: %s (%s, phase=%s)",
+        candidate_kind,
         candidate["name"],
         candidate["id"],
         candidate["phase"],
@@ -313,6 +326,39 @@ Common DO App Platform errors and fixes:
 - "Failed to compile" / "npm run build failed": Fix TypeScript errors, missing imports, incorrect module paths.
 """
 
+_TS_NULLABILITY_ERROR_RE = re.compile(
+    r"(?P<path>\.?/?[^\s:][^\n:]*):(?P<line>\d+):\d+\s*\nType error: "
+    r"'(?P<variable>[A-Za-z_$][\w$]*)' is possibly '(?:null|undefined)'\.",
+    re.MULTILINE,
+)
+_PYTHON_NAME_ERROR_RE = re.compile(
+    r'File "(?P<path>[^"]+)", line (?P<line>\d+), in [^\n]+\n'
+    r"(?P<source>[^\n]+)\n"
+    r"\s*\^+\n"
+    r"NameError: name '(?P<name>[A-Za-z_][\w]*)' is not defined",
+    re.MULTILINE,
+)
+_SQLALCHEMY_CORE_SYMBOLS = {
+    "Integer",
+    "String",
+    "Text",
+    "Date",
+    "DateTime",
+    "Boolean",
+    "Float",
+    "JSON",
+    "Numeric",
+    "ForeignKey",
+    "Column",
+    "Index",
+}
+_PYDANTIC_FIELD_CLASH_RE = re.compile(
+    r"(?P<field>[A-Za-z_][\w]*)\s*:\s*(?P<annotation>[A-Za-z_][\w]*)\s*=\s*Field\("
+)
+_NEXT_METADATA_CLIENT_ERROR_RE = re.compile(r'export "metadata" from a component marked with "use client"')
+_UNTERMINATED_STRING_ERROR_RE = re.compile(r"Unterminated string constant")
+_DUPLICATE_SSLMODE_ERROR_RE = re.compile(r"invalid sslmode value", re.IGNORECASE)
+
 
 async def _ci_repair_loop(
     full_name: str,
@@ -337,7 +383,7 @@ async def _ci_repair_loop(
         if fixed_files == files:
             return ci_result, files, attempt
 
-        files = fixed_files
+        files = await _prepare_files_for_push(fixed_files)
         push_result = await push_files(
             {"full_name": full_name},
             files,
@@ -353,6 +399,10 @@ async def _ci_repair_loop(
 
 async def _repair_code_from_errors(files: dict[str, str], error_logs: str) -> dict[str, str]:
     from ..llm import MODEL_CONFIG, ainvoke_with_retry, content_to_str, get_llm, get_rate_limit_fallback_models
+
+    deterministic_fixes = _apply_deterministic_repairs(files, error_logs)
+    if deterministic_fixes != files:
+        return deterministic_fixes
 
     repair_model = MODEL_CONFIG["ci_repair"]
     llm = get_llm(model=repair_model, temperature=0.1, max_tokens=8000)
@@ -386,6 +436,271 @@ async def _repair_code_from_errors(files: dict[str, str], error_logs: str) -> di
         if isinstance(path, str) and isinstance(content, str):
             result[path] = content
     return result
+
+
+def _apply_deterministic_repairs(files: dict[str, str], error_logs: str) -> dict[str, str]:
+    repaired = _apply_typescript_nullability_repairs(files, error_logs)
+    repaired = _apply_missing_sqlalchemy_import_repairs(repaired, error_logs)
+    repaired = _apply_duplicate_sslmode_repairs(repaired, error_logs)
+    repaired = _apply_next_layout_boundary_repairs(repaired, error_logs)
+    repaired = _apply_pydantic_field_annotation_repairs(repaired, error_logs)
+    return repaired
+
+
+def _apply_typescript_nullability_repairs(files: dict[str, str], error_logs: str) -> dict[str, str]:
+    updated_files = dict(files)
+    changed = False
+
+    for match in _TS_NULLABILITY_ERROR_RE.finditer(error_logs):
+        relative_path = match.group("path").lstrip("./")
+        line_number = int(match.group("line"))
+        variable_name = match.group("variable")
+
+        candidate_paths = [relative_path]
+        if relative_path.startswith("web/"):
+            candidate_paths.append(relative_path[4:])
+        else:
+            candidate_paths.append(f"web/{relative_path}")
+
+        for candidate_path in candidate_paths:
+            content = updated_files.get(candidate_path)
+            if not isinstance(content, str):
+                continue
+
+            lines = content.splitlines()
+            if line_number < 1 or line_number > len(lines):
+                continue
+
+            line_index = line_number - 1
+            original_line = lines[line_index]
+            repaired_line = re.sub(
+                rf"(?<![\w$]){re.escape(variable_name)}(?=(?:\.|\[))",
+                f"{variable_name}!",
+                original_line,
+                count=1,
+            )
+            if repaired_line == original_line:
+                continue
+
+            lines[line_index] = repaired_line
+            updated_files[candidate_path] = "\n".join(lines) + ("\n" if content.endswith("\n") else "")
+            changed = True
+            break
+
+    return updated_files if changed else files
+
+
+def _apply_missing_sqlalchemy_import_repairs(files: dict[str, str], error_logs: str) -> dict[str, str]:
+    updated_files = dict(files)
+    changed = False
+
+    for match in _PYTHON_NAME_ERROR_RE.finditer(error_logs):
+        missing_name = match.group("name")
+        if missing_name not in _SQLALCHEMY_CORE_SYMBOLS:
+            continue
+
+        for candidate_path in _candidate_paths_from_error(match.group("path")):
+            content = updated_files.get(candidate_path)
+            if not isinstance(content, str):
+                continue
+
+            repaired_content = _add_sqlalchemy_import(content, missing_name)
+            if repaired_content == content:
+                continue
+
+            updated_files[candidate_path] = repaired_content
+            changed = True
+            break
+
+    return updated_files if changed else files
+
+
+def _candidate_paths_from_error(raw_path: str) -> list[str]:
+    normalized_path = raw_path.replace("\\", "/").strip()
+    if normalized_path.startswith("/workspace/"):
+        normalized_path = normalized_path[len("/workspace/") :]
+    normalized_path = normalized_path.lstrip("./")
+
+    candidate_paths = [normalized_path]
+    if normalized_path.startswith("web/"):
+        candidate_paths.append(normalized_path[4:])
+    else:
+        candidate_paths.append(f"web/{normalized_path}")
+    return candidate_paths
+
+
+def _add_sqlalchemy_import(content: str, missing_name: str) -> str:
+    multiline_import = re.search(r"from sqlalchemy import \(\n(?P<body>[\s\S]*?)\n\)", content)
+    if multiline_import:
+        body = multiline_import.group("body")
+        if re.search(rf"(?<![\w$]){re.escape(missing_name)}(?![\w$])", body):
+            return content
+        start, end = multiline_import.span()
+        updated_block = multiline_import.group(0).replace("\n)", f"    {missing_name},\n)")
+        return content[:start] + updated_block + content[end:]
+
+    single_line_import = re.search(r"from sqlalchemy import (?P<body>[^\n]+)", content)
+    if not single_line_import:
+        return content
+
+    body = single_line_import.group("body")
+    if re.search(rf"(?<![\w$]){re.escape(missing_name)}(?![\w$])", body):
+        return content
+
+    start, end = single_line_import.span()
+    updated_line = f"from sqlalchemy import {body}, {missing_name}"
+    return content[:start] + updated_line + content[end:]
+
+
+def _apply_pydantic_field_annotation_repairs(files: dict[str, str], error_logs: str) -> dict[str, str]:
+    if "PydanticUserError" not in error_logs or "type annotation" not in error_logs:
+        return files
+
+    updated_files = dict(files)
+    changed = False
+    current_path = ""
+
+    for raw_line in error_logs.splitlines():
+        file_match = re.search(r'File "(?P<path>[^"]+)", line \d+, in ', raw_line)
+        if file_match:
+            current_path = file_match.group("path")
+            continue
+
+        field_match = _PYDANTIC_FIELD_CLASH_RE.search(raw_line.strip())
+        if not field_match or not current_path:
+            continue
+
+        field_name = field_match.group("field")
+        annotation_name = field_match.group("annotation")
+        if field_name != annotation_name:
+            continue
+
+        annotation_alias = f"{annotation_name}_type"
+
+        for candidate_path in _candidate_paths_from_error(current_path):
+            content = updated_files.get(candidate_path)
+            if not isinstance(content, str):
+                continue
+
+            aliased_content, import_updated = _alias_imported_symbol(content, annotation_name, annotation_alias)
+            if not import_updated and annotation_alias not in aliased_content:
+                continue
+
+            repaired_content = re.sub(
+                rf"(^\s*{re.escape(field_name)}\s*:\s*){re.escape(annotation_name)}(\s*=\s*Field\()",
+                rf"\1{annotation_alias}\2",
+                aliased_content,
+                count=1,
+                flags=re.MULTILINE,
+            )
+            if repaired_content == content:
+                continue
+
+            updated_files[candidate_path] = repaired_content
+            changed = True
+            break
+
+    return updated_files if changed else files
+
+
+def _apply_next_layout_boundary_repairs(files: dict[str, str], error_logs: str) -> dict[str, str]:
+    metadata_boundary_error = bool(_NEXT_METADATA_CLIENT_ERROR_RE.search(error_logs))
+    unterminated_string_error = bool(_UNTERMINATED_STRING_ERROR_RE.search(error_logs))
+
+    if not metadata_boundary_error and not unterminated_string_error:
+        return files
+
+    updated_files = dict(files)
+    changed = False
+    layout_suffixes = ("src/app/layout.tsx", "src/app/layout.jsx", "app/layout.tsx", "app/layout.jsx")
+
+    for path, content in files.items():
+        if not path.endswith(layout_suffixes) and "use client" not in content:
+            continue
+
+        repaired_content = _canonicalize_use_client_directive(content)
+
+        if metadata_boundary_error and path.endswith(layout_suffixes) and (
+            "export const metadata" in repaired_content or "generateMetadata" in repaired_content
+        ):
+            repaired_content = re.sub(r'^\s*"use client";\n+', "", repaired_content, count=1)
+
+        if repaired_content == content:
+            continue
+
+        updated_files[path] = repaired_content
+        changed = True
+
+    return updated_files if changed else files
+
+
+def _apply_duplicate_sslmode_repairs(files: dict[str, str], error_logs: str) -> dict[str, str]:
+    if not _DUPLICATE_SSLMODE_ERROR_RE.search(error_logs):
+        return files
+
+    updated_files = dict(files)
+    changed = False
+    guard_pattern = re.compile(
+        r'if\s+not\s+_raw_url\.startswith\("sqlite"\)\s+and\s+"localhost"\s+not\s+in\s+_raw_url\s+and\s+"127\.0\.0\.1"\s+not\s+in\s+_raw_url\s*:',
+        flags=re.MULTILINE,
+    )
+    replacement = (
+        "if (\n"
+        '    not _raw_url.startswith("sqlite")\n'
+        '    and "localhost" not in _raw_url\n'
+        '    and "127.0.0.1" not in _raw_url\n'
+        '    and "sslmode=" not in _raw_url.lower()\n'
+        "):"
+    )
+
+    for path, content in files.items():
+        if not path.endswith(".py") or "_raw_url" not in content or "sslmode=require" not in content:
+            continue
+        repaired_content = guard_pattern.sub(replacement, content)
+        if repaired_content == content:
+            continue
+        updated_files[path] = repaired_content
+        changed = True
+
+    return updated_files if changed else files
+
+
+def _canonicalize_use_client_directive(content: str) -> str:
+    lines = content.splitlines()
+    for index, line in enumerate(lines):
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if "use client" not in stripped:
+            return content
+        normalized = stripped.rstrip(";")
+        normalized = normalized.replace('"', "").replace("'", "").strip()
+        if normalized != "use client":
+            return content
+        lines[index] = '"use client";'
+        updated = "\n".join(lines)
+        if content.endswith("\n"):
+            updated += "\n"
+        return updated
+    return content
+
+
+def _alias_imported_symbol(content: str, symbol: str, alias: str) -> tuple[str, bool]:
+    import_pattern = re.compile(r"^(from [\w\.]+ import )(?P<body>[^\n]+)$", re.MULTILINE)
+
+    for match in import_pattern.finditer(content):
+        body = match.group("body")
+        items = [item.strip() for item in body.split(",")]
+        if alias in items or f"{symbol} as {alias}" in items:
+            return content, True
+        if symbol not in items:
+            continue
+
+        updated_items = [f"{symbol} as {alias}" if item == symbol else item for item in items]
+        updated_line = f"{match.group(1)}{', '.join(updated_items)}"
+        return content[: match.start()] + updated_line + content[match.end() :], True
+
+    return content, False
 
 
 def _parse_repair_json(raw: str) -> dict[str, str] | None:
@@ -429,7 +744,8 @@ async def _local_fallback_deploy(
     web_dir = base_dir / "web"
     package_json_path = web_dir / "package.json"
     if package_json_path.exists():
-        await _spawn_background_process(["npm", "install"], web_dir)
+        frontend_install = ["npm", "ci"] if (web_dir / "package-lock.json").exists() else ["npm", "install"]
+        await _spawn_background_process(frontend_install, web_dir)
 
     backend_main = base_dir / "main.py"
     if backend_main.exists():
@@ -471,6 +787,61 @@ def _write_local_files(base_dir: Path, files: dict[str, str]) -> None:
         target_path.write_text(content, encoding="utf-8")
 
 
+async def _prepare_files_for_push(files: dict[str, str]) -> dict[str, str]:
+    prepared = dict(files)
+    prepared = await _ensure_frontend_lockfile(prepared)
+    return prepared
+
+
+async def _ensure_frontend_lockfile(files: dict[str, str]) -> dict[str, str]:
+    package_json = files.get("web/package.json", "")
+    if not isinstance(package_json, str) or not package_json.strip():
+        return files
+
+    package_lock = await _generate_package_lock(package_json)
+    if not package_lock:
+        return files
+
+    prepared = dict(files)
+    prepared["web/package-lock.json"] = package_lock
+    return prepared
+
+
+async def _generate_package_lock(package_json: str) -> str:
+    npm_bin = shutil.which("npm")
+    if not npm_bin:
+        logger.warning("[DEPLOYER] npm not found; skipping package-lock generation")
+        return ""
+
+    with tempfile.TemporaryDirectory(prefix="vibedeploy-lock-") as temp_dir:
+        workspace = Path(temp_dir)
+        (workspace / "package.json").write_text(package_json, encoding="utf-8")
+
+        process = await asyncio.create_subprocess_exec(
+            npm_bin,
+            "install",
+            "--package-lock-only",
+            "--ignore-scripts",
+            "--no-audit",
+            "--no-fund",
+            cwd=str(workspace),
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await process.communicate()
+        if process.returncode != 0:
+            error_output = (stderr or stdout).decode("utf-8", errors="replace")[-400:]
+            logger.warning("[DEPLOYER] Failed to generate package-lock.json: %s", error_output)
+            return ""
+
+        lockfile_path = workspace / "package-lock.json"
+        if not lockfile_path.exists():
+            logger.warning("[DEPLOYER] npm completed without producing package-lock.json")
+            return ""
+
+        return lockfile_path.read_text(encoding="utf-8")
+
+
 async def _spawn_background_process(command: list[str], cwd: Path) -> None:
     try:
         await asyncio.create_subprocess_exec(
@@ -495,6 +866,31 @@ def _find_free_port(start_port: int) -> int:
 
 def _sanitize_app_name(app_name: str) -> str:
     return re.sub(r"[^a-zA-Z0-9_-]", "-", app_name).strip("-") or "vibedeploy-app"
+
+
+def _ensure_unique_backend_table_prefix(files: dict[str, str], app_name: str) -> dict[str, str]:
+    models_content = files.get("models.py", "")
+    if not models_content or "TABLE_PREFIX" not in models_content:
+        return files
+
+    unique_prefix = _build_table_prefix(app_name)
+    updated_models = re.sub(
+        r'TABLE_PREFIX\s*=\s*["\'][^"\']+["\']',
+        f'TABLE_PREFIX = "{unique_prefix}"',
+        models_content,
+        count=1,
+    )
+    if updated_models == models_content:
+        return files
+
+    updated_files = dict(files)
+    updated_files["models.py"] = updated_models
+    return updated_files
+
+
+def _build_table_prefix(app_name: str) -> str:
+    slug = re.sub(r"[^a-z0-9]+", "_", app_name.lower()).strip("_")
+    return f"{slug[:24] or 'app'}_"
 
 
 def _set_repo_metadata(full_name: str, topics: list[str], homepage: str) -> None:
@@ -631,7 +1027,7 @@ def _generate_readme(idea: dict, scoring: dict, backend_code: dict, live_url: st
 |-------|-----------|---------|
 | Runtime | Python | 3.12+ |
 | Backend | FastAPI + uvicorn | 0.115.0 |
-| Frontend | Next.js + React | 15.1.6 / 19.0.0 |
+| Frontend | Next.js + React | 15.5.12 / 19.0.0 |
 | Database | PostgreSQL + psycopg | 3.2.3 |
 | AI | DO Serverless Inference | openai-gpt-oss-120b |
 | Styling | Tailwind CSS | 3.4.17 |
@@ -642,7 +1038,7 @@ def _generate_readme(idea: dict, scoring: dict, backend_code: dict, live_url: st
 ### Prerequisites
 
 - Python 3.12+
-- Node.js 20+
+- Node.js 22.x
 
 ### Run Locally
 
@@ -655,7 +1051,7 @@ uvicorn main:app --reload --port 8000
 
 # Frontend (new terminal)
 cd web
-npm install
+npm ci
 npm run dev
 ```
 
@@ -692,7 +1088,7 @@ static_sites:
       repo: {github_org}/{app_name.lower().replace(" ", "-")}
       branch: master
     source_dir: web
-    build_command: npm install && npm run build
+    build_command: npm ci && npm run build
     output_dir: web/.next
 ```
 

@@ -24,6 +24,7 @@ out/
 dist/
 build/
 *.egg-info/
+agent/production.zip
 
 # Experimental
 agent_v2/
@@ -43,6 +44,8 @@ agent/tools_v2/
 # Test artifacts
 .hypothesis/
 .pytest_cache/
+.playwright-cli/
+output/playwright/
 
 # Misc
 *.log

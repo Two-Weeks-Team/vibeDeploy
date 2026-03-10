@@ -88,3 +88,23 @@ async def test_evaluate_verdict_schema(app_client, mock_eval_graph):
     assert "decision" in verdict
     assert isinstance(verdict["final_score"], (int, float))
     assert verdict["decision"] in ("GO", "CONDITIONAL", "NO_GO")
+
+
+@pytest.mark.asyncio
+async def test_evaluate_stores_result_before_complete_event(mock_eval_graph, monkeypatch):
+    import agent.server as srv
+
+    stored = {"called": False}
+
+    async def fake_store_result(_thread_id: str, _state: dict):
+        stored["called"] = True
+
+    monkeypatch.setattr(srv, "_store_result", fake_store_result)
+
+    async for chunk in srv._stream_pipeline("Ordering test", "eval-ordering"):
+        for event in parse_sse_events(chunk):
+            if event["event"] == "council.phase.complete":
+                assert stored["called"] is True
+                return
+
+    pytest.fail("council.phase.complete event was not emitted")

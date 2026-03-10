@@ -384,6 +384,8 @@ async def _stream_pipeline(prompt: str, thread_id: str) -> AsyncGenerator[str, N
         cost = estimate_pipeline_cost()
         final_state["cost_estimate"] = cost
 
+        await _store_result(thread_id, final_state)
+
         yield _sse(
             "council.phase.complete",
             {
@@ -393,8 +395,6 @@ async def _stream_pipeline(prompt: str, thread_id: str) -> AsyncGenerator[str, N
                 "cost_estimate": cost,
             },
         )
-
-        await _store_result(thread_id, final_state)
 
     except Exception as exc:
         yield _sse(
@@ -511,6 +511,8 @@ async def _stream_resume(thread_id: str, action: str) -> AsyncGenerator[str, Non
         else:
             merged = final_state
 
+        await _store_result(thread_id, merged)
+
         yield _sse(
             "council.phase.complete",
             {
@@ -519,8 +521,6 @@ async def _stream_resume(thread_id: str, action: str) -> AsyncGenerator[str, Non
                 "message": "Pipeline complete",
             },
         )
-
-        await _store_result(thread_id, merged)
 
     except Exception as exc:
         yield _sse(
@@ -631,6 +631,8 @@ async def _stream_brainstorm(prompt: str, thread_id: str) -> AsyncGenerator[str,
         cost = estimate_pipeline_cost()
         final_state["cost_estimate"] = cost
 
+        await _store_brainstorm_result(thread_id, final_state)
+
         yield _sse(
             "brainstorm.phase.complete",
             {
@@ -640,8 +642,6 @@ async def _stream_brainstorm(prompt: str, thread_id: str) -> AsyncGenerator[str,
                 "cost_estimate": cost,
             },
         )
-
-        await _store_brainstorm_result(thread_id, final_state)
 
     except Exception as exc:
         yield _sse(

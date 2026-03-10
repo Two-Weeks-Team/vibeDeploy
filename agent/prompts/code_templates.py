@@ -14,8 +14,8 @@ Hard constraints:
 
 MANDATORY VERSION REQUIREMENTS (use these exact versions):
   Python: >=3.12
-  Node.js: >=20
-  Next.js: 15.1.6
+  Node.js: 22.x
+  Next.js: 15.5.12
   React / React DOM: 19.0.0
   TypeScript: 5.7.3
   Tailwind CSS: 3.4.17
@@ -33,11 +33,12 @@ FRONTEND_SYSTEM_PROMPT = """
 Generate a Next.js 15 App Router frontend as JSON map: { "files": { "path": "content" } }.
 
 Required files:
-- package.json (MUST use: next@15.1.6, react@19.0.0, react-dom@19.0.0, typescript@5.7.3, tailwindcss@3.4.17, @types/node@20.17.12, @types/react@19.0.7, postcss@8.4.49, autoprefixer@10.4.20)
+- package.json (MUST use: next@15.5.12, react@19.0.0, react-dom@19.0.0, typescript@5.7.3, tailwindcss@3.4.17, @types/node@20.17.12, @types/react@19.0.7, postcss@8.4.49, autoprefixer@10.4.20, and engines: { "node": "22.x" })
+- package-lock.json
 - tsconfig.json (MUST include compilerOptions with paths: {"@/*": ["./src/*"]}, baseUrl: ".", moduleResolution: "bundler", jsx: "preserve", plugins: [{ "name": "next" }], and include: ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"])
 - next-env.d.ts
 - next.config.js (minimal: module.exports = {})
-- tailwind.config.ts (content paths: ["./src/**/*.{js,ts,jsx,tsx,mdx}"])
+- tailwind.config.ts (content paths: ["./src/**/*.{js,ts,jsx,tsx,mdx}"]; MUST extend theme colors/borderRadius/shadows for CSS variable tokens like background, foreground, card, muted, border, primary, accent, success, warning)
 - postcss.config.js (plugins: tailwindcss + autoprefixer)
 - src/app/layout.tsx
 - src/app/page.tsx
@@ -78,11 +79,12 @@ API and implementation requirements:
 - Frontend routes should call `/api/...` paths, but assume the backend defines business routes without wrapping `APIRouter(prefix="/api")`.
 - Surface AI-powered features in the main user flow (not in a side chatbot widget).
 - Keep dependencies minimal and compatible with Next.js 15.
+- Every third-party import used anywhere in the frontend MUST be declared in package.json dependencies. If you import packages like `@heroicons/react`, `lucide-react`, `framer-motion`, `clsx`, `tailwind-merge`, `recharts`, `zod`, or `react-hook-form`, include them explicitly.
 - Prefer CSS transitions/keyframes first; add animation libraries only if they are actually used.
 - TypeScript should be clean and practical.
 - Alias imports like "@/components/..." MUST compile under `npm run build`.
 - NEVER import from "@/src/...". When using the alias, write "@/components/...", "@/lib/...", "@/app/..." because "@/*" already points to "./src/*".
-- package.json engines field must specify: { "node": ">=20" }
+- package.json engines field must specify: { "node": "22.x" }
 - Avoid generic dashboards, centered auth-card layouts on blank backgrounds, stock hero sections with three random feature cards, or unstyled shadcn defaults.
 """.strip()
 

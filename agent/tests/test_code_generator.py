@@ -5,6 +5,7 @@ from agent.nodes.code_generator import (
     _normalize_cross_stack,
     _normalize_files_dict,
     _normalize_frontend_files,
+    _parse_json_response,
 )
 
 
@@ -51,6 +52,8 @@ def test_normalize_frontend_files_patches_next_tsconfig_and_tailwind():
     assert "swcMinify" not in normalized["next.config.js"]
     assert "serverComponents" not in normalized["next.config.js"]
     assert "./src/**/*.{js,ts,jsx,tsx,mdx}" in normalized["tailwind.config.ts"]
+    assert "card: 'var(--card)'" in normalized["tailwind.config.ts"]
+    assert "borderRadius" in normalized["tailwind.config.ts"]
     assert "module.exports" in normalized["postcss.config.js"]
     assert "plugins" in normalized["postcss.config.js"]
 
@@ -159,6 +162,180 @@ def test_normalize_frontend_files_adds_required_google_font_weights():
     assert "weight: ['400', '700']" in normalized["src/components/InsightPanel.tsx"]
 
 
+def test_normalize_frontend_files_adds_api_base_fallback():
+    files = {
+        "src/lib/api.ts": (
+            "export async function fetchHabits() {\n"
+            "  return fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/habits`);\n"
+            "}\n"
+        ),
+        "src/app/page.tsx": (
+            '"use client";\n'
+            "export default function Page() {\n"
+            "  return fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/health`);\n"
+            "}\n"
+        ),
+    }
+
+    normalized = _normalize_frontend_files(files)
+
+    assert '${(process.env.NEXT_PUBLIC_API_URL || "")}/api/habits' in normalized["src/lib/api.ts"]
+    assert '${(process.env.NEXT_PUBLIC_API_URL || "")}/api/health' in normalized["src/app/page.tsx"]
+
+
+def test_normalize_frontend_files_removes_use_client_from_layout_metadata_export():
+    files = {
+        "src/app/layout.tsx": (
+            '"use client";\n\n'
+            "import '@/app/globals.css';\n\n"
+            "export const metadata = {\n"
+            "  title: 'DemoPilot',\n"
+            "};\n\n"
+            "export default function RootLayout({ children }: { children: React.ReactNode }) {\n"
+            "  return <html><body>{children}</body></html>;\n"
+            "}\n"
+        )
+    }
+
+    normalized = _normalize_frontend_files(files)
+
+    assert not normalized["src/app/layout.tsx"].lstrip().startswith('"use client";')
+    assert "export const metadata" in normalized["src/app/layout.tsx"]
+
+
+def test_normalize_frontend_files_canonicalizes_broken_use_client_directive_and_heroicons():
+    files = {
+        "package.json": json.dumps({"name": "demo-pilot", "private": True}),
+        "src/components/Rehearsal.tsx": (
+            "\"use client';\n"
+            "import { MicrophoneIcon, CloudUploadIcon } from '@heroicons/react/24/solid';\n"
+            "export default function Rehearsal() { return <MicrophoneIcon className=\"h-5 w-5\" />; }\n"
+        ),
+    }
+
+    normalized = _normalize_frontend_files(files)
+
+    assert normalized["src/components/Rehearsal.tsx"].startswith('"use client";')
+    assert "ArrowUpTrayIcon" in normalized["src/components/Rehearsal.tsx"]
+    assert "CloudUploadIcon" not in normalized["src/components/Rehearsal.tsx"]
+
+
+def test_normalize_frontend_files_adds_detected_optional_dependencies_to_package_json():
+    files = {
+        "package.json": json.dumps(
+            {
+                "name": "queueflow-lite",
+                "private": True,
+                "dependencies": {
+                    "next": "15.5.12",
+                    "react": "19.0.0",
+                    "react-dom": "19.0.0",
+                    "@heroicons/react": "2.0.0",
+                },
+            }
+        ),
+        "src/components/QRCodeScanner.tsx": (
+            '"use client";\n'
+            "import { CameraIcon } from '@heroicons/react/24/outline';\n"
+            "export default function QRCodeScanner() { return <CameraIcon className=\"h-5 w-5\" />; }\n"
+        ),
+    }
+
+    normalized = _normalize_frontend_files(files)
+    package_json = json.loads(normalized["package.json"])
+
+    assert package_json["dependencies"]["@heroicons/react"] == "2.2.0"
+    assert package_json["dependencies"]["typescript"] == "5.7.3"
+    assert package_json["engines"] == {"node": "22.x"}
+
+
+def test_parse_json_response_extracts_balanced_json_when_trailing_text_exists():
+    response = (
+        "Here is the generated bundle:\n"
+        "{\n"
+        '  "files": {\n'
+        '    "src/app/page.tsx": "export default function Page() { return <div>{\\"ok\\"}</div>; }"\n'
+        "  }\n"
+        "}\n"
+        "This trailing note should be ignored.\n"
+    )
+
+    parsed = _parse_json_response(response, {"files": {}}, label="frontend")
+
+    assert parsed["files"]["src/app/page.tsx"].startswith("export default function Page")
+
+
+def test_normalize_frontend_files_adds_chart_dependencies_when_imported():
+    files = {
+        "package.json": json.dumps({"name": "studymate", "private": True}),
+        "src/components/ProgressDashboard.tsx": (
+            '"use client";\n'
+            "import { Doughnut } from 'react-chartjs-2';\n"
+            "import 'chart.js/auto';\n"
+            "export default function ProgressDashboard() { return <Doughnut data={{ labels: [], datasets: [] }} />; }\n"
+        ),
+    }
+
+    normalized = _normalize_frontend_files(files)
+    package_json = json.loads(normalized["package.json"])
+
+    assert package_json["dependencies"]["react-chartjs-2"] == "5.3.1"
+    assert package_json["dependencies"]["chart.js"] == "4.5.1"
+
+
+def test_normalize_frontend_files_adds_overloads_for_optional_body_api_helpers():
+    files = {
+        "src/lib/api.ts": (
+            "export type JoinRequest = { name: string };\n"
+            "export type JoinResponse = { queue_position: number };\n"
+            "export type PositionResponse = { current_position: number };\n\n"
+            "export async function fetchQueuePosition(\n"
+            "  queueId: string,\n"
+            "  body?: JoinRequest\n"
+            "): Promise<JoinResponse | PositionResponse> {\n"
+            "  return body ? { queue_position: 1 } : { current_position: 1 };\n"
+            "}\n"
+        )
+    }
+
+    normalized = _normalize_frontend_files(files)
+
+    assert "export async function fetchQueuePosition(queueId: string, body: JoinRequest): Promise<JoinResponse>;" in normalized["src/lib/api.ts"]
+    assert "export async function fetchQueuePosition(queueId: string): Promise<PositionResponse>;" in normalized["src/lib/api.ts"]
+
+
+def test_normalize_frontend_files_adds_missing_react_hook_imports():
+    files = {
+        "src/components/Hero.tsx": (
+            '"use client";\n'
+            "export default function Hero() {\n"
+            "  const [count, setCount] = useState(0);\n"
+            "  useEffect(() => {}, []);\n"
+            "  return <button onClick={() => setCount(count + 1)}>{count}</button>;\n"
+            "}\n"
+        )
+    }
+
+    normalized = _normalize_frontend_files(files)
+
+    assert 'import { useEffect, useState } from "react";' in normalized["src/components/Hero.tsx"]
+
+
+def test_normalize_frontend_files_materializes_missing_ui_button_component():
+    files = {
+        "src/components/Hero.tsx": (
+            '"use client";\n'
+            'import { Button } from "@/components/ui/button";\n'
+            "export default function Hero() { return <Button>Launch</Button>; }\n"
+        )
+    }
+
+    normalized = _normalize_frontend_files(files)
+
+    assert "src/components/ui/button.tsx" in normalized
+    assert "export function Button" in normalized["src/components/ui/button.tsx"]
+
+
 def test_normalize_backend_files_coerces_plain_text_ai_responses():
     files = {
         "ai_service.py": (
@@ -177,6 +354,40 @@ def test_normalize_backend_files_coerces_plain_text_ai_responses():
 
     assert "_coerce_unstructured_payload" in normalized["ai_service.py"]
     assert "return _coerce_unstructured_payload(raw_json)" in normalized["ai_service.py"]
+
+
+def test_normalize_backend_files_fixes_oauth_scheme_reference_and_adds_python_version():
+    files = {
+        "routes.py": (
+            "from fastapi import Depends\n"
+            "from fastapi.security import OAuth2PasswordBearer\n\n"
+            'oauth_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")\n\n'
+            "async def get_current_user(token: str = Depends(auth_scheme)):\n"
+            "    return token\n"
+        )
+    }
+
+    normalized = _normalize_backend_files(files)
+
+    assert "Depends(oauth_scheme)" in normalized["routes.py"]
+    assert normalized[".python-version"] == "3.13\n"
+
+
+def test_normalize_backend_files_avoids_duplicate_sslmode_query_params():
+    files = {
+        "models.py": (
+            '_raw_url = os.getenv("DATABASE_URL", os.getenv("POSTGRES_URL", "sqlite:///./app.db"))\n'
+            'if not _raw_url.startswith("sqlite") and "localhost" not in _raw_url and "127.0.0.1" not in _raw_url:\n'
+            '    if "?" in _raw_url:\n'
+            '        _raw_url = f"{_raw_url}&sslmode=require"\n'
+            "    else:\n"
+            '        _raw_url = f"{_raw_url}?sslmode=require"\n'
+        )
+    }
+
+    normalized = _normalize_backend_files(files)
+
+    assert 'and "sslmode=" not in _raw_url.lower()' in normalized["models.py"]
 
 
 def test_normalize_backend_files_awaits_async_ai_helpers_in_routes():

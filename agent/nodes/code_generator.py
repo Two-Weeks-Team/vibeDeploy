@@ -28,6 +28,183 @@ _FONT_DEFAULT_WEIGHTS = {
     "Alegreya": ["400", "700"],
     "Roboto_Slab": ["400", "700"],
 }
+_BASE_FRONTEND_DEPENDENCIES = {
+    "next": "15.5.12",
+    "react": "19.0.0",
+    "react-dom": "19.0.0",
+    "typescript": "5.7.3",
+    "tailwindcss": "3.4.17",
+    "postcss": "8.4.49",
+    "autoprefixer": "10.4.20",
+    "@types/react": "19.0.7",
+    "@types/node": "20.17.12",
+}
+_OPTIONAL_FRONTEND_DEPENDENCIES = {
+    "@heroicons/react": "2.2.0",
+    "chart.js": "4.5.1",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "date-fns": "4.1.0",
+    "framer-motion": "^12.34.5",
+    "lucide-react": "^0.576.0",
+    "qrcode.react": "4.2.0",
+    "react-hook-form": "7.71.2",
+    "react-markdown": "^10.1.0",
+    "react-chartjs-2": "5.3.1",
+    "react-syntax-highlighter": "^16.1.1",
+    "recharts": "^3.7.0",
+    "sonner": "2.0.7",
+    "tailwind-merge": "^3.5.0",
+    "zod": "4.3.6",
+}
+_BUILTIN_FRONTEND_PACKAGES = {"next", "react", "react-dom"}
+_LEGACY_HEROICON_RENAMES = {
+    "CloudUploadIcon": "ArrowUpTrayIcon",
+    "CloudDownloadIcon": "ArrowDownTrayIcon",
+    "DownloadIcon": "ArrowDownTrayIcon",
+    "UploadIcon": "ArrowUpTrayIcon",
+    "XIcon": "XMarkIcon",
+    "SearchIcon": "MagnifyingGlassIcon",
+    "RefreshIcon": "ArrowPathIcon",
+    "MenuIcon": "Bars3Icon",
+    "SelectorIcon": "ChevronUpDownIcon",
+    "LocationMarkerIcon": "MapPinIcon",
+    "ExternalLinkIcon": "ArrowTopRightOnSquareIcon",
+    "DuplicateIcon": "Square2StackIcon",
+    "DotsHorizontalIcon": "EllipsisHorizontalIcon",
+    "DotsVerticalIcon": "EllipsisVerticalIcon",
+    "TrendingUpIcon": "ArrowTrendingUpIcon",
+    "TrendingDownIcon": "ArrowTrendingDownIcon",
+}
+_REACT_IMPORTABLE_SYMBOLS = {
+    "useState",
+    "useEffect",
+    "useMemo",
+    "useCallback",
+    "useRef",
+    "useReducer",
+    "useTransition",
+    "useDeferredValue",
+    "startTransition",
+}
+_UI_PRIMITIVE_TEMPLATES = {
+    "button": """"use client";
+
+import * as React from "react";
+
+type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
+  variant?: "default" | "outline" | "ghost";
+  size?: "sm" | "md" | "lg";
+};
+
+const VARIANT_CLASSES: Record<NonNullable<ButtonProps["variant"]>, string> = {
+  default: "bg-primary text-white hover:opacity-90",
+  outline: "border border-border text-foreground hover:bg-muted",
+  ghost: "text-foreground hover:bg-muted/70",
+};
+
+const SIZE_CLASSES: Record<NonNullable<ButtonProps["size"]>, string> = {
+  sm: "h-9 px-3 text-sm",
+  md: "h-11 px-4 text-sm",
+  lg: "h-12 px-5 text-base",
+};
+
+export function Button({
+  className = "",
+  variant = "default",
+  size = "md",
+  type = "button",
+  ...props
+}: ButtonProps) {
+  const classes = [
+    "inline-flex items-center justify-center rounded-md font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-50",
+    VARIANT_CLASSES[variant],
+    SIZE_CLASSES[size],
+    className,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  return <button type={type} className={classes} {...props} />;
+}
+
+export default Button;
+""",
+    "card": """import * as React from "react";
+
+type DivProps = React.HTMLAttributes<HTMLDivElement>;
+
+export function Card({ className = "", ...props }: DivProps) {
+  return <div className={["rounded-xl border border-border bg-card shadow-card", className].filter(Boolean).join(" ")} {...props} />;
+}
+
+export function CardHeader({ className = "", ...props }: DivProps) {
+  return <div className={["p-6 pb-3", className].filter(Boolean).join(" ")} {...props} />;
+}
+
+export function CardTitle({ className = "", ...props }: DivProps) {
+  return <div className={["text-lg font-semibold text-foreground", className].filter(Boolean).join(" ")} {...props} />;
+}
+
+export function CardDescription({ className = "", ...props }: DivProps) {
+  return <div className={["text-sm text-muted", className].filter(Boolean).join(" ")} {...props} />;
+}
+
+export function CardContent({ className = "", ...props }: DivProps) {
+  return <div className={["p-6 pt-0", className].filter(Boolean).join(" ")} {...props} />;
+}
+
+export function CardFooter({ className = "", ...props }: DivProps) {
+  return <div className={["p-6 pt-0", className].filter(Boolean).join(" ")} {...props} />;
+}
+""",
+    "input": """"use client";
+
+import * as React from "react";
+
+export type InputProps = React.InputHTMLAttributes<HTMLInputElement>;
+
+export const Input = React.forwardRef<HTMLInputElement, InputProps>(function Input({ className = "", ...props }, ref) {
+  return (
+    <input
+      ref={ref}
+      className={["h-11 w-full rounded-md border border-border bg-card px-3 text-sm text-foreground outline-none transition focus:ring-2 focus:ring-primary/40", className].filter(Boolean).join(" ")}
+      {...props}
+    />
+  );
+});
+
+export default Input;
+""",
+    "textarea": """"use client";
+
+import * as React from "react";
+
+export type TextareaProps = React.TextareaHTMLAttributes<HTMLTextAreaElement>;
+
+export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(function Textarea({ className = "", ...props }, ref) {
+  return (
+    <textarea
+      ref={ref}
+      className={["min-h-28 w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground outline-none transition focus:ring-2 focus:ring-primary/40", className].filter(Boolean).join(" ")}
+      {...props}
+    />
+  );
+});
+
+export default Textarea;
+""",
+    "badge": """import * as React from "react";
+
+type BadgeProps = React.HTMLAttributes<HTMLSpanElement>;
+
+export function Badge({ className = "", ...props }: BadgeProps) {
+  return <span className={["inline-flex items-center rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground", className].filter(Boolean).join(" ")} {...props} />;
+}
+
+export default Badge;
+""",
+}
 
 
 async def code_generator(state: VibeDeployState) -> dict:
@@ -262,12 +439,19 @@ def _normalize_frontend_files(files: dict[str, str]) -> dict[str, str]:
     if any(path.startswith("src/") for path in normalized):
         normalized = _normalize_frontend_import_aliases(normalized)
         normalized = _normalize_frontend_invalid_next_imports(normalized)
+        normalized = _normalize_frontend_client_directive_syntax(normalized)
         normalized = _normalize_frontend_use_client_directives(normalized)
+        normalized = _normalize_frontend_layout_metadata_boundaries(normalized)
+        normalized = _normalize_frontend_react_hook_imports(normalized)
         normalized = _normalize_frontend_state_types(normalized)
         normalized = _normalize_frontend_next_font_weights(normalized)
+        normalized = _normalize_frontend_heroicons_imports(normalized)
+        normalized = _normalize_frontend_api_base_env(normalized)
         normalized = _normalize_frontend_error_parsing(normalized)
+        normalized = _normalize_frontend_api_overloads(normalized)
         normalized = _normalize_frontend_partial_ai_requests(normalized)
         normalized = _normalize_frontend_component_exports(normalized)
+        normalized = _normalize_frontend_ui_primitives(normalized)
         normalized.setdefault(
             "next-env.d.ts",
             '/// <reference types="next" />\n/// <reference types="next/image-types/global" />\n\n// This file is auto-generated by Next.js.\n',
@@ -277,6 +461,7 @@ def _normalize_frontend_files(files: dict[str, str]) -> dict[str, str]:
         normalized["next.config.js"] = _normalize_next_config(normalized.get("next.config.js", ""))
         normalized["tailwind.config.ts"] = _normalize_tailwind_config(normalized.get("tailwind.config.ts", ""))
         normalized["postcss.config.js"] = _normalize_postcss_config(normalized.get("postcss.config.js", ""))
+        normalized["package.json"] = _normalize_frontend_package_json(normalized)
 
     return normalized
 
@@ -284,8 +469,12 @@ def _normalize_frontend_files(files: dict[str, str]) -> dict[str, str]:
 def _normalize_backend_files(files: dict[str, str]) -> dict[str, str]:
     normalized = dict(files)
     normalized = _normalize_backend_api_routes(normalized)
+    normalized = _normalize_backend_database_url_guards(normalized)
+    normalized = _normalize_backend_auth_scheme_references(normalized)
     normalized = _normalize_backend_ai_fallbacks(normalized)
     normalized = _normalize_backend_async_ai_calls(normalized)
+    if normalized:
+        normalized.setdefault(".python-version", "3.13\n")
     return normalized
 
 
@@ -366,6 +555,48 @@ def _normalize_frontend_request_payloads(
     return normalized
 
 
+def _normalize_backend_auth_scheme_references(files: dict[str, str]) -> dict[str, str]:
+    normalized: dict[str, str] = {}
+
+    for path, content in files.items():
+        updated = content
+        if path.endswith(".py") and "OAuth2PasswordBearer" in content and "Depends(" in content:
+            scheme_names = re.findall(r"^([A-Za-z_][\w]*)\s*=\s*OAuth2PasswordBearer\(", updated, flags=re.MULTILINE)
+            if len(scheme_names) == 1:
+                scheme_name = scheme_names[0]
+                if scheme_name != "auth_scheme" and "Depends(auth_scheme)" in updated:
+                    updated = updated.replace("Depends(auth_scheme)", f"Depends({scheme_name})")
+                if scheme_name != "oauth_scheme" and "Depends(oauth_scheme)" in updated:
+                    updated = updated.replace("Depends(oauth_scheme)", f"Depends({scheme_name})")
+        normalized[path] = updated
+
+    return normalized
+
+
+def _normalize_backend_database_url_guards(files: dict[str, str]) -> dict[str, str]:
+    normalized: dict[str, str] = {}
+    ssl_guard_pattern = re.compile(
+        r'if\s+not\s+_raw_url\.startswith\("sqlite"\)\s+and\s+"localhost"\s+not\s+in\s+_raw_url\s+and\s+"127\.0\.0\.1"\s+not\s+in\s+_raw_url\s*:',
+        flags=re.MULTILINE,
+    )
+    replacement = (
+        "if (\n"
+        '    not _raw_url.startswith("sqlite")\n'
+        '    and "localhost" not in _raw_url\n'
+        '    and "127.0.0.1" not in _raw_url\n'
+        '    and "sslmode=" not in _raw_url.lower()\n'
+        "):"
+    )
+
+    for path, content in files.items():
+        updated = content
+        if path.endswith(".py") and "_raw_url" in content and "sslmode=require" in content:
+            updated = ssl_guard_pattern.sub(replacement, updated)
+        normalized[path] = updated
+
+    return normalized
+
+
 def _normalize_frontend_use_client_directives(files: dict[str, str]) -> dict[str, str]:
     normalized: dict[str, str] = {}
     client_signal = re.compile(
@@ -382,6 +613,97 @@ def _normalize_frontend_use_client_directives(files: dict[str, str]) -> dict[str
             if client_signal.search(content):
                 updated = f'"use client";\n\n{content.lstrip()}'
         normalized[path] = updated
+    return normalized
+
+
+def _normalize_frontend_client_directive_syntax(files: dict[str, str]) -> dict[str, str]:
+    normalized: dict[str, str] = {}
+    for path, content in files.items():
+        updated = content
+        if path.endswith((".ts", ".tsx", ".js", ".jsx")):
+            updated = _canonicalize_use_client_directive(updated)
+        normalized[path] = updated
+    return normalized
+
+
+def _canonicalize_use_client_directive(content: str) -> str:
+    lines = content.splitlines()
+    for index, line in enumerate(lines):
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if "use client" not in stripped:
+            return content
+        normalized = stripped.rstrip(";")
+        normalized = normalized.replace('"', "").replace("'", "").strip()
+        if normalized != "use client":
+            return content
+        lines[index] = '"use client";'
+        updated = "\n".join(lines)
+        if content.endswith("\n"):
+            updated += "\n"
+        return updated
+    return content
+
+
+def _normalize_frontend_layout_metadata_boundaries(files: dict[str, str]) -> dict[str, str]:
+    normalized: dict[str, str] = {}
+    layout_suffixes = ("src/app/layout.tsx", "src/app/layout.jsx", "app/layout.tsx", "app/layout.jsx")
+
+    for path, content in files.items():
+        updated = content
+        if path.endswith(layout_suffixes) and (
+            "export const metadata" in content or "generateMetadata" in content
+        ):
+            updated = re.sub(r'^\s*"use client";\n+', "", updated, count=1)
+        normalized[path] = updated
+
+    return normalized
+
+
+def _normalize_frontend_react_hook_imports(files: dict[str, str]) -> dict[str, str]:
+    normalized: dict[str, str] = {}
+    for path, content in files.items():
+        updated = content
+        if path.endswith((".ts", ".tsx", ".js", ".jsx")):
+            used_symbols = sorted(symbol for symbol in _REACT_IMPORTABLE_SYMBOLS if re.search(rf"\b{symbol}\b", updated))
+            if used_symbols:
+                match = re.search(r'import\s+\{(?P<named>[^}]+)\}\s+from\s+[\'"]react[\'"]\s*;?', updated)
+                if match:
+                    existing = {part.strip() for part in match.group("named").split(",") if part.strip()}
+                    merged = ", ".join(sorted(existing | set(used_symbols)))
+                    updated = f"{updated[:match.start()]}import {{ {merged} }} from \"react\";{updated[match.end():]}"
+                elif 'from "react"' not in updated and "from 'react'" not in updated:
+                    updated = f'import {{ {", ".join(used_symbols)} }} from "react";\n{updated}'
+        normalized[path] = updated
+    return normalized
+
+
+def _normalize_frontend_heroicons_imports(files: dict[str, str]) -> dict[str, str]:
+    normalized: dict[str, str] = {}
+    import_pattern = re.compile(
+        r"import\s+\{(?P<body>[^}]+)\}\s+from\s+['\"]@heroicons/react/24/(?P<variant>solid|outline)['\"]\s*;?"
+    )
+
+    for path, content in files.items():
+        updated = content
+        if path.endswith((".ts", ".tsx", ".js", ".jsx")) and "@heroicons/react/24/" in content:
+
+            def repl(match: re.Match[str]) -> str:
+                items = [item.strip() for item in match.group("body").split(",") if item.strip()]
+                renamed_items: list[str] = []
+                for item in items:
+                    normalized_item = _LEGACY_HEROICON_RENAMES.get(item, item)
+                    if normalized_item not in renamed_items:
+                        renamed_items.append(normalized_item)
+                return (
+                    f"import {{ {', '.join(renamed_items)} }} "
+                    f"from '@heroicons/react/24/{match.group('variant')}';"
+                )
+
+            updated = import_pattern.sub(repl, updated)
+        normalized[path] = updated
+
     return normalized
 
 
@@ -441,6 +763,22 @@ def _normalize_frontend_next_font_weights(files: dict[str, str]) -> dict[str, st
                     return f"{font_name}({{ weight: [{weight_values}]{body_suffix} }})"
 
                 updated = pattern.sub(repl, updated)
+        normalized[path] = updated
+
+    return normalized
+
+
+def _normalize_frontend_api_base_env(files: dict[str, str]) -> dict[str, str]:
+    normalized: dict[str, str] = {}
+
+    for path, content in files.items():
+        updated = content
+        if path.endswith((".ts", ".tsx", ".js", ".jsx")) and "NEXT_PUBLIC_API_URL" in content:
+            updated = re.sub(
+                r"(?<!\()process\.env\.NEXT_PUBLIC_API_URL(?!\s*(?:\|\||\?\?))",
+                '(process.env.NEXT_PUBLIC_API_URL || "")',
+                updated,
+            )
         normalized[path] = updated
 
     return normalized
@@ -522,6 +860,140 @@ def _normalize_frontend_partial_ai_requests(files: dict[str, str]) -> dict[str, 
             )
         normalized[path] = updated
     return normalized
+
+
+def _normalize_frontend_api_overloads(files: dict[str, str]) -> dict[str, str]:
+    normalized: dict[str, str] = {}
+    pattern = re.compile(
+        r"export async function (?P<name>\w+)\(\s*(?P<params>[\s\S]*?)\)\s*:\s*Promise<(?P<returns>[^>]+)>\s*\{",
+        flags=re.MULTILINE,
+    )
+
+    for path, content in files.items():
+        updated = content
+        if path.endswith("api.ts"):
+            def repl(match: re.Match[str]) -> str:
+                name = match.group("name")
+                params = match.group("params")
+                returns = [item.strip() for item in match.group("returns").split("|") if item.strip()]
+                if "body?:" not in params or len(returns) != 2:
+                    return match.group(0)
+                if f"export async function {name}(" in updated[: match.start()] and f"{name}(" in updated[: match.start()]:
+                    return match.group(0)
+
+                body_match = re.search(r",?\s*body\?\s*:\s*(?P<body_type>[^,\n)]+)", params)
+                if not body_match:
+                    return match.group(0)
+
+                body_type = body_match.group("body_type").strip()
+                required_params = re.sub(r",?\s*body\?\s*:\s*[^,\n)]+", "", params).strip().rstrip(",")
+                if not required_params:
+                    return match.group(0)
+
+                overloads = (
+                    f"export async function {name}({required_params}, body: {body_type}): Promise<{returns[0]}>;\n"
+                    f"export async function {name}({required_params}): Promise<{returns[1]}>;\n"
+                )
+                return overloads + match.group(0)
+
+            updated = pattern.sub(repl, updated)
+        normalized[path] = updated
+    return normalized
+
+
+def _normalize_frontend_ui_primitives(files: dict[str, str]) -> dict[str, str]:
+    normalized = dict(files)
+    for path, content in list(files.items()):
+        if not path.endswith((".ts", ".tsx", ".js", ".jsx")):
+            continue
+        for primitive, template in _UI_PRIMITIVE_TEMPLATES.items():
+            import_path = f"@/components/ui/{primitive}"
+            target_path = f"src/components/ui/{primitive}.tsx"
+            if import_path in content and target_path not in normalized:
+                normalized[target_path] = template
+    return normalized
+
+
+def _normalize_frontend_package_json(files: dict[str, str]) -> str:
+    raw = files.get("package.json", "")
+    try:
+        parsed = json.loads(raw) if raw.strip() else {}
+    except json.JSONDecodeError:
+        parsed = {}
+
+    if not isinstance(parsed, dict):
+        parsed = {}
+
+    dependencies = parsed.get("dependencies", {})
+    if not isinstance(dependencies, dict):
+        dependencies = {}
+
+    for package_name, version in _BASE_FRONTEND_DEPENDENCIES.items():
+        dependencies[package_name] = version
+
+    detected_optional_dependencies = _detect_frontend_external_dependencies(files)
+    for package_name, version in _OPTIONAL_FRONTEND_DEPENDENCIES.items():
+        if package_name in detected_optional_dependencies or package_name in dependencies:
+            dependencies[package_name] = version
+
+    scripts = parsed.get("scripts", {})
+    if not isinstance(scripts, dict):
+        scripts = {}
+    normalized_scripts = {
+        "dev": "next dev",
+        "build": "next build",
+        "start": "next start",
+        "lint": "next lint",
+        **scripts,
+    }
+
+    parsed["name"] = parsed.get("name") or "generated-app"
+    parsed["version"] = parsed.get("version") or "0.1.0"
+    parsed["private"] = True
+    parsed["scripts"] = normalized_scripts
+    parsed["dependencies"] = dependencies
+    parsed["engines"] = {"node": "22.x"}
+
+    return json.dumps(parsed, indent=2)
+
+
+def _detect_frontend_external_dependencies(files: dict[str, str]) -> set[str]:
+    detected: set[str] = set()
+    import_pattern = re.compile(
+        r"""(?:from\s+['"](?P<from>[^'"]+)['"]|import\s+['"](?P<bare>[^'"]+)['"]|import\s*\(\s*['"](?P<dynamic>[^'"]+)['"]\s*\)|require\(\s*['"](?P<require>[^'"]+)['"]\s*\))"""
+    )
+
+    for path, content in files.items():
+        if not path.endswith((".ts", ".tsx", ".js", ".jsx")):
+            continue
+        for match in import_pattern.finditer(content):
+            module_name = (
+                match.group("from")
+                or match.group("bare")
+                or match.group("dynamic")
+                or match.group("require")
+                or ""
+            )
+            package_name = _extract_npm_package_name(module_name)
+            if not package_name or package_name in _BUILTIN_FRONTEND_PACKAGES:
+                continue
+            if package_name in _OPTIONAL_FRONTEND_DEPENDENCIES:
+                detected.add(package_name)
+
+    return detected
+
+
+def _extract_npm_package_name(module_name: str) -> str | None:
+    if not module_name or module_name.startswith((".", "/", "@/")):
+        return None
+    if module_name.startswith("next/"):
+        return "next"
+    if module_name.startswith("react-dom/"):
+        return "react-dom"
+    if module_name.startswith("@"):
+        parts = module_name.split("/")
+        return "/".join(parts[:2]) if len(parts) >= 2 else module_name
+    return module_name.split("/", 1)[0]
 
 
 def _normalize_next_tsconfig(raw: str) -> str:
@@ -744,7 +1216,13 @@ def _extract_backend_request_fields(routes_source: str) -> dict[str, list[str]]:
 
 
 def _normalize_tailwind_config(raw: str) -> str:
-    if "./src/**/*.{js,ts,jsx,tsx,mdx}" in raw:
+    if (
+        "./src/**/*.{js,ts,jsx,tsx,mdx}" in raw
+        and "card:" in raw
+        and "muted:" in raw
+        and "primary:" in raw
+        and "borderRadius" in raw
+    ):
         return raw
 
     return (
@@ -752,7 +1230,27 @@ def _normalize_tailwind_config(raw: str) -> str:
         "const config: Config = {\n"
         "  content: ['./src/**/*.{js,ts,jsx,tsx,mdx}'],\n"
         "  theme: {\n"
-        "    extend: {},\n"
+        "    extend: {\n"
+        "      colors: {\n"
+        "        background: 'var(--background)',\n"
+        "        foreground: 'var(--foreground)',\n"
+        "        card: 'var(--card)',\n"
+        "        muted: 'var(--muted)',\n"
+        "        border: 'var(--border)',\n"
+        "        primary: 'var(--primary)',\n"
+        "        accent: 'var(--accent)',\n"
+        "        success: 'var(--success)',\n"
+        "        warning: 'var(--warning)',\n"
+        "      },\n"
+        "      borderRadius: {\n"
+        "        DEFAULT: 'var(--radius)',\n"
+        "        lg: 'calc(var(--radius) + 0.25rem)',\n"
+        "        xl: 'calc(var(--radius) + 0.5rem)',\n"
+        "      },\n"
+        "      boxShadow: {\n"
+        "        card: 'var(--shadow)',\n"
+        "      },\n"
+        "    },\n"
         "  },\n"
         "  plugins: [],\n"
         "};\n\n"
@@ -782,6 +1280,8 @@ def _parse_json_response(content, default: dict, label: str = "unknown") -> dict
     if cleaned.startswith("```"):
         cleaned = re.sub(r"^```(?:json)?\n?", "", cleaned)
         cleaned = re.sub(r"\n?```$", "", cleaned)
+    if cleaned.lower().startswith("json\n"):
+        cleaned = cleaned[5:]
 
     try:
         return json.loads(cleaned)
@@ -802,6 +1302,16 @@ def _parse_json_response(content, default: dict, label: str = "unknown") -> dict
                 label,
             )
 
+    balanced_json = _extract_balanced_json_block(cleaned)
+    if balanced_json:
+        try:
+            return json.loads(balanced_json)
+        except json.JSONDecodeError:
+            logger.warning(
+                "[CODE_GEN] %s: Balanced JSON extraction also failed",
+                label,
+            )
+
     logger.error(
         "[CODE_GEN] %s: All JSON parse attempts failed. Returning default. Response preview: %.200s",
         label,
@@ -810,3 +1320,42 @@ def _parse_json_response(content, default: dict, label: str = "unknown") -> dict
     result = dict(default)
     result["raw_response"] = raw_content[:500]
     return result
+
+
+def _extract_balanced_json_block(raw: str) -> str | None:
+    for start_index, char in enumerate(raw):
+        if char not in "{[":
+            continue
+
+        stack = ["}" if char == "{" else "]"]
+        in_string = False
+        escaped = False
+
+        for index in range(start_index + 1, len(raw)):
+            current = raw[index]
+
+            if in_string:
+                if escaped:
+                    escaped = False
+                elif current == "\\":
+                    escaped = True
+                elif current == '"':
+                    in_string = False
+                continue
+
+            if current == '"':
+                in_string = True
+                continue
+
+            if current in "{[":
+                stack.append("}" if current == "{" else "]")
+                continue
+
+            if current in "}]":
+                if not stack or current != stack[-1]:
+                    break
+                stack.pop()
+                if not stack:
+                    return raw[start_index : index + 1]
+
+    return None
