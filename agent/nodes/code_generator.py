@@ -21,6 +21,8 @@ _MIN_BACKEND_FILES = 2  # At least main.py + requirements.txt
 async def code_generator(state: VibeDeployState) -> dict:
     generated_docs = state.get("generated_docs", {})
     idea = state.get("idea", {})
+    blueprint = state.get("blueprint", {}) or {}
+    code_eval_result = state.get("code_eval_result")
 
     llm = get_llm(
         model=MODEL_CONFIG["code_gen"],
@@ -32,15 +34,17 @@ async def code_generator(state: VibeDeployState) -> dict:
         {
             "idea": idea,
             "generated_docs": generated_docs,
+            "blueprint": blueprint,
         },
         indent=2,
         ensure_ascii=False,
     )
 
-    # Generate frontend and backend in parallel for 2x speed
+    eval_feedback = _build_eval_feedback(code_eval_result)
+
     frontend_code, backend_code = await asyncio.gather(
-        _generate_frontend_files(llm, context),
-        _generate_backend_files(llm, context),
+        _generate_frontend_files(llm, context, eval_feedback=eval_feedback),
+        _generate_backend_files(llm, context, eval_feedback=eval_feedback),
     )
 
     generation_warnings = []
@@ -89,7 +93,12 @@ async def code_generator(state: VibeDeployState) -> dict:
     }
 
 
-async def _generate_frontend_files(llm, context: str, retry: bool = False) -> dict[str, str]:
+async def _generate_frontend_files(
+    llm,
+    context: str,
+    retry: bool = False,
+    eval_feedback: str | None = None,
+) -> dict[str, str]:
     extra_instruction = ""
     if retry:
         extra_instruction = (
@@ -97,6 +106,8 @@ async def _generate_frontend_files(llm, context: str, retry: bool = False) -> di
             'You MUST return ONLY a valid JSON object like: {"files": {"path": "content", ...}}. '
             "No markdown, no explanation — ONLY the JSON object."
         )
+    if eval_feedback:
+        extra_instruction += f"\n\nPREVIOUS EVALUATION FEEDBACK (fix these issues):\n{eval_feedback}"
 
     response = await llm.ainvoke(
         [
@@ -121,7 +132,15 @@ async def _generate_frontend_files(llm, context: str, retry: bool = False) -> di
     return _normalize_files_dict(files)
 
 
-async def _generate_backend_files(llm, context: str) -> dict[str, str]:
+async def _generate_backend_files(
+    llm,
+    context: str,
+    eval_feedback: str | None = None,
+) -> dict[str, str]:
+    extra_instruction = ""
+    if eval_feedback:
+        extra_instruction = f"\n\nPREVIOUS EVALUATION FEEDBACK (fix these issues):\n{eval_feedback}"
+
     response = await llm.ainvoke(
         [
             {
@@ -130,6 +149,7 @@ async def _generate_backend_files(llm, context: str) -> dict[str, str]:
                     f"{CODE_GENERATION_BASE_SYSTEM_PROMPT}\n\n"
                     f"{BACKEND_SYSTEM_PROMPT}\n\n"
                     "Return JSON object with exactly one top-level key: 'files'."
+                    f"{extra_instruction}"
                 ),
             },
             {
@@ -146,6 +166,19 @@ async def _generate_backend_files(llm, context: str) -> dict[str, str]:
     parsed = _parse_json_response(response.content, {"files": {}}, label="backend")
     files = parsed.get("files", {})
     return _normalize_files_dict(files)
+
+
+def _build_eval_feedback(code_eval_result: dict | None) -> str | None:
+    if not code_eval_result or code_eval_result.get("passed", False):
+        return None
+    parts: list[str] = []
+    if code_eval_result.get("fix_instructions"):
+        parts.append(code_eval_result["fix_instructions"])
+    if code_eval_result.get("missing_frontend"):
+        parts.append(f"Missing frontend files: {', '.join(code_eval_result['missing_frontend'])}")
+    if code_eval_result.get("missing_backend"):
+        parts.append(f"Missing backend files: {', '.join(code_eval_result['missing_backend'])}")
+    return "\n".join(parts) if parts else None
 
 
 def _normalize_files_dict(files: object) -> dict[str, str]:

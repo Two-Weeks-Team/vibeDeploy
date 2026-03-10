@@ -5,6 +5,7 @@ from ..state import VibeDeployState
 logger = logging.getLogger(__name__)
 
 MAX_CODE_EVAL_ITERATIONS = 3
+MAX_EMPTY_FRONTEND_RETRIES = 5
 PASS_THRESHOLD = 85
 
 
@@ -137,9 +138,27 @@ def _build_fix_instructions(eval_result: dict) -> str:
 def route_code_eval(state: VibeDeployState) -> str:
     eval_result = state.get("code_eval_result", {})
     iteration = state.get("code_eval_iteration", 0)
+    blueprint = state.get("blueprint", {}) or {}
+    frontend_code = state.get("frontend_code", {}) or {}
 
     if eval_result.get("passed", False):
         logger.info("[CODE_EVAL] PASSED → deployer")
+        return "deployer"
+
+    expected_frontend = blueprint.get("frontend_files", {})
+    if not frontend_code and expected_frontend:
+        if iteration < MAX_EMPTY_FRONTEND_RETRIES:
+            logger.warning(
+                "[CODE_EVAL] 0 frontend files (expected %d) → force retry (iter %d/%d)",
+                len(expected_frontend),
+                iteration,
+                MAX_EMPTY_FRONTEND_RETRIES,
+            )
+            return "code_generator"
+        logger.error(
+            "[CODE_EVAL] Still 0 frontend after %d iters → deployer (backend-only)",
+            iteration,
+        )
         return "deployer"
 
     if iteration >= MAX_CODE_EVAL_ITERATIONS:

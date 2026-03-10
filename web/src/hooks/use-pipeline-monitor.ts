@@ -54,9 +54,11 @@ export function usePipelineMonitor() {
   const [connected, setConnected] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevPipelineIds = useRef<Set<string>>(new Set());
+  const clearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const updateNode = useCallback((vizId: string, status: PipelineNodeStatus) => {
-    setNodeStatuses((prev) => ({ ...prev, [vizId]: status }));
+    setNodeStatuses((prev: Record<string, PipelineNodeStatus>) => ({ ...prev, [vizId]: status }));
   }, []);
 
   const connectSSE = useCallback(() => {
@@ -97,13 +99,26 @@ export function usePipelineMonitor() {
                 const pipelines = Array.isArray(data.pipelines)
                   ? (data.pipelines as ActivePipeline[])
                   : [];
+                const currentIds = new Set(pipelines.map((p) => p.thread_id));
+                const hadPipelines = prevPipelineIds.current.size > 0;
+                const nowEmpty = currentIds.size === 0;
+
+                if (hadPipelines && nowEmpty) {
+                  if (clearTimer.current) clearTimeout(clearTimer.current);
+                  clearTimer.current = setTimeout(() => setNodeStatuses({}), 2000);
+                } else if (!nowEmpty && clearTimer.current) {
+                  clearTimeout(clearTimer.current);
+                  clearTimer.current = null;
+                }
+
+                prevPipelineIds.current = currentIds;
                 setActivePipelines(pipelines);
                 continue;
               }
 
               data._uid = `evt-${++_eventSeq}`;
               data._timestamp = Date.now();
-              setEvents((prev) => [data, ...prev].slice(0, MAX_EVENTS));
+              setEvents((prev: DashboardEvent[]) => [data, ...prev].slice(0, MAX_EVENTS));
 
               if (data.node) {
                 const vizId = resolveVizNodeId(data.node);
@@ -181,8 +196,16 @@ export function usePipelineMonitor() {
                 }
               }
 
-              if (data.type.includes(".phase.complete") || data.type.includes(".error")) {
-                setNodeStatuses({});
+              if (data.type === "blueprint.complete") {
+                updateNode("blueprint", "complete");
+              }
+
+              if (data.type === "code_gen.complete") {
+                updateNode("code_gen", "complete");
+              }
+
+              if (data.type === "code_eval.result") {
+                updateNode("code_eval", data.passed ? "complete" : "active");
               }
             } catch { }
           }
@@ -210,6 +233,7 @@ export function usePipelineMonitor() {
     return () => {
       abortRef.current?.abort();
       if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
+      if (clearTimer.current) clearTimeout(clearTimer.current);
       clearInterval(id);
     };
   }, [connectSSE, fetchActive]);

@@ -63,6 +63,15 @@ function ElapsedTime({ startedAt }: { startedAt: number }) {
 
 export function LiveMonitor({ activePipelines, events, nodeStatuses, connected }: LiveMonitorProps) {
   const activePipeline = activePipelines[0];
+  const [showEmpty, setShowEmpty] = useState(true);
+
+  useEffect(() => {
+    if (activePipelines.length === 0) {
+      const timer = setTimeout(() => setShowEmpty(true), 500);
+      return () => clearTimeout(timer);
+    }
+    setShowEmpty(false);
+  }, [activePipelines.length]);
 
   const getEventColor = (type: string) => {
     if (type.includes("error")) return "text-red-400";
@@ -92,7 +101,7 @@ export function LiveMonitor({ activePipelines, events, nodeStatuses, connected }
         </div>
       </div>
 
-      {activePipelines.length === 0 ? (
+      {activePipelines.length === 0 && showEmpty ? (
         <Card className="border-border/50 bg-card/50 backdrop-blur-sm py-12">
           <div className="flex flex-col items-center justify-center text-muted-foreground">
             <Play className="w-12 h-12 mb-4 opacity-20" />

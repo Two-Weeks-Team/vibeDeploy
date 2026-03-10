@@ -11,7 +11,7 @@ export async function startMeeting(input: string): Promise<{
 }> {
   const meetingId = crypto.randomUUID();
 
-  const response = await fetch(`${AGENT_URL}/run`, {
+  const response = await fetch(`${DASHBOARD_API_URL}/run`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -26,7 +26,7 @@ export async function startMeeting(input: string): Promise<{
 
   return {
     meetingId,
-    streamUrl: `${AGENT_URL}/run`,
+    streamUrl: `${DASHBOARD_API_URL}/run`,
   };
 }
 
@@ -34,7 +34,7 @@ export async function resumeMeeting(
   meetingId: string,
   action: string = "proceed",
 ): Promise<Response> {
-  const response = await fetch(`${AGENT_URL}/resume`, {
+  const response = await fetch(`${DASHBOARD_API_URL}/resume`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ thread_id: meetingId, action }),
@@ -80,7 +80,7 @@ export async function getMeetingResult(
   meetingId: string,
 ): Promise<MeetingResult | null> {
   try {
-    const response = await fetch(`${AGENT_URL}/result/${meetingId}`);
+    const response = await fetch(`${DASHBOARD_API_URL}/result/${meetingId}`);
     if (!response.ok) return null;
     return response.json();
   } catch {
@@ -93,7 +93,7 @@ export async function startBrainstorm(input: string): Promise<{
   streamUrl: string;
 }> {
   const sessionId = crypto.randomUUID();
-  const response = await fetch(`${AGENT_URL}/brainstorm`, {
+  const response = await fetch(`${DASHBOARD_API_URL}/brainstorm`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -102,7 +102,7 @@ export async function startBrainstorm(input: string): Promise<{
     }),
   });
   if (!response.ok) throw new Error(`Agent returned ${response.status}`);
-  return { sessionId, streamUrl: `${AGENT_URL}/brainstorm` };
+  return { sessionId, streamUrl: `${DASHBOARD_API_URL}/brainstorm` };
 }
 
 export type BrainstormResult = {
@@ -133,7 +133,7 @@ export async function getBrainstormResult(
 ): Promise<BrainstormResult | null> {
   try {
     const response = await fetch(
-      `${AGENT_URL}/brainstorm/result/${sessionId}`,
+      `${DASHBOARD_API_URL}/brainstorm/result/${sessionId}`,
     );
     if (!response.ok) return null;
     return response.json();

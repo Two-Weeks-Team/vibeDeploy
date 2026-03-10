@@ -407,6 +407,7 @@ async def _stream_pipeline(prompt: str, thread_id: str) -> AsyncGenerator[str, N
         )
 
 
+@app.post("/api/run")
 @app.post("/run")
 async def run_pipeline(request: RunRequest):
     from .guardrails import sanitize_input
@@ -532,6 +533,7 @@ async def _stream_resume(thread_id: str, action: str) -> AsyncGenerator[str, Non
         )
 
 
+@app.post("/api/resume")
 @app.post("/resume")
 async def resume_pipeline(request: ResumeRequest):
     return StreamingResponse(
@@ -670,6 +672,7 @@ async def _store_brainstorm_result(thread_id: str, state: dict):
     await _store.save_brainstorm(thread_id, result)
 
 
+@app.post("/api/brainstorm")
 @app.post("/brainstorm")
 async def brainstorm_pipeline(request: RunRequest):
     from .guardrails import sanitize_input
@@ -692,6 +695,7 @@ async def brainstorm_pipeline(request: RunRequest):
     )
 
 
+@app.get("/api/brainstorm/result/{session_id}")
 @app.get("/brainstorm/result/{session_id}")
 async def get_brainstorm_result(session_id: str):
     result = await _store.get_brainstorm(session_id)
@@ -700,6 +704,7 @@ async def get_brainstorm_result(session_id: str):
     return result
 
 
+@app.get("/api/result/{meeting_id}")
 @app.get("/result/{meeting_id}")
 async def get_result(meeting_id: str):
     result = await _store.get_meeting(meeting_id)
