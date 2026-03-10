@@ -155,21 +155,22 @@ def build_app_spec(
     if has_frontend:
         api_name = f"{name[:28]}-api"
         web_name = f"{name[:28]}-web"
-        spec["static_sites"] = [
-            {
-                "name": web_name,
-                "github": {
-                    "repo": github_parts,
-                    "branch": branch,
-                    "deploy_on_push": True,
-                },
-                "build_command": "npm install && npm run build",
-                "output_dir": ".next",
-                "source_dir": "/web",
-                "environment_slug": "node-js",
+        web_service: dict = {
+            "name": web_name,
+            "github": {
+                "repo": github_parts,
+                "branch": branch,
+                "deploy_on_push": True,
             },
-        ]
-        # Explicit ingress rules to avoid path conflict between API and static site
+            "build_command": "npm install && npm run build",
+            "run_command": "npm start",
+            "http_port": 3000,
+            "instance_count": 1,
+            "instance_size_slug": "apps-s-1vcpu-0.5gb",
+            "source_dir": "/web",
+            "environment_slug": "node-js",
+        }
+        spec["services"].append(web_service)
         spec["ingress"] = {
             "rules": [
                 {"match": {"path": {"prefix": "/api"}}, "component": {"name": api_name}},
