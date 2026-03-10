@@ -269,18 +269,21 @@ export default function DashboardPage() {
                           <div className="text-center text-muted-foreground py-8">No recent activity</div>
                         ) : (
                           recentActivity.map((item) => (
-                            <div key={item.type === "evaluation" ? item.data.thread_id : item.data.thread_id} className="flex items-center justify-between p-3 rounded-lg bg-accent/50">
-                              <div className="flex items-center gap-3">
+                            <div
+                              key={item.type === "evaluation" ? item.data.thread_id : item.data.thread_id}
+                              className="flex flex-col gap-3 rounded-lg bg-accent/50 p-3 sm:flex-row sm:items-center sm:justify-between"
+                            >
+                              <div className="flex min-w-0 items-center gap-3">
                                 {item.type === "evaluation" ? (
                                   <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/20">Eval</Badge>
                                 ) : (
                                   <Badge className="bg-purple-500/10 text-purple-400 border-purple-500/20">Brainstorm</Badge>
                                 )}
-                                <span className="text-sm text-foreground truncate max-w-[300px]">
+                                <span className="min-w-0 flex-1 truncate text-sm text-foreground sm:max-w-[300px]">
                                   {(item.type === "evaluation" ? (item.data as MeetingResultFull).idea_summary || (item.data as MeetingResultFull).input_prompt : (item.data as BrainstormResultFull).idea_summary) || item.data.thread_id}
                                 </span>
                               </div>
-                              <div className="flex items-center gap-4">
+                              <div className="flex w-full flex-wrap items-center justify-between gap-3 sm:w-auto sm:justify-end sm:gap-4">
                                 {item.type === "evaluation" && (
                                   <>
                                     <span className="font-bold">{item.data.score.toFixed(1)}</span>
