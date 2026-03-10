@@ -41,33 +41,33 @@ interface EdgeDef {
 }
 
 const evalNodes: NodeDef[] = [
-  { id: "input", label: "Input", x: 50, y: 2, emoji: "📝" },
-  { id: "enrich", label: "Enrich", x: 50, y: 8, emoji: "✨" },
-  { id: "architect", label: "Architect", x: 10, y: 16, emoji: "🏗️" },
-  { id: "scout", label: "Scout", x: 30, y: 16, emoji: "🔭" },
-  { id: "catalyst", label: "Catalyst", x: 50, y: 16, emoji: "⚡" },
-  { id: "guardian", label: "Guardian", x: 70, y: 16, emoji: "🛡️" },
-  { id: "advocate", label: "Advocate", x: 90, y: 16, emoji: "🎯" },
-  { id: "cross_exam", label: "Cross-Exam", x: 50, y: 26, emoji: "⚔️" },
-  { id: "score_tech", label: "Tech", x: 10, y: 34, emoji: "📊" },
-  { id: "score_market", label: "Market", x: 30, y: 34, emoji: "📊" },
-  { id: "score_innovation", label: "Innovation", x: 50, y: 34, emoji: "📊" },
-  { id: "score_risk", label: "Risk", x: 70, y: 34, emoji: "📊" },
-  { id: "score_user", label: "User", x: 90, y: 34, emoji: "📊" },
-  { id: "verdict", label: "Vibe Score™", x: 50, y: 43, emoji: "🏛️", glow: true },
-  { id: "decision", label: "Decision Gate", x: 50, y: 51, emoji: "🚦" },
-  { id: "fix_storm", label: "Fix-Storm", x: 30, y: 59, emoji: "🔧" },
-  { id: "scope_down", label: "Scope-Down", x: 70, y: 59, emoji: "📐" },
-  { id: "doc_gen", label: "Specs", x: 20, y: 66, emoji: "📄" },
-  { id: "blueprint", label: "Blueprint", x: 50, y: 66, emoji: "🗺️" },
-  { id: "code_gen", label: "Code Gen", x: 80, y: 66, emoji: "💻" },
-  { id: "code_eval", label: "Eval", x: 50, y: 73, emoji: "✅" },
-  { id: "git_push", label: "Git Push", x: 10, y: 82, emoji: "📦" },
-  { id: "ci_test", label: "CI Test", x: 26, y: 82, emoji: "⚙️" },
-  { id: "app_spec", label: "App Spec", x: 42, y: 82, emoji: "📋" },
-  { id: "do_build", label: "Build", x: 58, y: 82, emoji: "🏗️" },
-  { id: "do_deploy", label: "Deploy", x: 74, y: 82, emoji: "🚀" },
-  { id: "verified", label: "Live", x: 90, y: 82, emoji: "✅", glow: true },
+  { id: "input", label: "Input", x: 50, y: 4, emoji: "📝" },
+  { id: "enrich", label: "Enrich", x: 50, y: 11, emoji: "✨" },
+  { id: "architect", label: "Architect", x: 10, y: 20, emoji: "🏗️" },
+  { id: "scout", label: "Scout", x: 30, y: 20, emoji: "🔭" },
+  { id: "catalyst", label: "Catalyst", x: 50, y: 20, emoji: "⚡" },
+  { id: "guardian", label: "Guardian", x: 70, y: 20, emoji: "🛡️" },
+  { id: "advocate", label: "Advocate", x: 90, y: 20, emoji: "🎯" },
+  { id: "cross_exam", label: "Cross-Exam", x: 50, y: 29, emoji: "⚔️" },
+  { id: "score_tech", label: "Tech", x: 10, y: 38, emoji: "📊" },
+  { id: "score_market", label: "Market", x: 30, y: 38, emoji: "📊" },
+  { id: "score_innovation", label: "Innovation", x: 50, y: 38, emoji: "📊" },
+  { id: "score_risk", label: "Risk", x: 70, y: 38, emoji: "📊" },
+  { id: "score_user", label: "User", x: 90, y: 38, emoji: "📊" },
+  { id: "verdict", label: "Vibe Score™", x: 50, y: 47, emoji: "🏛️", glow: true },
+  { id: "decision", label: "Decision Gate", x: 50, y: 53, emoji: "🚦" },
+  { id: "fix_storm", label: "Fix-Storm", x: 30, y: 60, emoji: "🔧" },
+  { id: "scope_down", label: "Scope-Down", x: 70, y: 60, emoji: "📐" },
+  { id: "doc_gen", label: "Specs", x: 20, y: 68, emoji: "📄" },
+  { id: "blueprint", label: "Blueprint", x: 50, y: 68, emoji: "🗺️" },
+  { id: "code_gen", label: "Code Gen", x: 80, y: 68, emoji: "💻" },
+  { id: "code_eval", label: "Eval", x: 50, y: 76, emoji: "✅" },
+  { id: "git_push", label: "Git Push", x: 8, y: 86, emoji: "📦" },
+  { id: "ci_test", label: "CI Test", x: 24, y: 86, emoji: "⚙️" },
+  { id: "app_spec", label: "App Spec", x: 40, y: 86, emoji: "📋" },
+  { id: "do_build", label: "Build", x: 56, y: 86, emoji: "🏗️" },
+  { id: "do_deploy", label: "Deploy", x: 72, y: 86, emoji: "🚀" },
+  { id: "verified", label: "Live", x: 88, y: 86, emoji: "✅", glow: true },
 ];
 
 const evalEdges: EdgeDef[] = [
@@ -141,13 +141,13 @@ const PARTICLE_DUR = "12s";
 const EASE = "0.25 0.1 0.25 1";
 
 const EVAL_KT = "0;0.04;0.08;0.13;0.21;0.28;0.34;0.42;0.48;0.53;0.58;0.63;0.68;0.74;0.79;0.84;0.88;0.92;0.96;1";
-const EVAL_CY = "2;8;16;16;26;34;34;43;51;66;66;66;73;82;82;82;82;82;82;82";
+const EVAL_CY = "4;11;20;20;29;38;38;47;53;68;68;68;76;86;86;86;86;86;86;86";
 const EVAL_CX: number[][] = [
-  [50,50,10,10,50,10,10,50,50,20,50,80,50,10,26,42,58,74,90,90],
-  [50,50,30,30,50,30,30,50,50,20,50,80,50,10,26,42,58,74,90,90],
-  [50,50,50,50,50,50,50,50,50,20,50,80,50,10,26,42,58,74,90,90],
-  [50,50,70,70,50,70,70,50,50,20,50,80,50,10,26,42,58,74,90,90],
-  [50,50,90,90,50,90,90,50,50,20,50,80,50,10,26,42,58,74,90,90],
+  [50,50,10,10,50,10,10,50,50,20,50,80,50,8,24,40,56,72,88,88],
+  [50,50,30,30,50,30,30,50,50,20,50,80,50,8,24,40,56,72,88,88],
+  [50,50,50,50,50,50,50,50,50,20,50,80,50,8,24,40,56,72,88,88],
+  [50,50,70,70,50,70,70,50,50,20,50,80,50,8,24,40,56,72,88,88],
+  [50,50,90,90,50,90,90,50,50,20,50,80,50,8,24,40,56,72,88,88],
 ];
 const EVAL_KS = Array(19).fill(EASE).join("; ");
 
@@ -263,17 +263,17 @@ export function PipelineViz({ activeNodes = {}, pipeline = "evaluation", classNa
 
   const phaseLabels = pipeline === "evaluation"
     ? [
-        { label: "INPUT", y: "1%", color: "text-slate-500" },
-        { label: "ENRICH", y: "7%", color: "text-slate-500" },
-        { label: "COUNCIL", y: "15%", color: "text-slate-500" },
-        { label: "DEBATE", y: "25%", color: "text-slate-500" },
-        { label: "SCORING", y: "33%", color: "text-slate-500" },
-        { label: "VERDICT", y: "42%", color: "text-blue-500/70" },
-        { label: "GATE", y: "50%", color: "text-amber-500/70" },
-        { label: "FIX", y: "58%", color: "text-orange-500/70" },
-        { label: "BUILD", y: "65%", color: "text-emerald-500/60" },
-        { label: "EVAL", y: "72%", color: "text-cyan-500/70" },
-        { label: "SHIP", y: "81%", color: "text-emerald-500/70" },
+        { label: "INPUT", y: "3%", color: "text-slate-500" },
+        { label: "ENRICH", y: "10%", color: "text-slate-500" },
+        { label: "COUNCIL", y: "19%", color: "text-slate-500" },
+        { label: "DEBATE", y: "28%", color: "text-slate-500" },
+        { label: "SCORING", y: "37%", color: "text-slate-500" },
+        { label: "VERDICT", y: "46%", color: "text-blue-500/70" },
+        { label: "GATE", y: "52%", color: "text-amber-500/70" },
+        { label: "FIX", y: "59%", color: "text-orange-500/70" },
+        { label: "BUILD", y: "67%", color: "text-emerald-500/60" },
+        { label: "EVAL", y: "75%", color: "text-cyan-500/70" },
+        { label: "SHIP", y: "85%", color: "text-emerald-500/70" },
       ]
     : [
         { label: "INPUT", y: "7%", color: "text-slate-500" },
@@ -282,12 +282,12 @@ export function PipelineViz({ activeNodes = {}, pipeline = "evaluation", classNa
       ];
 
   const phaseDividers = pipeline === "evaluation"
-    ? [5, 12, 21, 30, 38.5, 47, 55, 63, 70, 78]
+    ? [7.5, 15.5, 24.5, 33.5, 42.5, 50, 56.5, 64, 72, 81]
     : [28, 67];
 
   return (
     <Card className={cn(
-      "relative w-full h-[660px] overflow-hidden border-border/50 bg-card/50 backdrop-blur-sm",
+      "relative w-full h-[900px] overflow-hidden border-border/50 bg-card/50 backdrop-blur-sm",
       "bg-[radial-gradient(ellipse_at_top,rgba(59,130,246,0.06),transparent_60%)]",
       className,
     )}>
@@ -310,7 +310,7 @@ export function PipelineViz({ activeNodes = {}, pipeline = "evaluation", classNa
         ))}
       </svg>
 
-      <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 -2 100 88" preserveAspectRatio="xMidYMid meet">
+      <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 92" preserveAspectRatio="xMidYMid meet">
         <title>Pipeline Flow</title>
         <defs>
           <style>{SVG_STYLES}</style>
