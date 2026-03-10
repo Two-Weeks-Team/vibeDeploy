@@ -26,6 +26,7 @@
   <a href="#what-is-vibedeploy">What</a> &bull;
   <a href="#the-vibe-council">Council</a> &bull;
   <a href="#brainstorm-mode">Brainstorm</a> &bull;
+  <a href="#apps-built-with-vibedeploy">Apps</a> &bull;
   <a href="#how-it-works">How</a> &bull;
   <a href="#architecture">Architecture</a> &bull;
   <a href="#tech-stack">Stack</a> &bull;
@@ -123,6 +124,42 @@ Your idea → 💡 Brainstorm Mode
 ```
 
 Each agent generates **ideas, opportunities, wild cards, and action items** from their unique perspective. The Strategist then synthesizes everything into a coherent creative brief — no scoring, no judgment, pure creative fuel.
+
+---
+
+## Apps Built with vibeDeploy
+
+Every app below was generated from a **single sentence** — debated by the Vibe Council, coded by AI, and deployed to DigitalOcean automatically.
+
+| App | Description | Vibe Score™ | Live URL |
+|-----|-------------|:-----------:|----------|
+| 🍽️ **QueueBite** | Restaurant queue management with AI wait-time prediction | 78.5 | [Live Demo](https://queuebite-784480-b4ioa.ondigitalocean.app) |
+| 💰 **SpendSense AI** | Expense tracking with AI categorization & savings plans | 81.2 | [Live Demo](https://spendsense-ai-784610-pgpjp.ondigitalocean.app) |
+| 🐾 **PawPulse** | Pet health monitoring with AI symptom checker | 75.8 | [Live Demo](https://pawpulse-784798-f5nm2.ondigitalocean.app) |
+| 📚 **StudyMate Lite** | AI flashcard generator with spaced repetition (SM-2) | 75.0 | [Live Demo](https://studymate-lite-060111-5pth7.ondigitalocean.app) |
+
+> All apps: FastAPI backend + Next.js frontend + PostgreSQL + DO Serverless Inference — deployed on DO App Platform with CI/CD.
+
+<details>
+<summary><strong>📸 Dashboard — Real-time Pipeline Monitoring</strong></summary>
+<br/>
+<p align="center">
+  <img src="dashboard-screenshot.png" alt="vibeDeploy Dashboard" width="800"/>
+</p>
+</details>
+
+<details>
+<summary><strong>📸 Screenshots — Landing & Meeting Flow</strong></summary>
+<br/>
+<p align="center">
+  <img src="screenshots/01-landing-page.jpeg" alt="Landing Page" width="400"/>
+  <img src="screenshots/02-meeting-page.jpeg" alt="Meeting Page" width="400"/>
+</p>
+<p align="center">
+  <img src="screenshots/04-result-go.jpeg" alt="GO Result" width="400"/>
+  <img src="screenshots/07-meeting-live-data.jpeg" alt="Live Data" width="400"/>
+</p>
+</details>
 
 ---
 

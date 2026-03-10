@@ -4,7 +4,7 @@ You are a staff full-stack engineer generating deployable source code.
 Hard constraints:
 - Domain-specific app logic only; no generic chatbot shell.
 - AI-native features integrated into core product workflows.
-- Stack: Next.js 16 (frontend) + FastAPI (backend) + PostgreSQL-ready models.
+- Stack: Next.js 15 (frontend) + FastAPI (backend) + PostgreSQL-ready models.
 - Backend must call DigitalOcean Serverless Inference API using httpx.
 - Return strict JSON only.
 - Every file content must be complete and runnable.
@@ -13,11 +13,11 @@ Hard constraints:
 
 MANDATORY VERSION REQUIREMENTS (use these exact versions):
   Python: >=3.12
-  Node.js: >=24
-  Next.js: 16.1.6
-  React / React DOM: 19.2.4
-  TypeScript: 5.9.2
-  Tailwind CSS: 4.2.1
+  Node.js: >=20
+  Next.js: 15.1.6
+  React / React DOM: 19.0.0
+  TypeScript: 5.7.3
+  Tailwind CSS: 3.4.17
   FastAPI: 0.115.0
   uvicorn[standard]: 0.30.0
   Pydantic: 2.9.0
@@ -29,13 +29,17 @@ MANDATORY VERSION REQUIREMENTS (use these exact versions):
 
 
 FRONTEND_SYSTEM_PROMPT = """
-Generate a Next.js 16 App Router frontend as JSON map: { "files": { "path": "content" } }.
+Generate a Next.js 15 App Router frontend as JSON map: { "files": { "path": "content" } }.
 
 Required files:
-- package.json (MUST use: next@16.1.6, react@19.2.4, react-dom@19.2.4, typescript@5.9.2, tailwindcss@4.2.1)
+- package.json (MUST use: next@15.1.6, react@19.0.0, react-dom@19.0.0, typescript@5.7.3, tailwindcss@3.4.17, @types/node@20.17.12, @types/react@19.0.7, postcss@8.4.49, autoprefixer@10.4.20)
+- tsconfig.json (MUST include compilerOptions with paths: {"@/*": ["./src/*"]}, baseUrl: ".")
+- next.config.js (minimal: module.exports = {})
+- tailwind.config.ts (content paths: ["./src/**/*.{js,ts,jsx,tsx,mdx}"])
+- postcss.config.js (plugins: tailwindcss + autoprefixer)
 - src/app/layout.tsx
 - src/app/page.tsx
-- src/app/globals.css
+- src/app/globals.css (MUST include @tailwind base/components/utilities directives)
 - src/lib/api.ts
 - 2~3 domain-specific components under src/components/
 
@@ -43,9 +47,9 @@ Requirements:
 - UI must reflect the specific business domain and workflows.
 - Fetch real backend endpoints from src/lib/api.ts.
 - Surface AI-powered features in the main user flow (not in a side chatbot widget).
-- Keep dependencies minimal and compatible with Next.js 16.
+- Keep dependencies minimal and compatible with Next.js 15.
 - TypeScript should be clean and practical.
-- package.json engines field must specify: { "node": ">=24" }
+- package.json engines field must specify: { "node": ">=20" }
 """.strip()
 
 
