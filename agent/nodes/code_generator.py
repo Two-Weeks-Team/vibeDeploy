@@ -285,6 +285,7 @@ def _normalize_backend_files(files: dict[str, str]) -> dict[str, str]:
     normalized = dict(files)
     normalized = _normalize_backend_api_routes(normalized)
     normalized = _normalize_backend_ai_fallbacks(normalized)
+    normalized = _normalize_backend_async_ai_calls(normalized)
     return normalized
 
 
@@ -684,6 +685,41 @@ def _normalize_backend_ai_fallbacks(files: dict[str, str]) -> dict[str, str]:
                 else:
                     updated = f"{helper}\n\n{updated}"
         normalized[path] = updated
+    return normalized
+
+
+def _normalize_backend_async_ai_calls(files: dict[str, str]) -> dict[str, str]:
+    normalized = dict(files)
+    ai_service = normalized.get("ai_service.py", "")
+    async_helpers = set(re.findall(r"async def (\w+)\(", ai_service))
+    if not async_helpers:
+        return normalized
+
+    for path, content in list(normalized.items()):
+        if not path.endswith(".py") or path == "ai_service.py":
+            continue
+
+        updated = content
+        for helper in async_helpers:
+            updated = re.sub(rf"(?<!await\s)(=\s*){helper}\(", rf"\1await {helper}(", updated)
+            updated = re.sub(rf"(?<!await\s)(return\s+){helper}\(", rf"\1await {helper}(", updated)
+
+        function_pattern = re.compile(
+            r"(?P<header>^def\s+\w+\([^)]*\):\n)(?P<body>(?:^[ \t]+.*\n?)*)",
+            flags=re.MULTILINE,
+        )
+
+        def repl(match: re.Match[str]) -> str:
+            header = match.group("header")
+            body = match.group("body")
+            block = f"{header}{body}"
+            if "await " not in block:
+                return block
+            return block.replace("def ", "async def ", 1)
+
+        updated = function_pattern.sub(repl, updated)
+        normalized[path] = updated
+
     return normalized
 
 

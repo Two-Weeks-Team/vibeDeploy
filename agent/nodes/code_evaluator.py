@@ -33,6 +33,9 @@ _EXPERIENCE_STOPWORDS = {
 MAX_CODE_EVAL_ITERATIONS = 3
 MAX_EMPTY_FRONTEND_RETRIES = 5
 PASS_THRESHOLD = 80
+MIN_CONSISTENCY_TO_PASS = 75
+MIN_RUNNABILITY_TO_PASS = 85
+MIN_EXPERIENCE_TO_PASS = 70
 
 
 async def code_evaluator(state: VibeDeployState) -> dict:
@@ -65,7 +68,12 @@ async def code_evaluator(state: VibeDeployState) -> dict:
         "runnability": round(runnability, 1),
         "experience": round(experience, 1),
         "iteration": iteration,
-        "passed": match_rate >= PASS_THRESHOLD,
+        "passed": (
+            match_rate >= PASS_THRESHOLD
+            and consistency >= MIN_CONSISTENCY_TO_PASS
+            and runnability >= MIN_RUNNABILITY_TO_PASS
+            and experience >= MIN_EXPERIENCE_TO_PASS
+        ),
         "missing_frontend": missing_fe,
         "missing_backend": missing_be,
     }
@@ -202,7 +210,7 @@ def _check_runnability(frontend_code: dict | None, backend_code: dict | None) ->
     total = 0
 
     if backend_code:
-        total += 5
+        total += 6
         if "requirements.txt" in backend_code:
             score += 1
         if "main.py" in backend_code:
@@ -218,6 +226,8 @@ def _check_runnability(frontend_code: dict | None, backend_code: dict | None) ->
             score += 0.5
         if any("import" in (backend_code.get(f, "") or "") for f in backend_code if f.endswith(".py")):
             score += 0.5
+        if not _has_unawaited_async_helper_calls(backend_code):
+            score += 1.0
 
     if frontend_code:
         total += 5
@@ -251,7 +261,10 @@ def _check_runnability(frontend_code: dict | None, backend_code: dict | None) ->
         if has_use_client or not needs_use_client:
             score += 0.5
 
-    return (score / max(total, 1)) * 100
+    runnability = (score / max(total, 1)) * 100
+    if backend_code and _has_unawaited_async_helper_calls(backend_code):
+        runnability = max(0.0, runnability - 15.0)
+    return runnability
 
 
 def _check_experience(frontend_code: dict | None, blueprint: dict | None) -> float:
@@ -343,6 +356,9 @@ def _build_fix_instructions(eval_result: dict, blueprint: dict | None = None) ->
             "backend has requirements.txt + main.py (with FastAPI + uvicorn) + routes.py + ai_service.py; "
             "frontend has package.json (with next) + layout.tsx + page.tsx + globals.css + api.ts; "
             'interactive .tsx files must start with "use client".'
+        )
+        issues.append(
+            "If routes.py calls async helpers from ai_service.py, route handlers must be async and use await."
         )
     if eval_result.get("experience", 100) < 75:
         issues.append(
@@ -665,6 +681,26 @@ def _phrase_present(phrase: str, haystack: str) -> bool:
 
     hits = sum(1 for token in tokens if token in haystack)
     return hits >= 1 if len(tokens) <= 2 else hits >= 2
+
+
+def _has_unawaited_async_helper_calls(backend_code: dict[str, str]) -> bool:
+    ai_service = backend_code.get("ai_service.py", "")
+    if not ai_service:
+        return False
+
+    async_helpers = set(re.findall(r"async def (\w+)\(", ai_service))
+    if not async_helpers:
+        return False
+
+    for path, content in backend_code.items():
+        if not path.endswith(".py") or path == "ai_service.py":
+            continue
+        for helper in async_helpers:
+            if re.search(rf"(?<!await\s)(=\s*){helper}\(", content):
+                return True
+            if re.search(rf"(?<!await\s)(return\s+){helper}\(", content):
+                return True
+    return False
 
 
 def route_code_eval(state: VibeDeployState) -> str:

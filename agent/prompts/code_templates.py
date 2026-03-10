@@ -67,6 +67,7 @@ Experience and design requirements:
 - Layout must work on mobile and desktop. Avoid desktop-only compositions or cramped mobile stacks.
 - A single centered form with one result card is unacceptable unless the product is literally a one-step utility.
 - If the idea mentions saving, favorites, history, library, dashboard, analytics, workspace, or management, the first screen MUST include those surfaces or credible empty states.
+- If the product includes a saved collection, library, favorites, or history, wire a REAL create/save flow to backend endpoints from the first screen. Do not fake saved data or hardcode tags/results as placeholders.
 - Compose the page from at least three domain components: hero/header, primary workspace, and secondary insight/history/library surface.
 - Treat any blueprint `experience_contract`, `must_have_surfaces`, `proof_points`, and `experience_non_negotiables` as hard requirements, not inspiration.
 - Use charts, tables, or analytics cards only if the domain truly requires them.
@@ -99,6 +100,7 @@ Required files:
 CRITICAL RULES:
 - All Python files are in the project ROOT (flat structure, NOT a package). NEVER use relative imports like "from .models import X". Always use absolute: "from models import X".
 - Define business routes directly on `@router.get(...)` / `@router.post(...)` without `APIRouter(prefix="/api")`. DigitalOcean ingress can strip `/api`, so the backend should remain reachable with or without that prefix.
+- If a route handler calls an async helper from `ai_service.py`, the route itself MUST be `async def` and MUST use `await`. Never return coroutine objects or call async helpers from plain `def` handlers.
 - Use SYNCHRONOUS SQLAlchemy only (create_engine, sessionmaker, Session). NEVER use create_async_engine or AsyncSession — asyncpg is NOT installed.
 - models.py must handle DATABASE_URL env var with URL scheme auto-fix:
   * Read from os.getenv("DATABASE_URL", os.getenv("POSTGRES_URL", "sqlite:///./app.db"))

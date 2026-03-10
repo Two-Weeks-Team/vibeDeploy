@@ -96,6 +96,33 @@ def test_check_runnability_accepts_server_component_with_direct_fetch():
     assert _check_runnability(frontend_code, backend_code) >= 80.0
 
 
+def test_check_runnability_penalizes_unawaited_async_ai_helpers():
+    frontend_code = {
+        "package.json": '{"dependencies":{"next":"15.0.0"}}',
+        "src/app/layout.tsx": "export default function Layout({ children }) { return <html><body>{children}</body></html>; }",
+        "src/app/page.tsx": "export default async function Page() { return <main>Hello</main>; }",
+        "src/app/globals.css": "body { margin: 0; }",
+    }
+    backend_code = {
+        "requirements.txt": "fastapi\nuvicorn\n",
+        "main.py": (
+            "from fastapi import FastAPI\n"
+            "app = FastAPI()\n"
+            "if __name__ == '__main__':\n"
+            "    import uvicorn\n"
+        ),
+        "routes.py": (
+            "from ai_service import summarize_text\n"
+            "def create_bookmark(payload):\n"
+            "    result = summarize_text(url=payload.url)\n"
+            "    return result\n"
+        ),
+        "ai_service.py": "async def summarize_text(url=None, text=None):\n    return {}\n",
+    }
+
+    assert _check_runnability(frontend_code, backend_code) < 85.0
+
+
 def test_check_consistency_penalizes_misaligned_endpoint_names():
     blueprint = {
         "frontend_backend_contract": [

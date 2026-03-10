@@ -177,3 +177,23 @@ def test_normalize_backend_files_coerces_plain_text_ai_responses():
 
     assert "_coerce_unstructured_payload" in normalized["ai_service.py"]
     assert "return _coerce_unstructured_payload(raw_json)" in normalized["ai_service.py"]
+
+
+def test_normalize_backend_files_awaits_async_ai_helpers_in_routes():
+    files = {
+        "ai_service.py": (
+            "async def summarize_text(url=None, text=None):\n"
+            "    return {'summary': {'short': 'ok', 'long': 'ok'}}\n"
+        ),
+        "routes.py": (
+            "from ai_service import summarize_text\n\n"
+            "def create_bookmark(payload):\n"
+            "    result = summarize_text(url=payload.url)\n"
+            "    return result\n"
+        ),
+    }
+
+    normalized = _normalize_backend_files(files)
+
+    assert "async def create_bookmark" in normalized["routes.py"]
+    assert "result = await summarize_text" in normalized["routes.py"]
