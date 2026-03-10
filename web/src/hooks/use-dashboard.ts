@@ -87,23 +87,32 @@ export function useDashboard() {
   const [brainstorms, setBrainstorms] = useState<BrainstormResultFull[]>([]);
   const [deployments, setDeployments] = useState<DeployedApp[]>([]);
   const [loading, setLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState<number | null>(null);
 
   const refresh = useCallback(async () => {
-    const health = await checkHealth();
-    setHealthy(health);
-    if (!health) return;
+    try {
+      const health = await checkHealth();
+      setHealthy(health);
 
-    const [s, r, b, d] = await Promise.all([
-      getDashboardStats(),
-      getDashboardResults(),
-      getDashboardBrainstorms(),
-      getDashboardDeployments(),
-    ]);
-    setStats(s);
-    setResults(r as unknown as MeetingResultFull[]);
-    setBrainstorms(b as unknown as BrainstormResultFull[]);
-    setDeployments(d);
-    setLoading(false);
+      if (!health) {
+        setLoading(false);
+        return;
+      }
+
+      const [s, r, b, d] = await Promise.all([
+        getDashboardStats(),
+        getDashboardResults(),
+        getDashboardBrainstorms(),
+        getDashboardDeployments(),
+      ]);
+      setStats(s);
+      setResults(r as unknown as MeetingResultFull[]);
+      setBrainstorms(b as unknown as BrainstormResultFull[]);
+      setDeployments(d);
+      setLastUpdated(Date.now());
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -122,6 +131,7 @@ export function useDashboard() {
     brainstorms,
     deployments,
     loading,
+    lastUpdated,
     refresh,
     scoreDistribution: computeScoreDistribution(results),
     verdictBreakdown: computeVerdictBreakdown(results),

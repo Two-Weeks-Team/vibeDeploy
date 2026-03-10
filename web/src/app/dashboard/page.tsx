@@ -1,13 +1,13 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Activity, Target, Brain, CheckCircle, XCircle, Zap, TrendingUp } from "lucide-react";
+import { ArrowLeft, Activity, Target, Brain, CheckCircle, XCircle, Zap, TrendingUp, RadioTower, RefreshCw } from "lucide-react";
 import { useDashboard } from "@/hooks/use-dashboard";
 import { usePipelineMonitor } from "@/hooks/use-pipeline-monitor";
 import { PipelineViz } from "@/components/dashboard/pipeline-viz";
@@ -15,7 +15,6 @@ import { DashboardCharts } from "@/components/dashboard/dashboard-charts";
 import { HistoryList } from "@/components/dashboard/history-list";
 import { LiveMonitor } from "@/components/dashboard/live-monitor";
 import { DeployedApps } from "@/components/dashboard/deployed-apps";
-import { PieChart, Pie, ResponsiveContainer, Tooltip } from "recharts";
 import type { VerdictType, MeetingResultFull, BrainstormResultFull } from "@/types/dashboard";
 
 const containerVariants = {
@@ -35,6 +34,7 @@ const VERDICT_COLORS = {
 };
 
 export default function DashboardPage() {
+  const [activeTab, setActiveTab] = useState("overview");
   const {
     healthy,
     stats,
@@ -42,6 +42,7 @@ export default function DashboardPage() {
     brainstorms,
     deployments,
     loading,
+    lastUpdated,
     scoreDistribution,
     verdictBreakdown,
     agentPerformance,
@@ -68,6 +69,8 @@ export default function DashboardPage() {
     value,
     fill: VERDICT_COLORS[name as VerdictType],
   }));
+  const totalVerdicts = verdictData.reduce((sum, entry) => sum + entry.value, 0);
+  const tabTriggerClass = "h-10 flex-none basis-[calc(50%-0.25rem)] sm:basis-[calc(33.333%-0.375rem)] lg:basis-0";
 
   if (loading) {
     return (
@@ -115,18 +118,38 @@ export default function DashboardPage() {
               </p>
             </div>
           </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="outline" className="border-border/50 bg-background/40 text-foreground">
+              <RadioTower className="mr-1 h-3 w-3" />
+              Stream {connected ? "connected" : "reconnecting"}
+            </Badge>
+            <Badge variant="outline" className="border-border/50 bg-background/40 text-foreground">
+              <Activity className="mr-1 h-3 w-3" />
+              {activePipelines.length} active
+            </Badge>
+            <Badge variant="outline" className="border-border/50 bg-background/40 text-foreground">
+              <RefreshCw className="mr-1 h-3 w-3" />
+              {lastUpdated
+                ? `Updated ${new Date(lastUpdated).toLocaleTimeString("en-US", {
+                    hour: "numeric",
+                    minute: "2-digit",
+                    second: "2-digit",
+                  })}`
+                : "Waiting for sync"}
+            </Badge>
+          </div>
         </header>
 
-        <Tabs defaultValue="overview" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 lg:grid-cols-5 mb-8">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="live">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="mb-8 h-auto w-full flex-wrap justify-start gap-2 p-1">
+            <TabsTrigger value="overview" className={tabTriggerClass}>Overview</TabsTrigger>
+            <TabsTrigger value="live" className={tabTriggerClass}>
               Live Monitor
               {activePipelines.length > 0 && (
                 <span className="ml-2 flex h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
               )}
             </TabsTrigger>
-            <TabsTrigger value="deployed">
+            <TabsTrigger value="deployed" className={tabTriggerClass}>
               Deployed Apps
               {deployments.length > 0 && (
                 <Badge variant="secondary" className="ml-2 bg-primary/20 text-primary hover:bg-primary/30">
@@ -134,8 +157,8 @@ export default function DashboardPage() {
                 </Badge>
               )}
             </TabsTrigger>
-            <TabsTrigger value="history">History</TabsTrigger>
-            <TabsTrigger value="analytics">Analytics</TabsTrigger>
+            <TabsTrigger value="history" className={tabTriggerClass}>History</TabsTrigger>
+            <TabsTrigger value="analytics" className={tabTriggerClass}>Analytics</TabsTrigger>
           </TabsList>
 
             <TabsContent value="overview" className="space-y-6 outline-none">
@@ -215,7 +238,20 @@ export default function DashboardPage() {
               </motion.div>
 
               <motion.div variants={fadeUp} initial="hidden" animate="visible">
-                <h2 className="text-lg font-semibold mb-4">Architecture Overview</h2>
+                <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                  <div>
+                    <h2 className="text-lg font-semibold">Architecture Overview</h2>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      One prompt fans into the council, routes through repair or GO, then runs all the way through code, CI, and live deployment.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Badge variant="outline" className="border-blue-500/20 bg-blue-500/10 text-blue-200">Council</Badge>
+                    <Badge variant="outline" className="border-orange-500/20 bg-orange-500/10 text-orange-200">Repair loop</Badge>
+                    <Badge variant="outline" className="border-emerald-500/20 bg-emerald-500/10 text-emerald-200">GO route</Badge>
+                    <Badge variant="outline" className="border-cyan-500/20 bg-cyan-500/10 text-cyan-200">Ship chain</Badge>
+                  </div>
+                </div>
                 <PipelineViz pipeline="evaluation" />
               </motion.div>
 
@@ -276,36 +312,25 @@ export default function DashboardPage() {
                 <motion.div variants={fadeUp} initial="hidden" animate="visible" className="lg:col-span-1">
                   <Card className="border-border/50 bg-card/50 backdrop-blur-sm h-full">
                     <CardHeader>
-                      <CardTitle className="text-lg">Verdict Breakdown</CardTitle>
+                      <div className="flex items-center justify-between gap-3">
+                        <CardTitle className="text-lg">Verdict Breakdown</CardTitle>
+                        <Badge variant="outline" className="border-emerald-500/20 bg-emerald-500/10 text-emerald-200">
+                          {totalVerdicts} total
+                        </Badge>
+                      </div>
                     </CardHeader>
-                    <CardContent className="h-[300px] relative">
+                    <CardContent className="relative">
                       {verdictData.every((d) => d.value === 0) ? (
-                        <div className="h-full flex items-center justify-center text-muted-foreground">No data yet</div>
+                        <div className="flex h-[220px] items-center justify-center text-muted-foreground">No data yet</div>
                       ) : (
-                        <>
-                          <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                              <Pie
-                                data={verdictData}
-                                cx="50%"
-                                cy="50%"
-                                innerRadius={60}
-                                outerRadius={90}
-                                paddingAngle={2}
-                                dataKey="value"
-                                stroke="none"
-                              />
-                              <Tooltip
-                                contentStyle={{ backgroundColor: "hsl(var(--card))", borderColor: "hsl(var(--border))" }}
-                                itemStyle={{ color: "hsl(var(--foreground))" }}
-                              />
-                            </PieChart>
-                          </ResponsiveContainer>
-                          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                            <span className="text-2xl font-bold">{stats.total_meetings}</span>
-                            <span className="text-xs text-muted-foreground">Total</span>
-                          </div>
-                        </>
+                        <DashboardCharts
+                          scoreDistribution={scoreDistribution}
+                          verdictBreakdown={verdictBreakdown}
+                          scoreTrend={scoreTrend}
+                          agentPerformance={agentPerformance}
+                          singleChart="verdict"
+                          active={activeTab === "overview"}
+                        />
                       )}
                     </CardContent>
                   </Card>
@@ -314,37 +339,46 @@ export default function DashboardPage() {
             </TabsContent>
 
             <TabsContent value="live" className="outline-none">
-              <motion.div variants={fadeUp} initial="hidden" animate="visible">
-                <LiveMonitor
-                  activePipelines={activePipelines}
-                  events={events}
-                  nodeStatuses={nodeStatuses}
-                  connected={connected}
-                />
-              </motion.div>
+              {activeTab === "live" && (
+                <motion.div variants={fadeUp} initial="hidden" animate="visible">
+                  <LiveMonitor
+                    activePipelines={activePipelines}
+                    events={events}
+                    nodeStatuses={nodeStatuses}
+                    connected={connected}
+                  />
+                </motion.div>
+              )}
             </TabsContent>
 
             <TabsContent value="deployed" className="outline-none">
-              <motion.div variants={fadeUp} initial="hidden" animate="visible">
-                <DeployedApps deployments={deployments} />
-              </motion.div>
+              {activeTab === "deployed" && (
+                <motion.div variants={fadeUp} initial="hidden" animate="visible">
+                  <DeployedApps deployments={deployments} />
+                </motion.div>
+              )}
             </TabsContent>
 
             <TabsContent value="history" className="outline-none">
-              <motion.div variants={fadeUp} initial="hidden" animate="visible">
-                <HistoryList results={results} brainstorms={brainstorms} />
-              </motion.div>
+              {activeTab === "history" && (
+                <motion.div variants={fadeUp} initial="hidden" animate="visible">
+                  <HistoryList results={results} brainstorms={brainstorms} />
+                </motion.div>
+              )}
             </TabsContent>
 
             <TabsContent value="analytics" className="outline-none">
-              <motion.div variants={fadeUp} initial="hidden" animate="visible">
-                <DashboardCharts
-                  scoreDistribution={scoreDistribution}
-                  verdictBreakdown={verdictBreakdown}
-                  scoreTrend={scoreTrend}
-                  agentPerformance={agentPerformance}
-                />
-              </motion.div>
+              {activeTab === "analytics" && (
+                <motion.div variants={fadeUp} initial="hidden" animate="visible">
+                  <DashboardCharts
+                    scoreDistribution={scoreDistribution}
+                    verdictBreakdown={verdictBreakdown}
+                    scoreTrend={scoreTrend}
+                    agentPerformance={agentPerformance}
+                    active={activeTab === "analytics"}
+                  />
+                </motion.div>
+              )}
             </TabsContent>
         </Tabs>
       </div>

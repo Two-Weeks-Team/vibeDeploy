@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { CheckCircle, XCircle, Clock, Activity } from "lucide-react";
 
@@ -13,16 +14,6 @@ interface PipelineVizProps {
   pipeline?: PipelineType;
   className?: string;
 }
-
-const containerVariants = {
-  hidden: {},
-  visible: { transition: { staggerChildren: 0.06 } },
-};
-
-const fadeUp = {
-  hidden: { opacity: 0, y: 16 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.35, ease: "easeOut" as const } },
-};
 
 interface NodeDef {
   id: string;
@@ -36,9 +27,33 @@ interface NodeDef {
 interface EdgeDef {
   source: string;
   target: string;
-  label?: string;
-  labelColor?: string;
 }
+
+interface PhaseLabel {
+  label: string;
+  y: number;
+  color: string;
+}
+
+interface CalloutDef {
+  label: string;
+  x: number;
+  y: number;
+  className: string;
+}
+
+const SVG_WIDTH = 100;
+const SVG_HEIGHT = 92;
+
+const containerVariants = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.06 } },
+};
+
+const fadeUp = {
+  hidden: { opacity: 0, y: 16 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.35, ease: "easeOut" as const } },
+};
 
 const evalNodes: NodeDef[] = [
   { id: "input", label: "Input", x: 50, y: 4, emoji: "📝" },
@@ -54,7 +69,7 @@ const evalNodes: NodeDef[] = [
   { id: "score_innovation", label: "Innovation", x: 50, y: 38, emoji: "📊" },
   { id: "score_risk", label: "Risk", x: 70, y: 38, emoji: "📊" },
   { id: "score_user", label: "User", x: 90, y: 38, emoji: "📊" },
-  { id: "verdict", label: "Vibe Score™", x: 50, y: 47, emoji: "🏛️", glow: true },
+  { id: "verdict", label: "Vibe Score", x: 50, y: 47, emoji: "🏛️", glow: true },
   { id: "decision", label: "Decision Gate", x: 50, y: 53, emoji: "🚦" },
   { id: "fix_storm", label: "Fix-Storm", x: 30, y: 60, emoji: "🔧" },
   { id: "scope_down", label: "Scope-Down", x: 70, y: 60, emoji: "📐" },
@@ -93,7 +108,7 @@ const evalEdges: EdgeDef[] = [
   { source: "score_risk", target: "verdict" },
   { source: "score_user", target: "verdict" },
   { source: "verdict", target: "decision" },
-  { source: "decision", target: "doc_gen", label: "GO", labelColor: "rgba(16,185,129,0.9)" },
+  { source: "decision", target: "doc_gen" },
   { source: "decision", target: "fix_storm" },
   { source: "decision", target: "scope_down" },
   { source: "fix_storm", target: "architect" },
@@ -101,7 +116,7 @@ const evalEdges: EdgeDef[] = [
   { source: "doc_gen", target: "blueprint" },
   { source: "blueprint", target: "code_gen" },
   { source: "code_gen", target: "code_eval" },
-  { source: "code_eval", target: "git_push", label: "PASS", labelColor: "rgba(16,185,129,0.9)" },
+  { source: "code_eval", target: "git_push" },
   { source: "code_eval", target: "code_gen" },
   { source: "git_push", target: "ci_test" },
   { source: "ci_test", target: "app_spec" },
@@ -133,9 +148,47 @@ const brainstormEdges: EdgeDef[] = [
   { source: "advocate", target: "synthesize" },
 ];
 
+const evalPhaseLabels: PhaseLabel[] = [
+  { label: "INPUT", y: 3, color: "text-slate-500" },
+  { label: "ENRICH", y: 10, color: "text-slate-500" },
+  { label: "COUNCIL", y: 19, color: "text-slate-500" },
+  { label: "DEBATE", y: 28, color: "text-slate-500" },
+  { label: "SCORING", y: 37, color: "text-slate-500" },
+  { label: "VERDICT", y: 46, color: "text-blue-400/80" },
+  { label: "GATE", y: 52, color: "text-amber-400/80" },
+  { label: "FIX", y: 59, color: "text-orange-400/80" },
+  { label: "BUILD", y: 67, color: "text-emerald-400/80" },
+  { label: "EVAL", y: 75, color: "text-cyan-400/80" },
+  { label: "SHIP", y: 86, color: "text-emerald-300/90" },
+];
+
+const brainstormPhaseLabels: PhaseLabel[] = [
+  { label: "INPUT", y: 10, color: "text-slate-500" },
+  { label: "IDEATE", y: 45, color: "text-slate-500" },
+  { label: "SYNTH", y: 85, color: "text-purple-400/80" },
+];
+
+const evalCallouts: CalloutDef[] = [
+  { label: "Repair loop", x: 12, y: 61.5, className: "border-orange-500/30 bg-orange-500/12 text-orange-200" },
+  { label: "GO route", x: 12, y: 70, className: "border-emerald-500/30 bg-emerald-500/12 text-emerald-200" },
+  { label: "Ship chain", x: 79, y: 88.5, className: "border-cyan-500/30 bg-cyan-500/12 text-cyan-200" },
+];
+
+const brainstormCallouts: CalloutDef[] = [
+  { label: "Five-agent fan-out", x: 14, y: 28, className: "border-slate-500/30 bg-slate-500/10 text-slate-200" },
+  { label: "Synthesis lane", x: 74, y: 85, className: "border-purple-500/30 bg-purple-500/12 text-purple-200" },
+];
+
 const GO_NODES = new Set(["doc_gen", "blueprint", "code_gen", "code_eval", "git_push", "ci_test", "app_spec", "do_build", "do_deploy", "verified"]);
 const CONDITIONAL_NODES = new Set(["fix_storm", "scope_down"]);
 const BOTTOM_NODES = new Set([...GO_NODES, ...CONDITIONAL_NODES]);
+
+const EDGE_COLORS: Record<NodeStatus, string> = {
+  idle: "rgba(148,163,184,0.35)",
+  active: "rgba(59,130,246,0.82)",
+  complete: "rgba(16,185,129,0.65)",
+  error: "rgba(239,68,68,0.65)",
+};
 
 const PARTICLE_DUR = "12s";
 const EASE = "0.25 0.1 0.25 1";
@@ -143,24 +196,55 @@ const EASE = "0.25 0.1 0.25 1";
 const EVAL_KT = "0;0.04;0.08;0.13;0.21;0.28;0.34;0.42;0.48;0.53;0.58;0.63;0.68;0.74;0.79;0.84;0.88;0.92;0.96;1";
 const EVAL_CY = "4;11;20;20;29;38;38;47;53;68;68;68;76;86;86;86;86;86;86;86";
 const EVAL_CX: number[][] = [
-  [50,50,10,10,50,10,10,50,50,20,50,80,50,8,24,40,56,72,88,88],
-  [50,50,30,30,50,30,30,50,50,20,50,80,50,8,24,40,56,72,88,88],
-  [50,50,50,50,50,50,50,50,50,20,50,80,50,8,24,40,56,72,88,88],
-  [50,50,70,70,50,70,70,50,50,20,50,80,50,8,24,40,56,72,88,88],
-  [50,50,90,90,50,90,90,50,50,20,50,80,50,8,24,40,56,72,88,88],
+  [50, 50, 10, 10, 50, 10, 10, 50, 50, 20, 50, 80, 50, 8, 24, 40, 56, 72, 88, 88],
+  [50, 50, 30, 30, 50, 30, 30, 50, 50, 20, 50, 80, 50, 8, 24, 40, 56, 72, 88, 88],
+  [50, 50, 50, 50, 50, 50, 50, 50, 50, 20, 50, 80, 50, 8, 24, 40, 56, 72, 88, 88],
+  [50, 50, 70, 70, 50, 70, 70, 50, 50, 20, 50, 80, 50, 8, 24, 40, 56, 72, 88, 88],
+  [50, 50, 90, 90, 50, 90, 90, 50, 50, 20, 50, 80, 50, 8, 24, 40, 56, 72, 88, 88],
 ];
 const EVAL_KS = Array(19).fill(EASE).join("; ");
 
 const BS_KT = "0;0.30;0.45;1";
 const BS_CY = "10;45;45;85";
 const BS_CX: number[][] = [
-  [50,10,10,50],
-  [50,30,30,50],
-  [50,50,50,50],
-  [50,70,70,50],
-  [50,90,90,50],
+  [50, 10, 10, 50],
+  [50, 30, 30, 50],
+  [50, 50, 50, 50],
+  [50, 70, 70, 50],
+  [50, 90, 90, 50],
 ];
 const BS_KS = Array(3).fill(EASE).join("; ");
+
+const SVG_STYLES = `
+  @keyframes edgeFlow {
+    to { stroke-dashoffset: -16; }
+  }
+  @keyframes edgeFlowFast {
+    to { stroke-dashoffset: -16; }
+  }
+  @keyframes glowPulse {
+    0%, 100% { opacity: 0.12; }
+    50% { opacity: 0.45; }
+  }
+  .edge-idle {
+    stroke-dasharray: 5 3;
+    animation: edgeFlow 2.5s linear infinite;
+  }
+  .edge-active {
+    stroke-dasharray: 8 3;
+    animation: edgeFlowFast 0.6s linear infinite;
+  }
+  .edge-complete {
+    stroke-dasharray: none;
+  }
+  .glow-ring {
+    animation: glowPulse 3s ease-in-out infinite;
+  }
+`;
+
+function toVerticalPercent(y: number) {
+  return `${(y / SVG_HEIGHT) * 100}%`;
+}
 
 function getVisibleNodeIds(
   pipeline: PipelineType,
@@ -181,17 +265,20 @@ function getVisibleNodeIds(
       continue;
     }
 
-    const decisionStatus = activeNodes["decision"] || "idle";
+    const decisionStatus = activeNodes.decision || "idle";
     if (decisionStatus !== "complete") continue;
 
-    const isGo = GO_NODES.has(node.id) && [...GO_NODES].some((n) => activeNodes[n] && activeNodes[n] !== "idle");
-    const isFix = activeNodes["fix_storm"] && activeNodes["fix_storm"] !== "idle";
-    const isScopeDown = activeNodes["scope_down"] && activeNodes["scope_down"] !== "idle";
+    const isGo = GO_NODES.has(node.id) && [...GO_NODES].some((candidate) => activeNodes[candidate] && activeNodes[candidate] !== "idle");
+    const isFix = activeNodes.fix_storm && activeNodes.fix_storm !== "idle";
+    const isScopeDown = activeNodes.scope_down && activeNodes.scope_down !== "idle";
 
     if (isGo && !GO_NODES.has(node.id)) continue;
     if (isFix && node.id !== "fix_storm") continue;
     if (isScopeDown && node.id !== "scope_down" && !GO_NODES.has(node.id)) continue;
-    if (!isGo && !isFix && !isScopeDown) { visible.add(node.id); continue; }
+    if (!isGo && !isFix && !isScopeDown) {
+      visible.add(node.id);
+      continue;
+    }
 
     visible.add(node.id);
   }
@@ -199,265 +286,268 @@ function getVisibleNodeIds(
   return visible;
 }
 
-const EDGE_COLORS: Record<string, string> = {
-  idle: "rgba(148,163,184,0.35)",
-  active: "rgba(59,130,246,0.8)",
-  complete: "rgba(16,185,129,0.6)",
-};
-
-const SVG_STYLES = `
-  @keyframes edgeFlow {
-    to { stroke-dashoffset: -16; }
-  }
-  @keyframes edgeFlowFast {
-    to { stroke-dashoffset: -16; }
-  }
-  .edge-idle {
-    stroke-dasharray: 5 3;
-    animation: edgeFlow 2.5s linear infinite;
-  }
-  .edge-active {
-    stroke-dasharray: 8 3;
-    animation: edgeFlowFast 0.6s linear infinite;
-  }
-  .edge-complete {
-    stroke-dasharray: none;
-  }
-  @keyframes glowPulse {
-    0%, 100% { opacity: 0; }
-    50% { opacity: 0.6; }
-  }
-  .glow-ring {
-    animation: glowPulse 3s ease-in-out infinite;
-  }
-`;
-
 export function PipelineViz({ activeNodes = {}, pipeline = "evaluation", className }: PipelineVizProps) {
   const nodes = pipeline === "evaluation" ? evalNodes : brainstormNodes;
   const edges = pipeline === "evaluation" ? evalEdges : brainstormEdges;
+  const phaseLabels = pipeline === "evaluation" ? evalPhaseLabels : brainstormPhaseLabels;
+  const phaseDividers = pipeline === "evaluation" ? [7.5, 15.5, 24.5, 33.5, 42.5, 50, 56.5, 64, 72, 81] : [28, 67];
+  const callouts = pipeline === "evaluation" ? evalCallouts : brainstormCallouts;
   const getNodeStatus = (id: string): NodeStatus => activeNodes[id] || "idle";
   const visibleNodeIds = getVisibleNodeIds(pipeline, nodes, activeNodes);
   const isOverview = Object.keys(activeNodes).length === 0;
-
-  const visibleEdges = edges.filter(
-    (edge) => visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target),
-  );
+  const visibleEdges = edges.filter((edge) => visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target));
 
   const getStatusColor = (status: NodeStatus) => {
     switch (status) {
-      case "active": return "border-blue-500 bg-blue-500/20 text-blue-300 shadow-[0_0_20px_rgba(59,130,246,0.5)]";
-      case "complete": return "border-emerald-500 bg-emerald-500/20 text-emerald-300";
-      case "error": return "border-red-500 bg-red-500/20 text-red-400";
-      default: return "border-slate-600/40 bg-slate-800/30 text-slate-400";
+      case "active":
+        return "border-blue-500 bg-blue-500/20 text-blue-100 shadow-[0_0_22px_rgba(59,130,246,0.32)]";
+      case "complete":
+        return "border-emerald-500/80 bg-emerald-500/18 text-emerald-100";
+      case "error":
+        return "border-red-500/80 bg-red-500/18 text-red-100";
+      default:
+        return "border-slate-600/40 bg-slate-900/55 text-slate-300";
     }
   };
 
   const getStatusIcon = (status: NodeStatus) => {
     switch (status) {
-      case "active": return <Activity className="w-3 h-3 animate-pulse" />;
-      case "complete": return <CheckCircle className="w-3 h-3" />;
-      case "error": return <XCircle className="w-3 h-3" />;
-      default: return <Clock className="w-3 h-3 opacity-40" />;
+      case "active":
+        return <Activity className="h-3 w-3 animate-pulse" />;
+      case "complete":
+        return <CheckCircle className="h-3 w-3" />;
+      case "error":
+        return <XCircle className="h-3 w-3" />;
+      default:
+        return <Clock className="h-3 w-3 opacity-40" />;
     }
   };
 
-  const phaseLabels = pipeline === "evaluation"
-    ? [
-        { label: "INPUT", y: "3%", color: "text-slate-500" },
-        { label: "ENRICH", y: "10%", color: "text-slate-500" },
-        { label: "COUNCIL", y: "19%", color: "text-slate-500" },
-        { label: "DEBATE", y: "28%", color: "text-slate-500" },
-        { label: "SCORING", y: "37%", color: "text-slate-500" },
-        { label: "VERDICT", y: "46%", color: "text-blue-500/70" },
-        { label: "GATE", y: "52%", color: "text-amber-500/70" },
-        { label: "FIX", y: "59%", color: "text-orange-500/70" },
-        { label: "BUILD", y: "67%", color: "text-emerald-500/60" },
-        { label: "EVAL", y: "75%", color: "text-cyan-500/70" },
-        { label: "SHIP", y: "85%", color: "text-emerald-500/70" },
-      ]
-    : [
-        { label: "INPUT", y: "7%", color: "text-slate-500" },
-        { label: "IDEATE", y: "42%", color: "text-slate-500" },
-        { label: "SYNTH", y: "82%", color: "text-purple-500/70" },
-      ];
-
-  const phaseDividers = pipeline === "evaluation"
-    ? [7.5, 15.5, 24.5, 33.5, 42.5, 50, 56.5, 64, 72, 81]
-    : [28, 67];
+  const baseHeight = pipeline === "evaluation" ? "h-[860px] lg:h-[900px]" : "h-[520px] lg:h-[560px]";
 
   return (
-    <Card className={cn(
-      "relative w-full h-[900px] overflow-hidden border-border/50 bg-card/50 backdrop-blur-sm",
-      "bg-[radial-gradient(ellipse_at_top,rgba(59,130,246,0.06),transparent_60%)]",
-      className,
-    )}>
-      <div className="absolute left-2 top-0 bottom-0 z-10 pointer-events-none">
-        {phaseLabels.map((p) => (
-          <span
-            key={p.label}
-            className={cn("text-[9px] font-semibold uppercase tracking-[0.12em] absolute", p.color)}
-            style={{ top: p.y }}
-          >
-            {p.label}
-          </span>
-        ))}
-      </div>
-
-      <svg className="absolute inset-0 w-full h-full pointer-events-none opacity-15" viewBox="0 0 100 100" preserveAspectRatio="none">
-        <title>Phase Dividers</title>
-        {phaseDividers.map((y) => (
-          <line key={y} x1="5" y1={y} x2="95" y2={y} stroke="rgba(148,163,184,0.4)" strokeWidth={0.2} strokeDasharray="1.5,1" vectorEffect="non-scaling-stroke" />
-        ))}
-      </svg>
-
-      <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 92" preserveAspectRatio="xMidYMid meet">
-        <title>Pipeline Flow</title>
-        <defs>
-          <style>{SVG_STYLES}</style>
-          <marker id="arr-idle" viewBox="0 0 10 8" refX="10" refY="4" markerWidth="5" markerHeight="4" orient="auto-start-reverse">
-            <path d="M 0 0 L 10 4 L 0 8 z" fill={EDGE_COLORS.idle} />
-          </marker>
-          <marker id="arr-active" viewBox="0 0 10 8" refX="10" refY="4" markerWidth="6" markerHeight="5" orient="auto-start-reverse">
-            <path d="M 0 0 L 10 4 L 0 8 z" fill={EDGE_COLORS.active} />
-          </marker>
-          <marker id="arr-complete" viewBox="0 0 10 8" refX="10" refY="4" markerWidth="5" markerHeight="4" orient="auto-start-reverse">
-            <path d="M 0 0 L 10 4 L 0 8 z" fill={EDGE_COLORS.complete} />
-          </marker>
-          <filter id="edge-glow">
-            <feGaussianBlur stdDeviation="2" />
-          </filter>
-          <filter id="particle-glow">
-            <feGaussianBlur stdDeviation="1.5" />
-          </filter>
-        </defs>
-
-        {visibleEdges.map((edge, idx) => {
-          const src = nodes.find((n) => n.id === edge.source);
-          const tgt = nodes.find((n) => n.id === edge.target);
-          if (!src || !tgt) return null;
-
-          const srcStatus = getNodeStatus(edge.source);
-          const tgtStatus = getNodeStatus(edge.target);
-
-          let stroke = EDGE_COLORS.idle;
-          let edgeClass = "edge-idle";
-          let marker = "arr-idle";
-          let showGlow = false;
-
-          if (srcStatus === "complete" && (tgtStatus === "active" || tgtStatus === "complete")) {
-            stroke = EDGE_COLORS.active;
-            edgeClass = "edge-active";
-            marker = "arr-active";
-            showGlow = true;
-          } else if (srcStatus === "complete") {
-            stroke = EDGE_COLORS.complete;
-            edgeClass = "edge-complete";
-            marker = "arr-complete";
-          }
-
-          const midY = (src.y + tgt.y) / 2;
-          const d = `M ${src.x} ${src.y} C ${src.x} ${midY}, ${tgt.x} ${midY}, ${tgt.x} ${tgt.y}`;
-
-          return (
-            <g key={`${edge.source}-${edge.target}`}>
-              {showGlow && (
-                <path d={d} fill="none" stroke={stroke} strokeWidth={4} filter="url(#edge-glow)" opacity={0.35} vectorEffect="non-scaling-stroke" />
+    <Card
+      className={cn(
+        "relative w-full overflow-hidden border-border/50 bg-card/50 py-0 backdrop-blur-sm",
+        "bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.08),transparent_45%),linear-gradient(180deg,rgba(15,23,42,0.28),rgba(2,6,23,0.08))]",
+        baseHeight,
+        className,
+      )}
+    >
+      <div className="grid h-full grid-cols-[58px_minmax(0,1fr)] md:grid-cols-[72px_minmax(0,1fr)]">
+        <div className="relative border-r border-border/40 bg-black/15">
+          {phaseLabels.map((phase) => (
+            <span
+              key={phase.label}
+              className={cn(
+                "absolute left-2 -translate-y-1/2 text-[9px] font-semibold uppercase tracking-[0.18em] md:left-3",
+                phase.color,
               )}
-              <path
-                d={d}
-                fill="none"
-                stroke={stroke}
-                strokeWidth={1.5}
-                markerEnd={`url(#${marker})`}
-                vectorEffect="non-scaling-stroke"
-                className={cn(edgeClass, "transition-colors duration-300")}
-              />
-              {edge.label && (
-                <text
-                  x={(src.x + tgt.x) / 2 - 4}
-                  y={midY}
-                  fill={edge.labelColor || "rgba(148,163,184,0.7)"}
-                  fontSize="2.8"
-                  fontWeight="bold"
-                  textAnchor="end"
-                  dominantBaseline="middle"
-                >
-                  {edge.label}
-                </text>
-              )}
-            </g>
-          );
-        })}
-
-        {(pipeline === "evaluation" ? EVAL_CX : BS_CX).map((cxArr) => {
-          const kt = pipeline === "evaluation" ? EVAL_KT : BS_KT;
-          const cy = pipeline === "evaluation" ? EVAL_CY : BS_CY;
-          const ks = pipeline === "evaluation" ? EVAL_KS : BS_KS;
-          const cx = cxArr.join(";");
-          const particleId = `p-${cxArr[1]}`;
-          return (
-            <g key={particleId}>
-              <circle r="0.7" fill="rgba(99,166,255,0.85)">
-                <animate attributeName="cx" dur={PARTICLE_DUR} repeatCount="indefinite" values={cx} keyTimes={kt} calcMode="spline" keySplines={ks} />
-                <animate attributeName="cy" dur={PARTICLE_DUR} repeatCount="indefinite" values={cy} keyTimes={kt} calcMode="spline" keySplines={ks} />
-              </circle>
-              <circle r="2" fill="rgba(59,130,246,0.15)" filter="url(#particle-glow)">
-                <animate attributeName="cx" dur={PARTICLE_DUR} repeatCount="indefinite" values={cx} keyTimes={kt} calcMode="spline" keySplines={ks} />
-                <animate attributeName="cy" dur={PARTICLE_DUR} repeatCount="indefinite" values={cy} keyTimes={kt} calcMode="spline" keySplines={ks} />
-              </circle>
-            </g>
-          );
-        })}
-      </svg>
-
-      <motion.div
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
-        className="absolute inset-0"
-      >
-        {nodes.map((node) => {
-          if (!visibleNodeIds.has(node.id)) return null;
-          const status = getNodeStatus(node.id);
-          const shouldGlow = node.glow && (isOverview || status === "active");
-
-          return (
-            <motion.div
-              key={node.id}
-              variants={fadeUp}
-              animate={status === "active" ? { scale: [1, 1.08, 1] } : { scale: 1 }}
-              transition={status === "active" ? { repeat: Infinity, duration: 1.8, ease: "easeInOut" } : { duration: 0.3 }}
-              className="absolute transform -translate-x-1/2 -translate-y-1/2 flex flex-col items-center"
-              style={{ left: `${node.x}%`, top: `${node.y}%` }}
+              style={{ top: toVerticalPercent(phase.y) }}
             >
-              {shouldGlow && (
-                <div
-                  className="absolute inset-0 rounded-full glow-ring pointer-events-none"
-                  style={{
-                    boxShadow: status === "active"
-                      ? "0 0 24px 6px rgba(59,130,246,0.4)"
-                      : node.id === "verified"
-                        ? "0 0 18px 4px rgba(16,185,129,0.3)"
-                        : "0 0 16px 4px rgba(59,130,246,0.2)",
-                  }}
-                />
+              {phase.label}
+            </span>
+          ))}
+        </div>
+
+        <div className="relative overflow-hidden">
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-blue-500/8 via-transparent to-transparent" />
+
+          <div className="absolute right-4 top-4 z-20 flex flex-wrap justify-end gap-2">
+            <Badge variant="outline" className="border-slate-500/30 bg-slate-900/40 text-slate-200">
+              Idle
+            </Badge>
+            <Badge variant="outline" className="border-blue-500/30 bg-blue-500/12 text-blue-100">
+              Active
+            </Badge>
+            <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/12 text-emerald-100">
+              Complete
+            </Badge>
+          </div>
+
+          <svg
+            className="pointer-events-none absolute inset-0 h-full w-full opacity-20"
+            viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
+            preserveAspectRatio="none"
+          >
+            <title>Phase Dividers</title>
+            {phaseDividers.map((y) => (
+              <line
+                key={y}
+                x1="4"
+                y1={y}
+                x2="96"
+                y2={y}
+                stroke="rgba(148,163,184,0.38)"
+                strokeWidth={0.22}
+                strokeDasharray="1.5,1"
+                vectorEffect="non-scaling-stroke"
+              />
+            ))}
+          </svg>
+
+          <svg
+            className="pointer-events-none absolute inset-0 h-full w-full"
+            viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
+            preserveAspectRatio="xMidYMid meet"
+          >
+            <title>Pipeline Flow</title>
+            <defs>
+              <style>{SVG_STYLES}</style>
+              <marker id="arr-idle" viewBox="0 0 10 8" refX="10" refY="4" markerWidth="5" markerHeight="4" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 4 L 0 8 z" fill={EDGE_COLORS.idle} />
+              </marker>
+              <marker id="arr-active" viewBox="0 0 10 8" refX="10" refY="4" markerWidth="6" markerHeight="5" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 4 L 0 8 z" fill={EDGE_COLORS.active} />
+              </marker>
+              <marker id="arr-complete" viewBox="0 0 10 8" refX="10" refY="4" markerWidth="5" markerHeight="4" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 4 L 0 8 z" fill={EDGE_COLORS.complete} />
+              </marker>
+              <filter id="edge-glow">
+                <feGaussianBlur stdDeviation="2" />
+              </filter>
+              <filter id="particle-glow">
+                <feGaussianBlur stdDeviation="0.9" />
+              </filter>
+            </defs>
+
+            {visibleEdges.map((edge) => {
+              const src = nodes.find((node) => node.id === edge.source);
+              const tgt = nodes.find((node) => node.id === edge.target);
+              if (!src || !tgt) return null;
+
+              const srcStatus = getNodeStatus(edge.source);
+              const tgtStatus = getNodeStatus(edge.target);
+
+              let stroke = EDGE_COLORS.idle;
+              let edgeClass = "edge-idle";
+              let marker = "arr-idle";
+              let showGlow = false;
+
+              if (srcStatus === "complete" && (tgtStatus === "active" || tgtStatus === "complete")) {
+                stroke = EDGE_COLORS.active;
+                edgeClass = "edge-active";
+                marker = "arr-active";
+                showGlow = true;
+              } else if (srcStatus === "complete") {
+                stroke = EDGE_COLORS.complete;
+                edgeClass = "edge-complete";
+                marker = "arr-complete";
+              } else if (srcStatus === "error" || tgtStatus === "error") {
+                stroke = EDGE_COLORS.error;
+                edgeClass = "edge-complete";
+              }
+
+              const midY = (src.y + tgt.y) / 2;
+              const d = `M ${src.x} ${src.y} C ${src.x} ${midY}, ${tgt.x} ${midY}, ${tgt.x} ${tgt.y}`;
+
+              return (
+                <g key={`${edge.source}-${edge.target}`}>
+                  {showGlow && (
+                    <path
+                      d={d}
+                      fill="none"
+                      stroke={stroke}
+                      strokeWidth={3.8}
+                      filter="url(#edge-glow)"
+                      opacity={0.3}
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  )}
+                  <path
+                    d={d}
+                    fill="none"
+                    stroke={stroke}
+                    strokeWidth={1.4}
+                    markerEnd={`url(#${marker})`}
+                    vectorEffect="non-scaling-stroke"
+                    className={cn(edgeClass, "transition-colors duration-300")}
+                  />
+                </g>
+              );
+            })}
+
+            {isOverview &&
+              (pipeline === "evaluation" ? EVAL_CX : BS_CX).map((cxArr) => {
+                const kt = pipeline === "evaluation" ? EVAL_KT : BS_KT;
+                const cy = pipeline === "evaluation" ? EVAL_CY : BS_CY;
+                const ks = pipeline === "evaluation" ? EVAL_KS : BS_KS;
+                const cx = cxArr.join(";");
+                const particleId = `p-${pipeline}-${cxArr[1]}`;
+                return (
+                  <g key={particleId}>
+                    <circle r="0.38" fill="rgba(125,211,252,0.78)">
+                      <animate attributeName="cx" dur={PARTICLE_DUR} repeatCount="indefinite" values={cx} keyTimes={kt} calcMode="spline" keySplines={ks} />
+                      <animate attributeName="cy" dur={PARTICLE_DUR} repeatCount="indefinite" values={cy} keyTimes={kt} calcMode="spline" keySplines={ks} />
+                    </circle>
+                    <circle r="1.1" fill="rgba(56,189,248,0.12)" filter="url(#particle-glow)">
+                      <animate attributeName="cx" dur={PARTICLE_DUR} repeatCount="indefinite" values={cx} keyTimes={kt} calcMode="spline" keySplines={ks} />
+                      <animate attributeName="cy" dur={PARTICLE_DUR} repeatCount="indefinite" values={cy} keyTimes={kt} calcMode="spline" keySplines={ks} />
+                    </circle>
+                  </g>
+                );
+              })}
+          </svg>
+
+          {callouts.map((callout) => (
+            <div
+              key={callout.label}
+              className={cn(
+                "pointer-events-none absolute z-10 hidden -translate-y-1/2 rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] md:block",
+                callout.className,
               )}
-              <div
-                className={cn(
-                  "relative flex items-center justify-center px-2.5 py-1 rounded-full border text-[11px] font-medium transition-all duration-500 whitespace-nowrap gap-1",
-                  getStatusColor(status),
-                  isOverview && CONDITIONAL_NODES.has(node.id) && "border-dashed opacity-60"
-                )}
-              >
-                {node.emoji && <span className="text-[11px] leading-none">{node.emoji}</span>}
-                {!node.emoji && <span>{getStatusIcon(status)}</span>}
-                {node.label}
-                {status !== "idle" && <span className="ml-0.5">{getStatusIcon(status)}</span>}
-              </div>
-            </motion.div>
-          );
-        })}
-      </motion.div>
+              style={{ left: `${callout.x}%`, top: toVerticalPercent(callout.y) }}
+            >
+              {callout.label}
+            </div>
+          ))}
+
+          <motion.div variants={containerVariants} initial="hidden" animate="visible" className="absolute inset-0">
+            {nodes.map((node) => {
+              if (!visibleNodeIds.has(node.id)) return null;
+
+              const status = getNodeStatus(node.id);
+              const shouldGlow = node.glow && (isOverview || status === "active");
+
+              return (
+                <motion.div
+                  key={node.id}
+                  variants={fadeUp}
+                  animate={status === "active" ? { scale: [1, 1.08, 1] } : { scale: 1 }}
+                  transition={status === "active" ? { repeat: Infinity, duration: 1.8, ease: "easeInOut" } : { duration: 0.3 }}
+                  className="absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center"
+                  style={{ left: `${node.x}%`, top: toVerticalPercent(node.y) }}
+                >
+                  {shouldGlow && (
+                    <div
+                      className="glow-ring pointer-events-none absolute inset-0 rounded-full"
+                      style={{
+                        boxShadow:
+                          status === "active"
+                            ? "0 0 24px 6px rgba(59,130,246,0.36)"
+                            : node.id === "verified"
+                              ? "0 0 18px 4px rgba(16,185,129,0.25)"
+                              : "0 0 16px 4px rgba(59,130,246,0.18)",
+                      }}
+                    />
+                  )}
+                  <div
+                    className={cn(
+                      "relative flex items-center gap-1 rounded-full border px-3 py-1.5 text-[11px] font-medium whitespace-nowrap transition-all duration-500 backdrop-blur-sm shadow-[0_6px_18px_rgba(2,6,23,0.28)]",
+                      getStatusColor(status),
+                      isOverview && CONDITIONAL_NODES.has(node.id) && "border-dashed opacity-65",
+                    )}
+                  >
+                    {node.emoji ? <span className="text-[11px] leading-none">{node.emoji}</span> : <span>{getStatusIcon(status)}</span>}
+                    <span>{node.label}</span>
+                    {status !== "idle" && <span className="ml-0.5">{getStatusIcon(status)}</span>}
+                  </div>
+                </motion.div>
+              );
+            })}
+          </motion.div>
+        </div>
+      </div>
     </Card>
   );
 }
