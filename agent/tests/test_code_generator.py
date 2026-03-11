@@ -458,6 +458,25 @@ def test_normalize_backend_files_coerces_plain_text_ai_responses():
     assert "return _coerce_unstructured_payload(raw_json)" in normalized["ai_service.py"]
 
 
+def test_normalize_backend_ai_fallback_helper_is_import_safe_for_call_inference_files():
+    files = {
+        "ai_service.py": (
+            "import os\n"
+            "import json\n\n"
+            "async def call_inference(messages):\n"
+            "    raw_json = 'hello, world'\n"
+            '    return {"note": "Failed to parse JSON from AI response", "raw": raw_json}\n'
+        )
+    }
+
+    normalized = _normalize_backend_files(files)
+    compiled = compile(normalized["ai_service.py"], "ai_service.py", "exec")
+
+    assert "_coerce_unstructured_payload" in normalized["ai_service.py"]
+    assert "dict[str, object]" in normalized["ai_service.py"]
+    assert compiled is not None
+
+
 def test_normalize_backend_files_fixes_oauth_scheme_reference_and_adds_python_version():
     files = {
         "routes.py": (

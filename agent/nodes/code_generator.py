@@ -1974,11 +1974,12 @@ def _normalize_backend_ai_fallbacks(files: dict[str, str]) -> dict[str, str]:
                 "return _coerce_unstructured_payload(raw_json)",
             )
 
-            if "_coerce_unstructured_payload" not in updated:
+            if "def _coerce_unstructured_payload" not in updated:
                 helper = (
-                    "def _coerce_unstructured_payload(raw_text: str) -> Dict[str, Any]:\n"
+                    "def _coerce_unstructured_payload(raw_text: str) -> dict[str, object]:\n"
                     "    compact = raw_text.strip()\n"
-                    "    tags = [part.strip(\" -•\\t\") for part in re.split(r\",|\\\\n\", compact) if part.strip(\" -•\\t\")]\n"
+                    '    normalized = compact.replace("\\n", ",")\n'
+                    "    tags = [part.strip(\" -•\\t\") for part in normalized.split(\",\") if part.strip(\" -•\\t\")]\n"
                     "    return {\n"
                     '        "note": "Model returned plain text instead of JSON",\n'
                     '        "raw": compact,\n'
@@ -1987,11 +1988,15 @@ def _normalize_backend_ai_fallbacks(files: dict[str, str]) -> dict[str, str]:
                     '        "tags": tags[:6],\n'
                     "    }\n"
                 )
-                marker = "async def _call_inference"
-                if marker in updated:
-                    updated = updated.replace(marker, f"{helper}\n\n{marker}", 1)
+                marker_match = re.search(r"^async def\s+_?call_inference\b", updated, flags=re.MULTILINE)
+                if marker_match:
+                    updated = f"{updated[:marker_match.start()]}{helper}\n\n{updated[marker_match.start():]}"
                 else:
-                    updated = f"{helper}\n\n{updated}"
+                    import_block = re.match(r"((?:from [^\n]+\n|import [^\n]+\n)+\n?)", updated)
+                    if import_block:
+                        updated = f"{updated[:import_block.end()]}{helper}\n\n{updated[import_block.end():]}"
+                    else:
+                        updated = f"{helper}\n\n{updated}"
         normalized[path] = updated
     return normalized
 
