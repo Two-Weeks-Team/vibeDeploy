@@ -531,6 +531,24 @@ def test_normalize_backend_files_awaits_async_ai_helpers_in_routes():
     assert "result = await summarize_text" in normalized["routes.py"]
 
 
+def test_normalize_backend_files_relaxes_preferences_and_context_request_types():
+    files = {
+        "models.py": (
+            "from typing import Dict\n"
+            "from typing import Any, List\n\n"
+            "class PlanRequest:\n"
+            "    preferences: Dict[str, Any] = {}\n"
+            "    context: Dict[str, Any] = {}\n"
+            "    query: str = ''\n"
+        )
+    }
+
+    normalized = _normalize_backend_files(files)
+
+    assert "preferences: Any =" in normalized["models.py"]
+    assert "context: Any =" in normalized["models.py"]
+
+
 @pytest.mark.asyncio
 async def test_code_generator_regenerates_only_missing_frontend(monkeypatch):
     state = {

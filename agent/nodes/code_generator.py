@@ -1307,6 +1307,7 @@ def _normalize_backend_files(files: dict[str, str]) -> dict[str, str]:
     normalized = _normalize_backend_api_routes(normalized)
     normalized = _normalize_backend_database_url_guards(normalized)
     normalized = _normalize_backend_auth_scheme_references(normalized)
+    normalized = _normalize_backend_flexible_request_fields(normalized)
     normalized = _normalize_backend_ai_fallbacks(normalized)
     normalized = _normalize_backend_async_ai_calls(normalized)
     if normalized:
@@ -1428,6 +1429,30 @@ def _normalize_backend_database_url_guards(files: dict[str, str]) -> dict[str, s
         updated = content
         if path.endswith(".py") and "_raw_url" in content and "sslmode=require" in content:
             updated = ssl_guard_pattern.sub(replacement, updated)
+        normalized[path] = updated
+
+    return normalized
+
+
+def _normalize_backend_flexible_request_fields(files: dict[str, str]) -> dict[str, str]:
+    normalized: dict[str, str] = {}
+    pattern = re.compile(r"^(\s*)(preferences|context)(\s*:\s*)Dict\[[^\]]+\](\s*=)", flags=re.MULTILINE)
+
+    for path, content in files.items():
+        updated = content
+        if path.endswith(".py") and ("preferences:" in content or "context:" in content):
+            updated, replacements = pattern.subn(r"\1\2\3Any\4", updated)
+            if replacements:
+                typing_import = re.search(r"from typing import ([^\n]+)", updated)
+                if typing_import:
+                    imported = [part.strip() for part in typing_import.group(1).split(",") if part.strip()]
+                    if "Any" not in imported:
+                        imported.append("Any")
+                        updated = (
+                            f"{updated[:typing_import.start()]}"
+                            f"from typing import {', '.join(imported)}"
+                            f"{updated[typing_import.end():]}"
+                        )
         normalized[path] = updated
 
     return normalized
