@@ -718,10 +718,13 @@ export default function RootLayout({{ children }}: {{ children: ReactNode }}) {{
             "src/app/page.tsx": f'''"use client";
 
 import {{ useState }} from "react";
+import CollectionPanel from "@/components/CollectionPanel";
+import FeaturePanel from "@/components/FeaturePanel";
 import Hero from "@/components/Hero";
 import InsightPanel from "@/components/InsightPanel";
-import PlannerPanel from "@/components/PlannerPanel";
 import StatePanel from "@/components/StatePanel";
+import StatsStrip from "@/components/StatsStrip";
+import WorkspacePanel from "@/components/WorkspacePanel";
 import {{ createInsights, createPlan }} from "@/lib/api";
 
 const APP_NAME = {title_json};
@@ -752,7 +755,7 @@ export default function Page() {{
       }});
       const composed = {{ ...nextPlan, insights: insightPayload }};
       setPlan(composed);
-      setSaved((previous) => [composed, ...previous].slice(0, 3));
+      setSaved((previous) => [composed, ...previous].slice(0, 4));
     }} catch (err) {{
       setError(err instanceof Error ? err.message : "Request failed");
     }} finally {{
@@ -760,11 +763,18 @@ export default function Page() {{
     }}
   }}
 
+  const stats = [
+    {{ label: "Feature lanes", value: String(FEATURE_CHIPS.length) }},
+    {{ label: "Saved library", value: String(saved.length) }},
+    {{ label: "Readiness score", value: plan ? String(plan.score) : "88" }},
+  ];
+
   return (
     <main className="page-shell">
       <Hero appName={{APP_NAME}} tagline={{TAGLINE}} proofPoints={{PROOF_POINTS}} />
+      <StatsStrip stats={{stats}} />
       <section className="content-grid">
-        <PlannerPanel
+        <WorkspacePanel
           query={{query}}
           preferences={{preferences}}
           onQueryChange={{setQuery}}
@@ -779,31 +789,14 @@ export default function Page() {{
             <StatePanel
               title="Ready for the live demo"
               tone="neutral"
-              detail="Use the planner to generate a polished working session with saved outputs and insight cards."
+              detail="The first action produces a complete output, visible proof points, and saved library activity."
             />
           ) : null}}
           {{plan ? <InsightPanel plan={{plan}} /> : null}}
+          <FeaturePanel features={{FEATURE_CHIPS}} proofPoints={{PROOF_POINTS}} />
         </div>
       </section>
-      <section className="saved-section">
-        <div className="section-heading">
-          <span className="eyebrow">Saved Sessions</span>
-          <h2>Recent outputs stay visible for a judge-friendly walkthrough.</h2>
-        </div>
-        <div className="saved-grid">
-          {{saved.map((entry, index) => (
-            <article className="saved-card" key={{`${{entry.summary}}-${{index}}`}}>
-              <span className="saved-score">Score {{entry.score}}</span>
-              <h3>{{entry.summary}}</h3>
-              <ul>
-                {{entry.items.slice(0, 2).map((item) => (
-                  <li key={{item.title}}>{{item.title}}</li>
-                ))}}
-              </ul>
-            </article>
-          ))}}
-        </div>
-      </section>
+      <CollectionPanel saved={{saved}} />
     </main>
   );
 }}
@@ -829,7 +822,7 @@ html, body { margin: 0; padding: 0; background:
 a { color: inherit; text-decoration: none; }
 button, textarea { font: inherit; }
 .page-shell { max-width: 1200px; margin: 0 auto; padding: 32px 20px 80px; }
-.hero, .planner-panel, .insight-panel, .status-panel, .saved-card {
+.hero, .workspace-panel, .insight-panel, .status-panel, .feature-panel, .collection-panel, .saved-card, .stats-strip {
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: 24px;
@@ -840,10 +833,13 @@ button, textarea { font: inherit; }
 .hero p, .section-heading p { color: var(--muted); max-width: 60ch; }
 .eyebrow { display: inline-flex; padding: 8px 12px; border-radius: 999px; background: rgba(15,95,82,0.08); color: var(--primary); font-size: 0.78rem; letter-spacing: 0.12em; text-transform: uppercase; }
 .hero-proof-list, .feature-list, .insight-list, .saved-card ul { padding-left: 18px; color: var(--muted); }
+.stats-strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; padding: 16px; margin-bottom: 20px; }
+.stat-chip { padding: 14px 16px; border-radius: 18px; background: rgba(255,255,255,0.68); border: 1px solid var(--border); }
+.stat-chip strong { display: block; margin-top: 6px; font-size: 1.4rem; }
 .content-grid { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 20px; }
 .stack { display: grid; gap: 20px; }
-.planner-panel, .insight-panel, .status-panel { padding: 24px; }
-.planner-panel textarea { width: 100%; min-height: 140px; margin-top: 12px; border-radius: 18px; border: 1px solid var(--border); padding: 16px; background: rgba(255,255,255,0.7); }
+.workspace-panel, .insight-panel, .status-panel, .feature-panel, .collection-panel { padding: 24px; }
+.workspace-panel textarea { width: 100%; min-height: 140px; margin-top: 12px; border-radius: 18px; border: 1px solid var(--border); padding: 16px; background: rgba(255,255,255,0.7); }
 .controls { display: grid; gap: 12px; }
 .button-row { display: flex; gap: 12px; align-items: center; }
 .primary-button { border: none; border-radius: 999px; background: var(--primary); color: white; padding: 14px 22px; cursor: pointer; }
@@ -851,14 +847,20 @@ button, textarea { font: inherit; }
 .feature-chip, .saved-score { display: inline-flex; padding: 8px 12px; border-radius: 999px; background: rgba(217,140,63,0.12); color: var(--accent); }
 .score-pill { display: inline-flex; padding: 10px 14px; border-radius: 999px; background: rgba(15,95,82,0.1); color: var(--primary); font-weight: 600; }
 .item-card { margin-top: 12px; padding: 16px; border-radius: 18px; background: rgba(255,255,255,0.72); border: 1px solid var(--border); }
-.saved-section { margin-top: 28px; }
+.collection-panel { margin-top: 28px; }
 .saved-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-top: 16px; }
 .saved-card { padding: 18px; }
 @media (max-width: 900px) {{
+  .stats-strip {{ grid-template-columns: 1fr; }}
   .content-grid {{ grid-template-columns: 1fr; }}
 }}
 """,
             "src/lib/api.ts": """const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
+
+async function throwApiError(response: Response): Promise<never> {
+  const raw = await response.text();
+  throw new Error(raw || "Request failed");
+}
 
 async function request<T>(path: string, body: Record<string, unknown>): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
@@ -867,8 +869,7 @@ async function request<T>(path: string, body: Record<string, unknown>): Promise<
     body: JSON.stringify(body),
   });
   if (!res.ok) {
-    const raw = await res.text();
-    throw new Error(raw || "Request failed");
+    return throwApiError(res);
   }
   return res.json();
 }
@@ -893,7 +894,7 @@ export async function createInsights(body: { selection: string; context: string 
 export default function Hero({ appName, tagline, proofPoints }: HeroProps) {
   return (
     <section className="hero">
-      <span className="eyebrow">Hackathon Showcase</span>
+      <span className="eyebrow">Hero Header</span>
       <h1>{appName}</h1>
       <p>{tagline}</p>
       <ul className="hero-proof-list">
@@ -905,7 +906,7 @@ export default function Hero({ appName, tagline, proofPoints }: HeroProps) {
   );
 }
 """,
-            "src/components/PlannerPanel.tsx": """type PlannerPanelProps = {
+            "src/components/WorkspacePanel.tsx": """type WorkspacePanelProps = {
   query: string;
   preferences: string;
   onQueryChange: (value: string) => void;
@@ -915,7 +916,7 @@ export default function Hero({ appName, tagline, proofPoints }: HeroProps) {
   features: string[];
 };
 
-export default function PlannerPanel({
+export default function WorkspacePanel({
   query,
   preferences,
   onQueryChange,
@@ -923,10 +924,10 @@ export default function PlannerPanel({
   onGenerate,
   loading,
   features,
-}: PlannerPanelProps) {
+}: WorkspacePanelProps) {
   return (
-    <section className="planner-panel">
-      <span className="eyebrow">Primary Workflow</span>
+    <section className="workspace-panel">
+      <span className="eyebrow">Primary Workspace</span>
       <div className="controls">
         <textarea value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="Describe the session you want to generate." />
         <textarea value={preferences} onChange={(event) => onPreferencesChange(event.target.value)} placeholder="Add constraints, style cues, or priorities." />
@@ -955,6 +956,7 @@ export default function PlannerPanel({
 export default function InsightPanel({ plan }: { plan: PlanPayload }) {
   return (
     <section className="insight-panel">
+      <span className="eyebrow">Insight or Result Panel</span>
       <span className="score-pill">Readiness score {plan.score}</span>
       <h2>{plan.summary}</h2>
       {plan.items.map((item) => (
@@ -974,6 +976,63 @@ export default function InsightPanel({ plan }: { plan: PlanPayload }) {
   );
 }
 """,
+            "src/components/FeaturePanel.tsx": """type FeaturePanelProps = {
+  features: string[];
+  proofPoints: string[];
+};
+
+export default function FeaturePanel({ features, proofPoints }: FeaturePanelProps) {
+  return (
+    <section className="feature-panel">
+      <span className="eyebrow">Secondary Supporting Panel</span>
+      <h2>Demo talking points</h2>
+      <ul className="feature-list">
+        {features.concat(proofPoints).map((entry) => (
+          <li key={entry}>{entry}</li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+""",
+            "src/components/CollectionPanel.tsx": """type SavedPlan = {
+  summary: string;
+  score: number;
+  items: Array<{ title: string; detail: string; score: number }>;
+};
+
+export default function CollectionPanel({ saved }: { saved: SavedPlan[] }) {
+  return (
+    <section className="collection-panel">
+      <div className="section-heading">
+        <span className="eyebrow">Saved Library and Recent Activity</span>
+        <h2>Outputs stay visible for a live walkthrough.</h2>
+      </div>
+      <div className="saved-grid">
+        {saved.length ? (
+          saved.map((entry, index) => (
+            <article className="saved-card" key={`${entry.summary}-${index}`}>
+              <span className="saved-score">Score {entry.score}</span>
+              <h3>{entry.summary}</h3>
+              <ul>
+                {entry.items.slice(0, 2).map((item) => (
+                  <li key={item.title}>{item.title}</li>
+                ))}
+              </ul>
+            </article>
+          ))
+        ) : (
+          <article className="saved-card">
+            <span className="saved-score">Empty state</span>
+            <h3>Generate the first output</h3>
+            <p>The saved library and recent activity surface will fill after the first successful run.</p>
+          </article>
+        )}
+      </div>
+    </section>
+  );
+}
+""",
             "src/components/StatePanel.tsx": """export default function StatePanel({
   title,
   detail,
@@ -988,6 +1047,23 @@ export default function InsightPanel({ plan }: { plan: PlanPayload }) {
       <span className="eyebrow">{tone === "error" ? "Attention" : "Ready"}</span>
       <h2>{title}</h2>
       <p>{detail}</p>
+    </section>
+  );
+}
+""",
+            "src/components/StatsStrip.tsx": """type StatsStripProps = {
+  stats: Array<{ label: string; value: string }>;
+};
+
+export default function StatsStrip({ stats }: StatsStripProps) {
+  return (
+    <section className="stats-strip">
+      {stats.map((stat) => (
+        <article className="stat-chip" key={stat.label}>
+          <span className="eyebrow">{stat.label}</span>
+          <strong>{stat.value}</strong>
+        </article>
+      ))}
     </section>
   );
 }

@@ -590,7 +590,49 @@ async def test_generate_frontend_files_uses_deterministic_fallback_on_llm_error(
 
     assert "src/app/page.tsx" in files
     assert "src/lib/api.ts" in files
-    assert "src/components/PlannerPanel.tsx" in files
+    assert "src/components/WorkspacePanel.tsx" in files
+    assert "src/components/CollectionPanel.tsx" in files
+    assert "src/components/StatsStrip.tsx" in files
+
+
+def test_fallback_frontend_bundle_covers_template_blueprint_components():
+    files = code_generator_module._build_fallback_frontend_bundle(
+        json.dumps(
+            {
+                "idea": {"name": "TripCanvas AI", "tagline": "Plan cinematic journeys"},
+                "blueprint": {
+                    "frontend_files": {
+                        "package.json": {},
+                        "src/app/layout.tsx": {},
+                        "src/app/page.tsx": {},
+                        "src/app/globals.css": {},
+                        "src/lib/api.ts": {},
+                        "src/components/Hero.tsx": {},
+                        "src/components/InsightPanel.tsx": {},
+                        "src/components/StatePanel.tsx": {},
+                        "src/components/CollectionPanel.tsx": {},
+                        "src/components/StatsStrip.tsx": {},
+                    }
+                },
+            },
+            ensure_ascii=False,
+        )
+    )
+
+    expected = {
+        "package.json",
+        "src/app/layout.tsx",
+        "src/app/page.tsx",
+        "src/app/globals.css",
+        "src/lib/api.ts",
+        "src/components/Hero.tsx",
+        "src/components/InsightPanel.tsx",
+        "src/components/StatePanel.tsx",
+        "src/components/CollectionPanel.tsx",
+        "src/components/StatsStrip.tsx",
+    }
+
+    assert expected.issubset(files.keys())
 
 
 @pytest.mark.asyncio
