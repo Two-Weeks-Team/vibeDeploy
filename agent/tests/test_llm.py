@@ -1,6 +1,6 @@
 import pytest
 
-from agent.llm import MODEL_CONFIG, ainvoke_with_retry, get_runtime_model_config
+from agent.llm import MODEL_CONFIG, ainvoke_with_retry, get_rate_limit_fallback_models, get_runtime_model_config
 
 
 class _RetryLLM:
@@ -59,6 +59,21 @@ async def test_ainvoke_with_retry_uses_fallback_model(monkeypatch):
     assert primary.calls == 1
     assert fallback.calls == 3
     assert response["ok"] is True
+
+
+def test_rate_limit_fallbacks_disabled_by_default(monkeypatch):
+    monkeypatch.delenv("VIBEDEPLOY_ENABLE_RATE_LIMIT_MODEL_FALLBACKS", raising=False)
+
+    assert get_rate_limit_fallback_models("openai-gpt-oss-120b") == []
+
+
+def test_rate_limit_fallbacks_can_be_enabled(monkeypatch):
+    monkeypatch.setenv("VIBEDEPLOY_ENABLE_RATE_LIMIT_MODEL_FALLBACKS", "1")
+
+    assert get_rate_limit_fallback_models("openai-gpt-oss-120b") == [
+        "openai-gpt-oss-20b",
+        "alibaba-qwen3-32b",
+    ]
 
 
 def test_runtime_model_config_prefers_env_overrides(monkeypatch):

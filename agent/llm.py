@@ -7,9 +7,12 @@ from collections.abc import Iterator
 
 DO_INFERENCE_BASE_URL = "https://inference.do-ai.run/v1"
 DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS = float(os.getenv("LLM_REQUEST_TIMEOUT_SECONDS", "90"))
-DEFAULT_LLM_MAX_CONCURRENCY = max(1, int(os.getenv("LLM_MAX_CONCURRENCY", "2")))
+DEFAULT_LLM_MAX_CONCURRENCY = max(1, int(os.getenv("LLM_MAX_CONCURRENCY", "1")))
+DEFAULT_LLM_MIN_INTERVAL_SECONDS = max(0.0, float(os.getenv("LLM_MIN_INTERVAL_SECONDS", "2.0")))
 logger = logging.getLogger(__name__)
 _llm_semaphore: asyncio.Semaphore | None = None
+_llm_rate_lock: asyncio.Lock | None = None
+_llm_next_request_at = 0.0
 
 # Text generation defaults are unified on gpt-oss-120b so every LLM stage follows
 # the same runtime profile unless an explicit env override is provided.
@@ -138,6 +141,27 @@ def _get_llm_semaphore() -> asyncio.Semaphore:
     return _llm_semaphore
 
 
+def _get_llm_rate_lock() -> asyncio.Lock:
+    global _llm_rate_lock
+    if _llm_rate_lock is None:
+        _llm_rate_lock = asyncio.Lock()
+    return _llm_rate_lock
+
+
+async def _wait_for_llm_turn():
+    if DEFAULT_LLM_MIN_INTERVAL_SECONDS <= 0:
+        return
+
+    global _llm_next_request_at
+    loop = asyncio.get_running_loop()
+    async with _get_llm_rate_lock():
+        now = loop.time()
+        if _llm_next_request_at > now:
+            await asyncio.sleep(_llm_next_request_at - now)
+            now = loop.time()
+        _llm_next_request_at = now + DEFAULT_LLM_MIN_INTERVAL_SECONDS
+
+
 def _get_llm_model_name(llm) -> str:
     for attr in ("model_name", "model"):
         value = getattr(llm, attr, "")
@@ -171,7 +195,19 @@ def _clone_llm_with_model(llm, model: str):
     )
 
 
+def _rate_limit_model_fallbacks_enabled() -> bool:
+    return os.getenv("VIBEDEPLOY_ENABLE_RATE_LIMIT_MODEL_FALLBACKS", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
 def get_rate_limit_fallback_models(model: str) -> list[str]:
+    if not _rate_limit_model_fallbacks_enabled():
+        return []
+
     fallbacks = {
         "openai-gpt-oss-120b": ["openai-gpt-oss-20b", "alibaba-qwen3-32b"],
         "openai-gpt-oss-20b": ["openai-gpt-oss-120b", "alibaba-qwen3-32b"],
@@ -183,6 +219,7 @@ def get_rate_limit_fallback_models(model: str) -> list[str]:
 
 async def _ainvoke_with_semaphore(llm, messages: list[dict]):
     async with _get_llm_semaphore():
+        await _wait_for_llm_turn()
         return await llm.ainvoke(messages)
 
 

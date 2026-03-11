@@ -316,6 +316,38 @@ async def test_dashboard_reconcile_endpoint_prunes_store_to_supplied_showcase_ap
 
     _reset_dashboard_caches(srv)
     monkeypatch.setenv("VIBEDEPLOY_OPS_TOKEN", "ops-secret")
+    showcase_apps = [
+        srv._showcase_app_from_inventory(
+            "demopilot-168642",
+            "https://demopilot-168642-xbwvx.ondigitalocean.app",
+            "https://github.com/Two-Weeks-Team/demopilot-168642",
+        ),
+        srv._showcase_app_from_inventory(
+            "trihabit-166567",
+            "https://trihabit-166567-2fpe6.ondigitalocean.app",
+            "https://github.com/Two-Weeks-Team/trihabit-166567",
+        ),
+        srv._showcase_app_from_inventory(
+            "smartspend-161898",
+            "https://smartspend-161898-m59ar.ondigitalocean.app",
+            "https://github.com/Two-Weeks-Team/smartspend-161898",
+        ),
+        srv._showcase_app_from_inventory(
+            "queueless-158639",
+            "https://queueless-158639-44pch.ondigitalocean.app",
+            "https://github.com/Two-Weeks-Team/queueless-158639",
+        ),
+        srv._showcase_app_from_inventory(
+            "studymate-165585",
+            "https://studymate-165585-2mqzt.ondigitalocean.app",
+            "https://github.com/Two-Weeks-Team/studymate-165585",
+        ),
+    ]
+
+    async def _fake_showcase_live_apps():
+        return showcase_apps
+
+    monkeypatch.setattr(srv, "_get_showcase_live_apps", _fake_showcase_live_apps)
 
     records = [
         (
@@ -426,30 +458,11 @@ async def test_dashboard_reconcile_endpoint_prunes_store_to_supplied_showcase_ap
         json={
             "showcase_apps": [
                 {
-                    "name": "demopilot-168642",
-                    "live_url": "https://demopilot-168642-xbwvx.ondigitalocean.app",
-                    "repo_url": "https://github.com/Two-Weeks-Team/demopilot-168642",
-                },
-                {
-                    "name": "trihabit-166567",
-                    "live_url": "https://trihabit-166567-2fpe6.ondigitalocean.app",
-                    "repo_url": "https://github.com/Two-Weeks-Team/trihabit-166567",
-                },
-                {
-                    "name": "smartspend-161898",
-                    "live_url": "https://smartspend-161898-m59ar.ondigitalocean.app",
-                    "repo_url": "https://github.com/Two-Weeks-Team/smartspend-161898",
-                },
-                {
-                    "name": "queueless-158639",
-                    "live_url": "https://queueless-158639-44pch.ondigitalocean.app",
-                    "repo_url": "https://github.com/Two-Weeks-Team/queueless-158639",
-                },
-                {
-                    "name": "studymate-165585",
-                    "live_url": "https://studymate-165585-2mqzt.ondigitalocean.app",
-                    "repo_url": "https://github.com/Two-Weeks-Team/studymate-165585",
-                },
+                    "name": item["name"],
+                    "live_url": item["live_url"],
+                    "repo_url": item["repo_url"],
+                }
+                for item in showcase_apps
             ]
         },
     )
