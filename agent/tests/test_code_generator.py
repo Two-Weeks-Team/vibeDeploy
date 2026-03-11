@@ -159,6 +159,35 @@ def test_normalize_cross_stack_fixes_api_prefix_and_payload_field_names():
     assert 'JSON.stringify({ content: url })' in normalized_frontend["src/lib/api.ts"]
 
 
+def test_normalize_backend_files_strips_api_prefix_from_route_decorators():
+    files = {
+        "main.py": (
+            "from fastapi import FastAPI\n"
+            "from routes import router\n\n"
+            "app = FastAPI()\n"
+            "app.include_router(router)\n"
+        ),
+        "routes.py": (
+            "from fastapi import APIRouter\n\n"
+            "router = APIRouter()\n\n"
+            '@router.post("/api/plan")\n'
+            "async def create_plan():\n"
+            "    return {'ok': True}\n\n"
+            '@router.post("/api/insights")\n'
+            "async def create_insights():\n"
+            "    return {'ok': True}\n"
+        ),
+    }
+
+    normalized = _normalize_backend_files(files)
+
+    assert '@app.middleware("http")' in normalized["main.py"]
+    assert '@router.post("/plan")' in normalized["routes.py"]
+    assert '@router.post("/insights")' in normalized["routes.py"]
+    assert '"/api/plan"' not in normalized["routes.py"]
+    assert '"/api/insights"' not in normalized["routes.py"]
+
+
 def test_normalize_frontend_files_adds_resilient_api_error_handling_and_partial_success():
     files = {
         "src/lib/api.ts": (

@@ -1113,12 +1113,12 @@ async def health():
     return {"ok": True}
 
 
-@router.post("/api/plan")
+@router.post("/plan")
 async def create_plan(payload: PlanRequest):
     return build_plan(payload.query, payload.preferences)
 
 
-@router.post("/api/insights")
+@router.post("/insights")
 async def create_insights(payload: InsightRequest):
     return build_insights(payload.selection, payload.context)
 """,
@@ -1942,7 +1942,9 @@ def _normalize_backend_api_routes(files: dict[str, str]) -> dict[str, str]:
 
     routes_content = normalized.get("routes.py", "")
     if routes_content:
-        normalized["routes.py"] = _strip_api_prefix_from_router(routes_content)
+        routes_content = _strip_api_prefix_from_router(routes_content)
+        routes_content = _strip_api_prefix_from_route_decorators(routes_content)
+        normalized["routes.py"] = routes_content
 
     main_content = normalized.get("main.py", "")
     if main_content:
@@ -1961,6 +1963,17 @@ def _strip_api_prefix_from_router(content: str) -> str:
     args = re.sub(r",\s*,", ", ", args).strip().strip(",")
     replacement = f"APIRouter({args})" if args else "APIRouter()"
     return f"{content[:match.start()]}{replacement}{content[match.end():]}"
+
+
+def _strip_api_prefix_from_route_decorators(content: str) -> str:
+    updated = content
+    for target in ("router", "app"):
+        for method in ("get", "post", "put", "patch", "delete", "options", "head"):
+            updated = updated.replace(f'@{target}.{method}("/api/', f'@{target}.{method}("/')
+            updated = updated.replace(f"@{target}.{method}('/api/", f"@{target}.{method}('/")
+            updated = updated.replace(f'@{target}.{method}("/api")', f'@{target}.{method}("/")')
+            updated = updated.replace(f"@{target}.{method}('/api')", f"@{target}.{method}('/')")
+    return updated
 
 
 def _inject_optional_api_prefix_middleware(content: str) -> str:
