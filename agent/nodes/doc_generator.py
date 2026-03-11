@@ -2,6 +2,8 @@ import asyncio
 import json
 import re
 
+import yaml
+
 from ..llm import MODEL_CONFIG, ainvoke_with_retry, get_llm, get_rate_limit_fallback_models
 from ..prompts.doc_templates import (
     API_SPEC_SYSTEM_PROMPT,
@@ -29,14 +31,39 @@ async def doc_generator(state: VibeDeployState) -> dict:
     )
 
     context = _build_context(idea, council_analysis, scoring)
-
-    prd, tech_spec, api_spec, db_schema, app_spec_yaml = await asyncio.gather(
-        _generate_markdown_doc(llm, PRD_SYSTEM_PROMPT, context, fallback_models),
-        _generate_markdown_doc(llm, TECH_SPEC_SYSTEM_PROMPT, context, fallback_models),
-        _generate_markdown_doc(llm, API_SPEC_SYSTEM_PROMPT, context, fallback_models),
-        _generate_markdown_doc(llm, DB_SCHEMA_SYSTEM_PROMPT, context, fallback_models),
-        _generate_app_spec_yaml_doc(llm, context, idea, fallback_models),
+    prd = await _generate_markdown_doc(
+        llm,
+        PRD_SYSTEM_PROMPT,
+        context,
+        fallback_models,
+        fallback_title="Product Requirements",
+        idea=idea,
     )
+    tech_spec = await _generate_markdown_doc(
+        llm,
+        TECH_SPEC_SYSTEM_PROMPT,
+        context,
+        fallback_models,
+        fallback_title="Technical Specification",
+        idea=idea,
+    )
+    api_spec = await _generate_markdown_doc(
+        llm,
+        API_SPEC_SYSTEM_PROMPT,
+        context,
+        fallback_models,
+        fallback_title="API Specification",
+        idea=idea,
+    )
+    db_schema = await _generate_markdown_doc(
+        llm,
+        DB_SCHEMA_SYSTEM_PROMPT,
+        context,
+        fallback_models,
+        fallback_title="Database Schema",
+        idea=idea,
+    )
+    app_spec_yaml = await _generate_app_spec_yaml_doc(llm, context, idea, fallback_models)
 
     return {
         "generated_docs": {
@@ -62,63 +89,103 @@ def _build_context(idea: dict, council_analysis: dict, scoring: dict) -> str:
     )
 
 
-async def _generate_markdown_doc(llm, doc_system_prompt: str, context: str, fallback_models: list[str]) -> str:
-    response = await ainvoke_with_retry(
-        llm,
-        [
-            {
-                "role": "system",
-                "content": (
-                    f"{DOC_GENERATION_BASE_SYSTEM_PROMPT}\n\n"
-                    f"{doc_system_prompt}\n\n"
-                    "Return JSON with one key: 'content' containing the final markdown string."
-                ),
-            },
-            {
-                "role": "user",
-                "content": f"Create the document from this planning context:\n\n{context}",
-            },
-        ],
-        fallback_models=fallback_models,
-    )
+async def _generate_markdown_doc(
+    llm,
+    doc_system_prompt: str,
+    context: str,
+    fallback_models: list[str],
+    *,
+    fallback_title: str,
+    idea: dict,
+) -> str:
+    try:
+        response = await ainvoke_with_retry(
+            llm,
+            [
+                {
+                    "role": "system",
+                    "content": (
+                        f"{DOC_GENERATION_BASE_SYSTEM_PROMPT}\n\n"
+                        f"{doc_system_prompt}\n\n"
+                        "Return JSON with one key: 'content' containing the final markdown string."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": f"Create the document from this planning context:\n\n{context}",
+                },
+            ],
+            fallback_models=fallback_models,
+        )
+        parsed = _parse_json_response(response.content, {"content": ""})
+        content = parsed.get("content", "")
+        if isinstance(content, str) and content.strip():
+            return content
+    except Exception as exc:
+        return _fallback_markdown_doc(fallback_title, idea, str(exc)[:200])
 
-    parsed = _parse_json_response(response.content, {"content": ""})
-    content = parsed.get("content", "")
-    return content if isinstance(content, str) else ""
+    return _fallback_markdown_doc(fallback_title, idea, "empty_doc_response")
 
 
 async def _generate_app_spec_yaml_doc(llm, context: str, idea: dict, fallback_models: list[str]) -> str:
     app_name = _slugify(idea.get("name") or idea.get("tagline") or "vibedeploy-app")
     repo_placeholder = f"https://github.com/example/{app_name}.git"
     baseline_spec = build_app_spec(app_name, repo_placeholder)
+    try:
+        response = await ainvoke_with_retry(
+            llm,
+            [
+                {
+                    "role": "system",
+                    "content": (
+                        f"{DOC_GENERATION_BASE_SYSTEM_PROMPT}\n\n"
+                        f"{APP_SPEC_SYSTEM_PROMPT}\n\n"
+                        "Return JSON with one key: 'content' containing only YAML."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": (
+                        "Planning context:\n"
+                        f"{context}\n\n"
+                        "Reference baseline app spec dict from vibeDeploy tool pattern:\n"
+                        f"{json.dumps(baseline_spec, indent=2, ensure_ascii=False)}"
+                    ),
+                },
+            ],
+            fallback_models=fallback_models,
+        )
+        parsed = _parse_json_response(response.content, {"content": ""})
+        content = parsed.get("content", "")
+        if isinstance(content, str) and content.strip():
+            return content
+    except Exception:
+        pass
 
-    response = await ainvoke_with_retry(
-        llm,
-        [
-            {
-                "role": "system",
-                "content": (
-                    f"{DOC_GENERATION_BASE_SYSTEM_PROMPT}\n\n"
-                    f"{APP_SPEC_SYSTEM_PROMPT}\n\n"
-                    "Return JSON with one key: 'content' containing only YAML."
-                ),
-            },
-            {
-                "role": "user",
-                "content": (
-                    "Planning context:\n"
-                    f"{context}\n\n"
-                    "Reference baseline app spec dict from vibeDeploy tool pattern:\n"
-                    f"{json.dumps(baseline_spec, indent=2, ensure_ascii=False)}"
-                ),
-            },
-        ],
-        fallback_models=fallback_models,
-    )
+    return yaml.safe_dump(baseline_spec, sort_keys=False, allow_unicode=False)
 
-    parsed = _parse_json_response(response.content, {"content": ""})
-    content = parsed.get("content", "")
-    return content if isinstance(content, str) else ""
+
+def _fallback_markdown_doc(title: str, idea: dict, reason: str) -> str:
+    name = str(idea.get("name") or "Untitled App").strip()
+    tagline = str(idea.get("tagline") or "").strip()
+    problem = str(idea.get("problem") or "").strip()
+    solution = str(idea.get("solution") or "").strip()
+    target_users = str(idea.get("target_users") or "").strip()
+    features = [str(item).strip() for item in idea.get("key_features", []) if str(item).strip()]
+
+    lines = [f"# {title}", "", f"- App: {name}"]
+    if tagline:
+        lines.append(f"- Tagline: {tagline}")
+    if target_users:
+        lines.append(f"- Target Users: {target_users}")
+    if problem:
+        lines.extend(["", "## Problem", problem])
+    if solution:
+        lines.extend(["", "## Solution", solution])
+    if features:
+        lines.extend(["", "## Core Features", *[f"- {feature}" for feature in features[:6]]])
+    lines.extend(["", "## Delivery Note", f"- Fallback document generated because doc generation was unavailable: {reason}."])
+    return "\n".join(lines).strip()
 
 
 def _slugify(value: str) -> str:
