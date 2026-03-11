@@ -276,10 +276,15 @@ async def code_generator(state: VibeDeployState) -> dict:
     frontend_code = dict(existing_frontend_code)
     backend_code = dict(existing_backend_code)
     force_frontend_fallback = _should_force_frontend_fallback(code_eval_result)
+    prefer_deterministic_frontend = bool(str(idea.get("layout_archetype") or "").strip())
 
     if regenerate_frontend:
-        if force_frontend_fallback:
-            logger.warning("[CODE_GEN] Forcing deterministic frontend fallback after eval failure")
+        if prefer_deterministic_frontend or force_frontend_fallback:
+            logger.warning(
+                "[CODE_GEN] Using deterministic frontend scaffold (layout_archetype=%s, forced=%s)",
+                str(idea.get("layout_archetype") or ""),
+                force_frontend_fallback,
+            )
             generated_frontend = _build_fallback_frontend_bundle(context)
         else:
             generated_frontend = await _generate_frontend_files(
