@@ -175,9 +175,6 @@ export function HistoryList({ results, brainstorms }: HistoryListProps) {
                               <Brain className="w-3 h-3 mr-1" /> Brainstorm
                             </Badge>
                           )}
-                          <span className="font-mono text-xs text-muted-foreground/70">
-                            {item.data.thread_id}
-                          </span>
                         </div>
                         <div className="line-clamp-2 text-sm font-medium leading-6 text-foreground">
                           {getItemTitle(item)}
