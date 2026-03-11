@@ -16,6 +16,8 @@ logger = logging.getLogger(__name__)
 # Minimum expected file counts for validation
 _MIN_FRONTEND_FILES = 3  # At least package.json + 2 source files
 _MIN_BACKEND_FILES = 2  # At least main.py + requirements.txt
+_CODEGEN_MODEL_MAX_ATTEMPTS = 2
+_STACK_GENERATION_PAUSE_SECONDS = 2
 _FONT_DEFAULT_WEIGHTS = {
     "Merriweather": ["400", "700"],
     "Playfair_Display": ["400", "700"],
@@ -213,6 +215,8 @@ async def code_generator(state: VibeDeployState) -> dict:
     blueprint = state.get("blueprint", {}) or {}
     prompt_strategy = state.get("prompt_strategy", {}) or {}
     code_eval_result = state.get("code_eval_result")
+    existing_frontend_code = _normalize_frontend_files(_normalize_files_dict(state.get("frontend_code") or {}))
+    existing_backend_code = _normalize_backend_files(_normalize_files_dict(state.get("backend_code") or {}))
     frontend_model = MODEL_CONFIG.get("code_gen_frontend", MODEL_CONFIG["code_gen"])
     backend_model = MODEL_CONFIG.get("code_gen_backend", MODEL_CONFIG["code_gen"])
 
@@ -238,29 +242,58 @@ async def code_generator(state: VibeDeployState) -> dict:
     )
 
     eval_feedback = _build_eval_feedback(code_eval_result)
+    regenerate_frontend = _should_regenerate_target(
+        target="frontend",
+        existing_files=existing_frontend_code,
+        blueprint=blueprint,
+        code_eval_result=code_eval_result,
+    )
+    regenerate_backend = _should_regenerate_target(
+        target="backend",
+        existing_files=existing_backend_code,
+        blueprint=blueprint,
+        code_eval_result=code_eval_result,
+    )
 
-    frontend_code = await _generate_frontend_files(
-        frontend_llm,
-        context,
-        prompt_strategy=prompt_strategy,
-        eval_feedback=eval_feedback,
-        fallback_models=get_rate_limit_fallback_models(frontend_model),
-    )
-    await asyncio.sleep(8)
-    backend_code = await _generate_backend_files(
-        backend_llm,
-        context,
-        prompt_strategy=prompt_strategy,
-        eval_feedback=eval_feedback,
-        fallback_models=get_rate_limit_fallback_models(backend_model),
-    )
+    frontend_code = dict(existing_frontend_code)
+    backend_code = dict(existing_backend_code)
+
+    if regenerate_frontend:
+        generated_frontend = await _generate_frontend_files(
+            frontend_llm,
+            context,
+            prompt_strategy=prompt_strategy,
+            eval_feedback=eval_feedback,
+            fallback_models=get_rate_limit_fallback_models(frontend_model),
+            max_attempts=_CODEGEN_MODEL_MAX_ATTEMPTS,
+        )
+        frontend_code = _merge_generated_files(existing_frontend_code, generated_frontend, label="frontend")
+    else:
+        logger.info("[CODE_GEN] Reusing previous frontend bundle (%d files)", len(frontend_code))
+
+    if regenerate_frontend and regenerate_backend:
+        await asyncio.sleep(_STACK_GENERATION_PAUSE_SECONDS)
+
+    if regenerate_backend:
+        generated_backend = await _generate_backend_files(
+            backend_llm,
+            context,
+            prompt_strategy=prompt_strategy,
+            eval_feedback=eval_feedback,
+            fallback_models=get_rate_limit_fallback_models(backend_model),
+            max_attempts=_CODEGEN_MODEL_MAX_ATTEMPTS,
+        )
+        backend_code = _merge_generated_files(existing_backend_code, generated_backend, label="backend")
+    else:
+        logger.info("[CODE_GEN] Reusing previous backend bundle (%d files)", len(backend_code))
+
     frontend_code, backend_code = _normalize_cross_stack(frontend_code, backend_code)
 
     generation_warnings = []
 
-    if len(frontend_code) < _MIN_FRONTEND_FILES:
+    if regenerate_frontend and len(frontend_code) < _MIN_FRONTEND_FILES:
         warning = (
-            f"Frontend generation produced {len(frontend_code)} files "
+            f"Frontend generation produced {len(frontend_code)} merged files "
             f"(expected >= {_MIN_FRONTEND_FILES}). "
             f"Files: {list(frontend_code.keys()) if frontend_code else '(none)'}"
         )
@@ -268,31 +301,55 @@ async def code_generator(state: VibeDeployState) -> dict:
         generation_warnings.append(warning)
 
         logger.info("[CODE_GEN] Retrying frontend generation (attempt 2)...")
-        frontend_code = await _generate_frontend_files(
+        retried_frontend = await _generate_frontend_files(
             frontend_llm,
             context,
             retry=True,
             prompt_strategy=prompt_strategy,
+            eval_feedback=eval_feedback,
             fallback_models=get_rate_limit_fallback_models(frontend_model),
+            max_attempts=_CODEGEN_MODEL_MAX_ATTEMPTS,
         )
+        frontend_code = _merge_generated_files(frontend_code, retried_frontend, label="frontend")
         frontend_code, backend_code = _normalize_cross_stack(frontend_code, backend_code)
 
         if len(frontend_code) < _MIN_FRONTEND_FILES:
             retry_warning = (
-                f"Frontend retry also produced {len(frontend_code)} files. "
-                "Frontend will be omitted — backend-only deployment."
+                f"Frontend retry still has {len(frontend_code)} merged files. "
+                "Further code-eval retries are required before deployment."
             )
             logger.warning("[CODE_GEN] %s", retry_warning)
             generation_warnings.append(retry_warning)
 
-    if len(backend_code) < _MIN_BACKEND_FILES:
+    if regenerate_backend and len(backend_code) < _MIN_BACKEND_FILES:
         warning = (
-            f"Backend generation produced {len(backend_code)} files "
+            f"Backend generation produced {len(backend_code)} merged files "
             f"(expected >= {_MIN_BACKEND_FILES}). "
             f"Files: {list(backend_code.keys()) if backend_code else '(none)'}"
         )
         logger.warning("[CODE_GEN] %s", warning)
         generation_warnings.append(warning)
+
+        logger.info("[CODE_GEN] Retrying backend generation (attempt 2)...")
+        retried_backend = await _generate_backend_files(
+            backend_llm,
+            context,
+            retry=True,
+            prompt_strategy=prompt_strategy,
+            eval_feedback=eval_feedback,
+            fallback_models=get_rate_limit_fallback_models(backend_model),
+            max_attempts=_CODEGEN_MODEL_MAX_ATTEMPTS,
+        )
+        backend_code = _merge_generated_files(backend_code, retried_backend, label="backend")
+        frontend_code, backend_code = _normalize_cross_stack(frontend_code, backend_code)
+
+        if len(backend_code) < _MIN_BACKEND_FILES:
+            retry_warning = (
+                f"Backend retry still has {len(backend_code)} merged files. "
+                "Further code-eval retries are required before deployment."
+            )
+            logger.warning("[CODE_GEN] %s", retry_warning)
+            generation_warnings.append(retry_warning)
 
     logger.info(
         "[CODE_GEN] Result: frontend=%d files, backend=%d files, warnings=%d",
@@ -320,6 +377,50 @@ def _build_eval_feedback(code_eval_result: dict | None) -> str | None:
     if code_eval_result.get("missing_backend"):
         parts.append(f"Missing backend files: {', '.join(code_eval_result['missing_backend'])}")
     return "\n".join(parts) if parts else None
+
+
+def _should_regenerate_target(
+    *,
+    target: str,
+    existing_files: dict[str, str],
+    blueprint: dict | None,
+    code_eval_result: dict | None,
+) -> bool:
+    expected_files = ((blueprint or {}).get(f"{target}_files") or {})
+    if not expected_files:
+        return False
+    if not existing_files:
+        return True
+    if not code_eval_result:
+        return True
+
+    missing_key = f"missing_{target}"
+    other_missing_key = "missing_backend" if target == "frontend" else "missing_frontend"
+    if code_eval_result.get(missing_key):
+        return True
+    if code_eval_result.get(other_missing_key):
+        return False
+    return True
+
+
+def _merge_generated_files(
+    existing_files: dict[str, str],
+    generated_files: dict[str, str],
+    *,
+    label: str,
+) -> dict[str, str]:
+    if not generated_files:
+        if existing_files:
+            logger.warning(
+                "[CODE_GEN] %s generation returned 0 files; preserving previous %d-file bundle",
+                label,
+                len(existing_files),
+            )
+        return dict(existing_files)
+
+    merged = dict(existing_files)
+    merged.update(generated_files)
+    return merged
 
 
 def _get_prompt_target_bundle(prompt_strategy: dict | None, target: str) -> dict:
@@ -425,11 +526,18 @@ def _build_backend_prompt_messages(
     *,
     context: str,
     prompt_strategy: dict | None,
+    retry: bool = False,
     eval_feedback: str | None = None,
 ) -> list[dict[str, str]]:
     extra_instruction = ""
+    if retry:
+        extra_instruction = (
+            "\n\nCRITICAL: Your previous response could not be parsed as valid JSON. "
+            'You MUST return ONLY a valid JSON object like: {"files": {"path": "content", ...}}. '
+            "No markdown, no explanation — ONLY the JSON object."
+        )
     if eval_feedback:
-        extra_instruction = f"\n\nPREVIOUS EVALUATION FEEDBACK (fix these issues):\n{eval_feedback}"
+        extra_instruction += f"\n\nPREVIOUS EVALUATION FEEDBACK (fix these issues):\n{eval_feedback}"
 
     strategy_appendix = ((prompt_strategy or {}).get("backend_prompt_appendix") or "").strip()
     cross_model_contract = _build_cross_model_user_contract(prompt_strategy, "backend")
@@ -476,6 +584,7 @@ async def _generate_frontend_files(
     prompt_strategy: dict | None = None,
     eval_feedback: str | None = None,
     fallback_models: list[str] | None = None,
+    max_attempts: int = 6,
 ) -> dict[str, str]:
     response = await ainvoke_with_retry(
         llm,
@@ -485,6 +594,7 @@ async def _generate_frontend_files(
             retry=retry,
             eval_feedback=eval_feedback,
         ),
+        max_attempts=max_attempts,
         fallback_models=fallback_models,
     )
 
@@ -496,17 +606,21 @@ async def _generate_frontend_files(
 async def _generate_backend_files(
     llm,
     context: str,
+    retry: bool = False,
     prompt_strategy: dict | None = None,
     eval_feedback: str | None = None,
     fallback_models: list[str] | None = None,
+    max_attempts: int = 6,
 ) -> dict[str, str]:
     response = await ainvoke_with_retry(
         llm,
         _build_backend_prompt_messages(
             context=context,
             prompt_strategy=prompt_strategy,
+            retry=retry,
             eval_feedback=eval_feedback,
         ),
+        max_attempts=max_attempts,
         fallback_models=fallback_models,
     )
 

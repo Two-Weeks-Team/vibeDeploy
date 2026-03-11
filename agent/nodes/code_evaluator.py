@@ -32,6 +32,7 @@ _EXPERIENCE_STOPWORDS = {
 
 MAX_CODE_EVAL_ITERATIONS = 3
 MAX_EMPTY_FRONTEND_RETRIES = 5
+MAX_EMPTY_BACKEND_RETRIES = 5
 PASS_THRESHOLD = 80
 MIN_CONSISTENCY_TO_PASS = 75
 MIN_RUNNABILITY_TO_PASS = 85
@@ -708,26 +709,47 @@ def route_code_eval(state: VibeDeployState) -> str:
     iteration = state.get("code_eval_iteration", 0)
     blueprint = state.get("blueprint", {}) or {}
     frontend_code = state.get("frontend_code", {}) or {}
+    backend_code = state.get("backend_code", {}) or {}
 
     if eval_result.get("passed", False):
         logger.info("[CODE_EVAL] PASSED → deployer")
         return "deployer"
 
     expected_frontend = blueprint.get("frontend_files", {})
-    if not frontend_code and expected_frontend:
+    missing_frontend = eval_result.get("missing_frontend") or list(expected_frontend.keys() if not frontend_code else [])
+    if expected_frontend and missing_frontend:
         if iteration < MAX_EMPTY_FRONTEND_RETRIES:
             logger.warning(
-                "[CODE_EVAL] 0 frontend files (expected %d) → force retry (iter %d/%d)",
+                "[CODE_EVAL] Missing %d frontend files (expected %d) → force retry (iter %d/%d)",
+                len(missing_frontend),
                 len(expected_frontend),
                 iteration,
                 MAX_EMPTY_FRONTEND_RETRIES,
             )
             return "code_generator"
         logger.error(
-            "[CODE_EVAL] Still 0 frontend after %d iters → deployer (backend-only)",
+            "[CODE_EVAL] Still missing %d frontend files after %d iters → deployer (best effort)",
+            len(missing_frontend),
             iteration,
         )
-        return "deployer"
+
+    expected_backend = blueprint.get("backend_files", {})
+    missing_backend = eval_result.get("missing_backend") or list(expected_backend.keys() if not backend_code else [])
+    if expected_backend and missing_backend:
+        if iteration < MAX_EMPTY_BACKEND_RETRIES:
+            logger.warning(
+                "[CODE_EVAL] Missing %d backend files (expected %d) → force retry (iter %d/%d)",
+                len(missing_backend),
+                len(expected_backend),
+                iteration,
+                MAX_EMPTY_BACKEND_RETRIES,
+            )
+            return "code_generator"
+        logger.error(
+            "[CODE_EVAL] Still missing %d backend files after %d iters → deployer (best effort)",
+            len(missing_backend),
+            iteration,
+        )
 
     if iteration >= MAX_CODE_EVAL_ITERATIONS:
         logger.info("[CODE_EVAL] Max iterations reached → deployer (best effort)")

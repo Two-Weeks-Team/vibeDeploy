@@ -1,5 +1,8 @@
 import json
 
+import pytest
+
+import agent.nodes.code_generator as code_generator_module
 from agent.nodes.code_generator import (
     _build_backend_prompt_messages,
     _build_frontend_prompt_messages,
@@ -460,3 +463,112 @@ def test_normalize_backend_files_awaits_async_ai_helpers_in_routes():
 
     assert "async def create_bookmark" in normalized["routes.py"]
     assert "result = await summarize_text" in normalized["routes.py"]
+
+
+@pytest.mark.asyncio
+async def test_code_generator_regenerates_only_missing_frontend(monkeypatch):
+    state = {
+        "generated_docs": {},
+        "idea": {"title": "QueueFlow"},
+        "blueprint": {
+            "frontend_files": {
+                "package.json": {},
+                "src/app/layout.tsx": {},
+                "src/app/page.tsx": {},
+            },
+            "backend_files": {
+                "main.py": {},
+                "requirements.txt": {},
+            },
+        },
+        "prompt_strategy": {},
+        "code_eval_result": {
+            "passed": False,
+            "missing_frontend": ["src/app/page.tsx"],
+            "missing_backend": [],
+        },
+        "frontend_code": {},
+        "backend_code": {
+            "main.py": "from fastapi import FastAPI\napp = FastAPI()\n",
+            "requirements.txt": "fastapi\nuvicorn\n",
+        },
+    }
+    calls = {"frontend": 0, "backend": 0, "max_attempts": []}
+
+    async def fake_frontend(*args, **kwargs):
+        calls["frontend"] += 1
+        calls["max_attempts"].append(kwargs["max_attempts"])
+        return {
+            "package.json": '{"name":"queueflow","private":true}',
+            "src/app/layout.tsx": "export default function Layout({ children }) { return <html><body>{children}</body></html>; }",
+            "src/app/page.tsx": "export default function Page() { return <main>QueueFlow</main>; }",
+        }
+
+    async def fake_backend(*args, **kwargs):
+        calls["backend"] += 1
+        return {}
+
+    monkeypatch.setattr(code_generator_module, "get_llm", lambda **kwargs: object())
+    monkeypatch.setattr(code_generator_module, "get_rate_limit_fallback_models", lambda model: [])
+    monkeypatch.setattr(code_generator_module, "_generate_frontend_files", fake_frontend)
+    monkeypatch.setattr(code_generator_module, "_generate_backend_files", fake_backend)
+    monkeypatch.setattr(code_generator_module, "_normalize_cross_stack", lambda fe, be: (fe, be))
+
+    result = await code_generator_module.code_generator(state)
+
+    assert calls["frontend"] == 1
+    assert calls["backend"] == 0
+    assert calls["max_attempts"] == [code_generator_module._CODEGEN_MODEL_MAX_ATTEMPTS]
+    assert "src/app/page.tsx" in result["frontend_code"]
+    assert "main.py" in result["backend_code"]
+    assert "requirements.txt" in result["backend_code"]
+
+
+@pytest.mark.asyncio
+async def test_code_generator_merges_new_backend_files_into_existing_bundle(monkeypatch):
+    state = {
+        "generated_docs": {},
+        "idea": {"title": "TripPilot"},
+        "blueprint": {
+            "frontend_files": {},
+            "backend_files": {
+                "main.py": {},
+                "requirements.txt": {},
+                "routes.py": {},
+            },
+        },
+        "prompt_strategy": {},
+        "code_eval_result": {
+            "passed": False,
+            "missing_frontend": [],
+            "missing_backend": ["routes.py"],
+        },
+        "frontend_code": {},
+        "backend_code": {
+            "main.py": "from fastapi import FastAPI\napp = FastAPI()\n",
+            "requirements.txt": "fastapi\nuvicorn\n",
+        },
+    }
+    calls = {"frontend": 0, "backend": 0}
+
+    async def fake_backend(*args, **kwargs):
+        calls["backend"] += 1
+        return {
+            "routes.py": "from fastapi import APIRouter\nrouter = APIRouter()\n@router.get('/health')\nasync def health(): return {'ok': True}\n"
+        }
+
+    async def fake_frontend(*args, **kwargs):
+        calls["frontend"] += 1
+        return {}
+
+    monkeypatch.setattr(code_generator_module, "get_llm", lambda **kwargs: object())
+    monkeypatch.setattr(code_generator_module, "get_rate_limit_fallback_models", lambda model: [])
+    monkeypatch.setattr(code_generator_module, "_generate_frontend_files", fake_frontend)
+    monkeypatch.setattr(code_generator_module, "_generate_backend_files", fake_backend)
+    monkeypatch.setattr(code_generator_module, "_normalize_cross_stack", lambda fe, be: (fe, be))
+
+    result = await code_generator_module.code_generator(state)
+
+    assert calls["frontend"] == 0
+    assert calls["backend"] == 1
+    assert set(result["backend_code"]) >= {"main.py", "requirements.txt", "routes.py"}

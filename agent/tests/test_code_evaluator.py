@@ -1,4 +1,4 @@
-from agent.nodes.code_evaluator import _check_consistency, _check_experience, _check_runnability
+from agent.nodes.code_evaluator import _check_consistency, _check_experience, _check_runnability, route_code_eval
 
 
 def test_check_consistency_matches_contract_calls_across_generated_files():
@@ -170,3 +170,53 @@ def test_check_experience_rewards_multi_panel_ui_and_resilient_api_patterns():
     }
 
     assert _check_experience(frontend_code, blueprint) >= 80.0
+
+
+def test_route_code_eval_retries_missing_backend_beyond_generic_iteration_limit():
+    state = {
+        "code_eval_result": {
+            "passed": False,
+            "missing_frontend": [],
+            "missing_backend": ["routes.py"],
+        },
+        "code_eval_iteration": 3,
+        "blueprint": {
+            "frontend_files": {},
+            "backend_files": {
+                "main.py": {},
+                "requirements.txt": {},
+                "routes.py": {},
+            },
+        },
+        "backend_code": {
+            "main.py": "from fastapi import FastAPI\napp = FastAPI()\n",
+            "requirements.txt": "fastapi\nuvicorn\n",
+        },
+    }
+
+    assert route_code_eval(state) == "code_generator"
+
+
+def test_route_code_eval_deploys_after_backend_retry_budget_is_exhausted():
+    state = {
+        "code_eval_result": {
+            "passed": False,
+            "missing_frontend": [],
+            "missing_backend": ["routes.py"],
+        },
+        "code_eval_iteration": 5,
+        "blueprint": {
+            "frontend_files": {},
+            "backend_files": {
+                "main.py": {},
+                "requirements.txt": {},
+                "routes.py": {},
+            },
+        },
+        "backend_code": {
+            "main.py": "from fastapi import FastAPI\napp = FastAPI()\n",
+            "requirements.txt": "fastapi\nuvicorn\n",
+        },
+    }
+
+    assert route_code_eval(state) == "deployer"
