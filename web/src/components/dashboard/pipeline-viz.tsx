@@ -42,6 +42,8 @@ interface CalloutDef {
   className: string;
 }
 
+type ParticleRoute = string[];
+
 const SVG_WIDTH = 100;
 const SVG_HEIGHT = 92;
 
@@ -190,30 +192,23 @@ const EDGE_COLORS: Record<NodeStatus, string> = {
   error: "rgba(239,68,68,0.65)",
 };
 
+const PARTICLE_DUR_SECONDS = 12;
 const PARTICLE_DUR = "12s";
-const EASE = "0.25 0.1 0.25 1";
-
-const EVAL_KT = "0;0.04;0.08;0.13;0.21;0.28;0.34;0.42;0.48;0.53;0.58;0.63;0.68;0.74;0.79;0.84;0.88;0.92;0.96;1";
-const EVAL_CY = "4;11;20;20;29;38;38;47;53;68;68;68;76;86;86;86;86;86;86;86";
-const EVAL_CX: number[][] = [
-  [50, 50, 10, 10, 50, 10, 10, 50, 50, 20, 50, 80, 50, 8, 24, 40, 56, 72, 88, 88],
-  [50, 50, 30, 30, 50, 30, 30, 50, 50, 20, 50, 80, 50, 8, 24, 40, 56, 72, 88, 88],
-  [50, 50, 50, 50, 50, 50, 50, 50, 50, 20, 50, 80, 50, 8, 24, 40, 56, 72, 88, 88],
-  [50, 50, 70, 70, 50, 70, 70, 50, 50, 20, 50, 80, 50, 8, 24, 40, 56, 72, 88, 88],
-  [50, 50, 90, 90, 50, 90, 90, 50, 50, 20, 50, 80, 50, 8, 24, 40, 56, 72, 88, 88],
+const EVAL_PARTICLE_ROUTES: ParticleRoute[] = [
+  ["input", "enrich", "architect", "cross_exam", "score_tech", "verdict", "decision", "doc_gen", "blueprint", "code_gen", "code_eval", "git_push", "ci_test", "app_spec", "do_build", "do_deploy", "verified"],
+  ["input", "enrich", "scout", "cross_exam", "score_market", "verdict", "decision", "doc_gen", "blueprint", "code_gen", "code_eval", "git_push", "ci_test", "app_spec", "do_build", "do_deploy", "verified"],
+  ["input", "enrich", "catalyst", "cross_exam", "score_innovation", "verdict", "decision", "doc_gen", "blueprint", "code_gen", "code_eval", "git_push", "ci_test", "app_spec", "do_build", "do_deploy", "verified"],
+  ["input", "enrich", "guardian", "cross_exam", "score_risk", "verdict", "decision", "doc_gen", "blueprint", "code_gen", "code_eval", "git_push", "ci_test", "app_spec", "do_build", "do_deploy", "verified"],
+  ["input", "enrich", "advocate", "cross_exam", "score_user", "verdict", "decision", "doc_gen", "blueprint", "code_gen", "code_eval", "git_push", "ci_test", "app_spec", "do_build", "do_deploy", "verified"],
 ];
-const EVAL_KS = Array(19).fill(EASE).join("; ");
 
-const BS_KT = "0;0.30;0.45;1";
-const BS_CY = "10;45;45;85";
-const BS_CX: number[][] = [
-  [50, 10, 10, 50],
-  [50, 30, 30, 50],
-  [50, 50, 50, 50],
-  [50, 70, 70, 50],
-  [50, 90, 90, 50],
+const BS_PARTICLE_ROUTES: ParticleRoute[] = [
+  ["input", "architect", "synthesize"],
+  ["input", "scout", "synthesize"],
+  ["input", "catalyst", "synthesize"],
+  ["input", "guardian", "synthesize"],
+  ["input", "advocate", "synthesize"],
 ];
-const BS_KS = Array(3).fill(EASE).join("; ");
 
 const SVG_STYLES = `
   @keyframes edgeFlow {
@@ -244,6 +239,26 @@ const SVG_STYLES = `
 
 function toVerticalPercent(y: number) {
   return `${(y / SVG_HEIGHT) * 100}%`;
+}
+
+function buildEdgeCurve(source: NodeDef, target: NodeDef, includeMove: boolean) {
+  const midY = (source.y + target.y) / 2;
+  const command = `C ${source.x} ${midY}, ${target.x} ${midY}, ${target.x} ${target.y}`;
+  return includeMove ? `M ${source.x} ${source.y} ${command}` : command;
+}
+
+function buildParticlePath(nodes: NodeDef[], route: ParticleRoute) {
+  const nodeMap = new Map(nodes.map((node) => [node.id, node]));
+  let path = "";
+
+  for (let index = 0; index < route.length - 1; index += 1) {
+    const source = nodeMap.get(route[index]);
+    const target = nodeMap.get(route[index + 1]);
+    if (!source || !target) return null;
+    path += `${index === 0 ? "" : " "}${buildEdgeCurve(source, target, index === 0)}`;
+  }
+
+  return path || null;
 }
 
 function getVisibleNodeIds(
@@ -296,6 +311,9 @@ export function PipelineViz({ activeNodes = {}, pipeline = "evaluation", classNa
   const visibleNodeIds = getVisibleNodeIds(pipeline, nodes, activeNodes);
   const isOverview = Object.keys(activeNodes).length === 0;
   const visibleEdges = edges.filter((edge) => visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target));
+  const particlePaths = (pipeline === "evaluation" ? EVAL_PARTICLE_ROUTES : BS_PARTICLE_ROUTES)
+    .map((route) => buildParticlePath(nodes, route))
+    .filter((path): path is string => Boolean(path));
 
   const getStatusColor = (status: NodeStatus) => {
     switch (status) {
@@ -438,8 +456,7 @@ export function PipelineViz({ activeNodes = {}, pipeline = "evaluation", classNa
                 edgeClass = "edge-complete";
               }
 
-              const midY = (src.y + tgt.y) / 2;
-              const d = `M ${src.x} ${src.y} C ${src.x} ${midY}, ${tgt.x} ${midY}, ${tgt.x} ${tgt.y}`;
+              const d = buildEdgeCurve(src, tgt, true);
 
               return (
                 <g key={`${edge.source}-${edge.target}`}>
@@ -468,21 +485,16 @@ export function PipelineViz({ activeNodes = {}, pipeline = "evaluation", classNa
             })}
 
             {isOverview &&
-              (pipeline === "evaluation" ? EVAL_CX : BS_CX).map((cxArr) => {
-                const kt = pipeline === "evaluation" ? EVAL_KT : BS_KT;
-                const cy = pipeline === "evaluation" ? EVAL_CY : BS_CY;
-                const ks = pipeline === "evaluation" ? EVAL_KS : BS_KS;
-                const cx = cxArr.join(";");
-                const particleId = `p-${pipeline}-${cxArr[1]}`;
+              particlePaths.map((path, index) => {
+                const begin = index === 0 ? "0s" : `-${(PARTICLE_DUR_SECONDS * index) / particlePaths.length}s`;
+                const particleId = `p-${pipeline}-${index}`;
                 return (
                   <g key={particleId}>
                     <circle r="0.38" fill="rgba(125,211,252,0.78)">
-                      <animate attributeName="cx" dur={PARTICLE_DUR} repeatCount="indefinite" values={cx} keyTimes={kt} calcMode="spline" keySplines={ks} />
-                      <animate attributeName="cy" dur={PARTICLE_DUR} repeatCount="indefinite" values={cy} keyTimes={kt} calcMode="spline" keySplines={ks} />
+                      <animateMotion dur={PARTICLE_DUR} begin={begin} repeatCount="indefinite" path={path} rotate="auto" />
                     </circle>
                     <circle r="1.1" fill="rgba(56,189,248,0.12)" filter="url(#particle-glow)">
-                      <animate attributeName="cx" dur={PARTICLE_DUR} repeatCount="indefinite" values={cx} keyTimes={kt} calcMode="spline" keySplines={ks} />
-                      <animate attributeName="cy" dur={PARTICLE_DUR} repeatCount="indefinite" values={cy} keyTimes={kt} calcMode="spline" keySplines={ks} />
+                      <animateMotion dur={PARTICLE_DUR} begin={begin} repeatCount="indefinite" path={path} rotate="auto" />
                     </circle>
                   </g>
                 );
