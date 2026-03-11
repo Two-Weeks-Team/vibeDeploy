@@ -67,6 +67,11 @@ export function HistoryList({ results, brainstorms }: HistoryListProps) {
 
   const visibleItems = items.slice(0, visibleCount);
 
+  const getItemTitle = (item: UnifiedItem) =>
+    item.type === "evaluation"
+      ? item.data.idea_summary || item.data.input_prompt || item.data.thread_id
+      : item.data.idea_summary || item.data.thread_id;
+
   const getVerdictBadge = (verdict: string) => {
     switch (verdict) {
       case "GO":
@@ -158,8 +163,8 @@ export function HistoryList({ results, brainstorms }: HistoryListProps) {
                   onClick={() => setSelectedItem(item)}
                 >
                   <CardContent className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                    <div className="flex items-center gap-4">
-                      <div className="flex flex-col">
+                    <div className="flex min-w-0 items-center gap-4">
+                      <div className="flex min-w-0 flex-col">
                         <div className="flex items-center gap-2 mb-1">
                           {item.type === "evaluation" ? (
                             <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/20">
@@ -174,7 +179,10 @@ export function HistoryList({ results, brainstorms }: HistoryListProps) {
                             {item.data.thread_id.substring(0, 8)}
                           </span>
                         </div>
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <div className="line-clamp-2 text-sm font-medium leading-6 text-foreground">
+                          {getItemTitle(item)}
+                        </div>
+                        <div className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
                           <Clock className="w-3 h-3" />
                           {item.date.toLocaleString()}
                         </div>
@@ -241,13 +249,9 @@ export function HistoryList({ results, brainstorms }: HistoryListProps) {
       <Dialog open={!!selectedItem} onOpenChange={(open) => !open && setSelectedItem(null)}>
         <DialogContent className="max-w-3xl max-h-[80vh] flex flex-col">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              {selectedItem?.type === "evaluation" ? "Evaluation Details" : "Brainstorm Details"}
-              <span className="font-mono text-sm text-muted-foreground font-normal">
-                {selectedItem?.data.thread_id}
-              </span>
-            </DialogTitle>
+            <DialogTitle className="truncate">{selectedItem ? getItemTitle(selectedItem) : ""}</DialogTitle>
             <DialogDescription>
+              {selectedItem?.type === "evaluation" ? "Evaluation" : "Brainstorm"} · {selectedItem?.data.thread_id} ·{" "}
               {selectedItem?.date.toLocaleString()}
             </DialogDescription>
           </DialogHeader>

@@ -14,6 +14,8 @@ Run: python -m agent.server
 import asyncio
 import json
 import os
+import re
+import shutil
 import time
 import traceback
 from collections.abc import AsyncGenerator
@@ -31,6 +33,7 @@ from .cost import estimate_pipeline_cost
 from .db.store import ResultStore
 from .llm import get_runtime_model_config
 from .sse import NODE_EVENTS, format_sse
+from .tools.digitalocean import list_apps as list_digitalocean_apps
 
 _AGENT_DIR = Path(__file__).resolve().parent
 load_dotenv(_AGENT_DIR / ".env.test")
@@ -40,6 +43,14 @@ _store: ResultStore | None = None
 # ── Dashboard live tracking ──────────────────────────────────────────
 _active_pipelines: dict[str, dict] = {}
 _dashboard_queues: list[asyncio.Queue] = []
+_DASHBOARD_SHOWCASE_TTL_SECONDS = 15
+_DASHBOARD_SNAPSHOT_TTL_SECONDS = 4
+_DASHBOARD_SOURCE_LIMIT = 200
+_SHOWCASE_FAMILY_SUFFIXES = {"ai", "app", "api", "lite", "platform", "pro", "service", "site", "web"}
+_dashboard_showcase_cache = {"expires_at": 0.0, "apps": []}
+_dashboard_snapshot_cache = {"expires_at": 0.0, "meetings": [], "brainstorms": [], "filtered": False}
+_dashboard_showcase_lock: asyncio.Lock | None = None
+_dashboard_snapshot_lock: asyncio.Lock | None = None
 
 
 def _register_pipeline(thread_id: str, pipeline_type: str, prompt: str):
@@ -76,6 +87,284 @@ async def _broadcast_event(event_data: dict):
             dead.append(q)
     for q in dead:
         _dashboard_queues.remove(q)
+
+
+def _get_dashboard_showcase_lock() -> asyncio.Lock:
+    global _dashboard_showcase_lock
+    if _dashboard_showcase_lock is None:
+        _dashboard_showcase_lock = asyncio.Lock()
+    return _dashboard_showcase_lock
+
+
+def _get_dashboard_snapshot_lock() -> asyncio.Lock:
+    global _dashboard_snapshot_lock
+    if _dashboard_snapshot_lock is None:
+        _dashboard_snapshot_lock = asyncio.Lock()
+    return _dashboard_snapshot_lock
+
+
+def _normalize_repo_identifier(value: str) -> str:
+    normalized = (value or "").strip().lower()
+    if normalized.startswith("https://github.com/"):
+        normalized = normalized[len("https://github.com/") :]
+    return normalized.removesuffix(".git").strip("/")
+
+
+def _repo_basename(value: str) -> str:
+    normalized = _normalize_repo_identifier(value)
+    return normalized.rsplit("/", 1)[-1] if normalized else ""
+
+
+def _normalize_live_url(value: str) -> str:
+    return (value or "").strip().rstrip("/")
+
+
+def _project_family(value: str) -> str:
+    basename = _repo_basename(value)
+    if not basename:
+        return ""
+
+    tokens = re.findall(r"[a-z0-9]+", basename)
+    filtered: list[str] = []
+    for token in tokens:
+        if token.isdigit() or re.fullmatch(r"[0-9a-f]{6,}", token):
+            continue
+        filtered.append(token)
+
+    while filtered and filtered[-1] in _SHOWCASE_FAMILY_SUFFIXES:
+        filtered.pop()
+
+    return "-".join(filtered)
+
+
+def _extract_app_repo_candidates(spec: dict) -> set[str]:
+    candidates: set[str] = set()
+    for key in ("services", "workers", "jobs", "static_sites"):
+        for component in spec.get(key, []) or []:
+            github = component.get("github", {}) or {}
+            repo = _normalize_repo_identifier(str(github.get("repo", "")))
+            if repo:
+                candidates.add(repo)
+                candidates.add(_repo_basename(repo))
+
+    name = _normalize_repo_identifier(str(spec.get("name", "")))
+    if name:
+        candidates.add(name)
+        candidates.add(_repo_basename(name))
+    return {candidate for candidate in candidates if candidate}
+
+
+def _extract_primary_repo_url(spec: dict) -> str:
+    for key in ("services", "workers", "jobs", "static_sites"):
+        for component in spec.get(key, []) or []:
+            github = component.get("github", {}) or {}
+            repo = _normalize_repo_identifier(str(github.get("repo", "")))
+            if repo and "/" in repo:
+                return f"https://github.com/{repo}"
+    return ""
+
+
+async def _list_doctl_apps() -> list[dict]:
+    if shutil.which("doctl") is None:
+        return []
+
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "doctl",
+            "apps",
+            "list",
+            "-o",
+            "json",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, _stderr = await asyncio.wait_for(proc.communicate(), timeout=15)
+        if proc.returncode != 0:
+            return []
+        payload = json.loads(stdout.decode("utf-8"))
+        return payload if isinstance(payload, list) else []
+    except Exception:
+        return []
+
+
+async def _get_showcase_live_apps() -> list[dict]:
+    now = time.time()
+    if _dashboard_showcase_cache["expires_at"] > now:
+        return _dashboard_showcase_cache["apps"]
+
+    async with _get_dashboard_showcase_lock():
+        now = time.time()
+        if _dashboard_showcase_cache["expires_at"] > now:
+            return _dashboard_showcase_cache["apps"]
+
+        raw_apps = await list_digitalocean_apps(per_page=100)
+        if not raw_apps:
+            raw_apps = await _list_doctl_apps()
+
+        showcase_apps: list[dict] = []
+        for app in raw_apps:
+            spec = app.get("spec", {}) or {}
+            name = _repo_basename(str(spec.get("name", "")))
+            live_url = _normalize_live_url(str(app.get("live_url") or app.get("default_ingress") or ""))
+            phase = str((app.get("active_deployment") or {}).get("phase") or "").upper()
+            repo_candidates = _extract_app_repo_candidates(spec)
+            family_candidates = {
+                family
+                for family in {_project_family(candidate) for candidate in repo_candidates | ({name} if name else set())}
+                if family
+            }
+
+            if not live_url or "vibedeploy" in live_url:
+                continue
+            if name == "vibedeploy":
+                continue
+            if phase and phase != "ACTIVE":
+                continue
+
+            showcase_apps.append(
+                {
+                    "name": name,
+                    "live_url": live_url,
+                    "repo_url": _extract_primary_repo_url(spec),
+                    "repo_candidates": repo_candidates,
+                    "family_candidates": family_candidates,
+                }
+            )
+
+        _dashboard_showcase_cache["expires_at"] = time.time() + _DASHBOARD_SHOWCASE_TTL_SECONDS
+        _dashboard_showcase_cache["apps"] = showcase_apps
+        return showcase_apps
+
+
+def _meeting_match_score(meeting: dict, showcase_app: dict) -> int:
+    deployment = meeting.get("deployment") or {}
+    meeting_live_url = _normalize_live_url(str(deployment.get("liveUrl", "")))
+    if meeting_live_url and meeting_live_url == showcase_app["live_url"]:
+        return 400
+
+    repo_identifier = _normalize_repo_identifier(str(deployment.get("repoUrl", "")))
+    repo_basename = _repo_basename(repo_identifier)
+    if {candidate for candidate in (repo_identifier, repo_basename) if candidate} & showcase_app["repo_candidates"]:
+        return 300
+
+    meeting_family = _project_family(repo_identifier or repo_basename)
+    if meeting_family and meeting_family in showcase_app["family_candidates"]:
+        return 100
+
+    return 0
+
+
+def _reconcile_showcase_meetings(meetings: list[dict], showcase_apps: list[dict]) -> list[dict] | None:
+    if not showcase_apps:
+        return None
+
+    matches: dict[str, dict] = {}
+    used_threads: set[str] = set()
+    used_live_urls: set[str] = set()
+
+    for min_score in (300, 100):
+        for showcase_app in showcase_apps:
+            if showcase_app["live_url"] in used_live_urls:
+                continue
+
+            best_match: dict | None = None
+            best_score = 0
+            for meeting in meetings:
+                thread_id = str(meeting.get("thread_id", ""))
+                if not thread_id or thread_id in used_threads:
+                    continue
+
+                score = _meeting_match_score(meeting, showcase_app)
+                if score < min_score or score <= best_score:
+                    continue
+
+                best_match = meeting
+                best_score = score
+
+            if best_match is None:
+                continue
+
+            thread_id = str(best_match["thread_id"])
+            matches[thread_id] = showcase_app
+            used_threads.add(thread_id)
+            used_live_urls.add(showcase_app["live_url"])
+
+    if not matches:
+        return None
+
+    reconciled: list[dict] = []
+    for meeting in meetings:
+        showcase_app = matches.get(str(meeting.get("thread_id", "")))
+        if not showcase_app:
+            continue
+
+        deployment = dict(meeting.get("deployment") or {})
+        deployment["liveUrl"] = showcase_app["live_url"]
+        if showcase_app["repo_url"]:
+            deployment["repoUrl"] = showcase_app["repo_url"]
+
+        reconciled.append({**meeting, "deployment": deployment})
+
+    return reconciled
+
+
+async def _get_dashboard_snapshot() -> tuple[list[dict], list[dict], bool]:
+    now = time.time()
+    if _dashboard_snapshot_cache["expires_at"] > now:
+        return (
+            _dashboard_snapshot_cache["meetings"],
+            _dashboard_snapshot_cache["brainstorms"],
+            bool(_dashboard_snapshot_cache["filtered"]),
+        )
+
+    async with _get_dashboard_snapshot_lock():
+        now = time.time()
+        if _dashboard_snapshot_cache["expires_at"] > now:
+            return (
+                _dashboard_snapshot_cache["meetings"],
+                _dashboard_snapshot_cache["brainstorms"],
+                bool(_dashboard_snapshot_cache["filtered"]),
+            )
+
+        meetings = await _store.list_meetings(limit=_DASHBOARD_SOURCE_LIMIT)
+        brainstorms = await _store.list_brainstorms(limit=_DASHBOARD_SOURCE_LIMIT)
+        filtered = False
+
+        showcase_apps = await _get_showcase_live_apps()
+        reconciled_meetings = _reconcile_showcase_meetings(meetings, showcase_apps)
+        if reconciled_meetings is not None:
+            meetings = reconciled_meetings
+            selected_thread_ids = {str(meeting.get("thread_id", "")) for meeting in meetings}
+            brainstorms = [item for item in brainstorms if str(item.get("thread_id", "")) in selected_thread_ids]
+            filtered = True
+
+        _dashboard_snapshot_cache["expires_at"] = time.time() + _DASHBOARD_SNAPSHOT_TTL_SECONDS
+        _dashboard_snapshot_cache["meetings"] = meetings
+        _dashboard_snapshot_cache["brainstorms"] = brainstorms
+        _dashboard_snapshot_cache["filtered"] = filtered
+
+        return meetings, brainstorms, filtered
+
+
+def _invalidate_dashboard_snapshot_cache() -> None:
+    _dashboard_snapshot_cache["expires_at"] = 0.0
+    _dashboard_snapshot_cache["meetings"] = []
+    _dashboard_snapshot_cache["brainstorms"] = []
+    _dashboard_snapshot_cache["filtered"] = False
+
+
+def _compute_dashboard_stats(meetings: list[dict], brainstorms: list[dict]) -> dict:
+    total_meetings = len(meetings)
+    total_brainstorms = len(brainstorms)
+    go_count = sum(1 for item in meetings if item.get("verdict") == "GO")
+    avg_score = round(sum(float(item.get("score") or 0) for item in meetings) / total_meetings, 1) if meetings else 0
+    return {
+        "total_meetings": total_meetings,
+        "total_brainstorms": total_brainstorms,
+        "avg_score": avg_score,
+        "go_count": go_count,
+        "nogo_count": total_meetings - go_count,
+    }
 
 
 async def _with_tracking(
@@ -260,6 +549,7 @@ async def _store_result(thread_id: str, state: dict):
         "idea_summary": state.get("idea_summary", ""),
     }
     await _store.save_meeting(thread_id, result)
+    _invalidate_dashboard_snapshot_cache()
 
 
 class RunRequest(BaseModel):
@@ -772,6 +1062,7 @@ async def _store_brainstorm_result(thread_id: str, state: dict):
         "cost_estimate": state.get("cost_estimate"),
     }
     await _store.save_brainstorm(thread_id, result)
+    _invalidate_dashboard_snapshot_cache()
 
 
 @app.post("/api/brainstorm")
@@ -818,12 +1109,14 @@ async def get_result(meeting_id: str):
 @app.put("/test/result/{meeting_id}")
 async def put_test_result(meeting_id: str, body: dict):
     await _store.save_meeting(meeting_id, body)
+    _invalidate_dashboard_snapshot_cache()
     return {"stored": meeting_id}
 
 
 @app.put("/test/brainstorm/{brainstorm_id}")
 async def put_test_brainstorm(brainstorm_id: str, body: dict):
     await _store.save_brainstorm(brainstorm_id, body)
+    _invalidate_dashboard_snapshot_cache()
     return {"stored": brainstorm_id}
 
 
@@ -855,28 +1148,32 @@ async def models():
 @app.get("/dashboard/stats")
 @app.get("/stats")
 async def dashboard_stats():
-    stats = await _store.get_stats()
-    return stats
+    meetings, brainstorms, filtered = await _get_dashboard_snapshot()
+    if not filtered:
+        return await _store.get_stats()
+    return _compute_dashboard_stats(meetings, brainstorms)
 
 
 @app.get("/dashboard/results")
 @app.get("/results")
 async def dashboard_results():
-    return await _store.list_meetings(limit=50)
+    meetings, _brainstorms, _filtered = await _get_dashboard_snapshot()
+    return meetings[:50]
 
 
 @app.get("/dashboard/brainstorms")
 @app.get("/brainstorms")
 async def dashboard_brainstorms():
-    return await _store.list_brainstorms(limit=50)
+    _meetings, brainstorms, _filtered = await _get_dashboard_snapshot()
+    return brainstorms[:50]
 
 
 @app.get("/dashboard/deployments")
 @app.get("/deployments")
 async def dashboard_deployments():
-    meetings = await _store.list_meetings(limit=100)
+    meetings, _brainstorms, _filtered = await _get_dashboard_snapshot()
     deployed = []
-    for m in meetings:
+    for m in meetings[:100]:
         dep = m.get("deployment")
         if dep and (dep.get("liveUrl") or dep.get("repoUrl")):
             deployed.append(
