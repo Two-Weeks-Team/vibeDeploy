@@ -525,6 +525,13 @@ _PYDANTIC_FIELD_CLASH_RE = re.compile(
 _NEXT_METADATA_CLIENT_ERROR_RE = re.compile(r'export "metadata" from a component marked with "use client"')
 _UNTERMINATED_STRING_ERROR_RE = re.compile(r"Unterminated string constant")
 _DUPLICATE_SSLMODE_ERROR_RE = re.compile(r"invalid sslmode value", re.IGNORECASE)
+_CLIENT_COMPONENT_SIGNAL_RE = re.compile(
+    r"\b(useState|useEffect|useRef|useReducer|useTransition|useDeferredValue)\b|"
+    r"\bstartTransition\b|"
+    r"on[A-Z][A-Za-z]+\s*=|"
+    r"\bdocument\.|\bwindow\.",
+)
+_FRONTEND_CODE_SUFFIXES = (".ts", ".tsx", ".js", ".jsx")
 
 
 async def _ci_repair_loop(
@@ -955,8 +962,31 @@ def _write_local_files(base_dir: Path, files: dict[str, str]) -> None:
 
 
 async def _prepare_files_for_push(files: dict[str, str]) -> dict[str, str]:
-    prepared = dict(files)
+    prepared = _normalize_frontend_push_files(files)
     prepared = await _ensure_frontend_lockfile(prepared)
+    return prepared
+
+
+def _normalize_frontend_push_files(files: dict[str, str]) -> dict[str, str]:
+    prepared: dict[str, str] = {}
+    layout_suffixes = ("web/src/app/layout.tsx", "web/src/app/layout.jsx", "web/app/layout.tsx", "web/app/layout.jsx")
+
+    for path, content in files.items():
+        if not isinstance(path, str) or not isinstance(content, str):
+            continue
+
+        updated = content
+        if path.startswith("web/") and path.endswith(_FRONTEND_CODE_SUFFIXES):
+            updated = _canonicalize_use_client_directive(updated)
+            stripped = updated.lstrip()
+            if _CLIENT_COMPONENT_SIGNAL_RE.search(updated) and not stripped.startswith('"use client"') and not stripped.startswith("'use client'"):
+                updated = f'"use client";\n\n{updated.lstrip()}'
+
+            if path.endswith(layout_suffixes) and ("export const metadata" in updated or "generateMetadata" in updated):
+                updated = re.sub(r'^\s*"use client";\n+', "", updated, count=1)
+
+        prepared[path] = updated
+
     return prepared
 
 

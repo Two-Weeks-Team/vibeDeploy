@@ -8,6 +8,7 @@ from agent.nodes.deployer import (
     _generate_ci_yml,
     _ensure_unique_backend_table_prefix,
     _is_do_app_limit_error,
+    _prepare_files_for_push,
     _reclaim_do_app_capacity,
 )
 from agent.tools.digitalocean import build_app_spec
@@ -207,6 +208,43 @@ async def test_ensure_frontend_lockfile_replaces_empty_lockfile(monkeypatch):
     updated = await _ensure_frontend_lockfile(files)
 
     assert '"lockfileVersion": 3' in updated["web/package-lock.json"]
+
+
+@pytest.mark.asyncio
+async def test_prepare_files_for_push_canonicalizes_repaired_use_client_directives():
+    files = {
+        "web/src/components/Hero.tsx": (
+            "use client;\n\n"
+            "type HeroProps = { appName: string };\n"
+            "export default function Hero({ appName }: HeroProps) { return <section>{appName}</section>; }\n"
+        ),
+        "web/src/components/WorkspacePanel.tsx": (
+            "use client;\n\n"
+            "export default function WorkspacePanel() {\n"
+            "  return <button onClick={() => null}>Generate</button>;\n"
+            "}\n"
+        ),
+    }
+
+    updated = await _prepare_files_for_push(files)
+
+    assert updated["web/src/components/Hero.tsx"].startswith('"use client";')
+    assert updated["web/src/components/WorkspacePanel.tsx"].startswith('"use client";')
+
+
+@pytest.mark.asyncio
+async def test_prepare_files_for_push_adds_use_client_to_interactive_repairs():
+    files = {
+        "web/src/components/WorkspacePanel.tsx": (
+            "export default function WorkspacePanel() {\n"
+            "  return <textarea onChange={() => null} />;\n"
+            "}\n"
+        )
+    }
+
+    updated = await _prepare_files_for_push(files)
+
+    assert updated["web/src/components/WorkspacePanel.tsx"].startswith('"use client";')
 
 
 def test_build_app_spec_frontend_build_command_falls_back_to_npm_install():
