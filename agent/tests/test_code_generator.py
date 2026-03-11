@@ -474,6 +474,8 @@ def test_normalize_backend_ai_fallback_helper_is_import_safe_for_call_inference_
 
     assert "_coerce_unstructured_payload" in normalized["ai_service.py"]
     assert "dict[str, object]" in normalized["ai_service.py"]
+    assert '"items": items' in normalized["ai_service.py"]
+    assert '"highlights": highlights' in normalized["ai_service.py"]
     assert compiled is not None
 
 
