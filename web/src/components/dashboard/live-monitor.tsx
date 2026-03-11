@@ -79,7 +79,7 @@ function EventFeed({ events }: { events: DashboardEvent[] }) {
         </CardTitle>
       </CardHeader>
       <CardContent className="flex-1 p-0">
-        <ScrollArea className="h-[640px] px-4 pb-4">
+        <ScrollArea className="h-[280px] px-4 pb-4 md:h-[420px] xl:h-[640px]">
           <div className="space-y-3">
             <AnimatePresence initial={false}>
               {events.map((event, index) => (
