@@ -10,6 +10,8 @@ import time
 from pathlib import Path
 from urllib import error, request
 
+from langchain_core.callbacks.manager import adispatch_custom_event
+
 from ..state import VibeDeployState
 from ..tools.digitalocean import (
     build_app_spec,
@@ -26,7 +28,41 @@ logger = logging.getLogger(__name__)
 _DO_APP_LIMIT_ERROR_SNIPPET = "app count"
 
 
-async def deployer(state: VibeDeployState) -> dict:
+async def _emit_runtime_event(
+    event_name: str,
+    *,
+    config,
+    node: str,
+    phase: str,
+    message: str,
+    **extra,
+) -> None:
+    if config is None:
+        return
+    payload = {
+        "type": event_name,
+        "node": node,
+        "stage": node,
+        "phase": phase,
+        "message": message,
+        **extra,
+    }
+    await adispatch_custom_event(event_name, payload, config=config)
+
+
+async def _emit_step_start(node: str, message: str, *, config, **extra) -> None:
+    await _emit_runtime_event("deploy.step.start", config=config, node=node, phase=node, message=message, **extra)
+
+
+async def _emit_step_complete(node: str, message: str, *, config, **extra) -> None:
+    await _emit_runtime_event("deploy.step.complete", config=config, node=node, phase=node, message=message, **extra)
+
+
+async def _emit_step_error(node: str, message: str, *, config, **extra) -> None:
+    await _emit_runtime_event("deploy.step.error", config=config, node=node, phase=node, message=message, **extra)
+
+
+async def deployer(state: VibeDeployState, config=None) -> dict:
     frontend_code = state.get("frontend_code", {}) or {}
     backend_code = state.get("backend_code", {}) or {}
     idea = state.get("idea", {}) or {}
@@ -66,6 +102,7 @@ async def deployer(state: VibeDeployState) -> dict:
         }
     )
     github_org = os.getenv("GITHUB_ORG")
+    await _emit_step_start("git_push", "Creating repository and pushing generated files", config=config)
 
     github_result = await create_github_repo(
         name=app_name,
@@ -80,6 +117,7 @@ async def deployer(state: VibeDeployState) -> dict:
 
     if github_result.get("status") == "error" or not github_clone_url:
         error_message = github_result.get("error", "GitHub repository creation failed")
+        await _emit_step_error("git_push", f"GitHub push failed: {error_message}", config=config, error=error_message)
         return {
             "deploy_result": {
                 "app_id": "",
@@ -103,12 +141,46 @@ async def deployer(state: VibeDeployState) -> dict:
             commit_message="Add project docs, CI workflow, and env example",
         )
         commit_sha = push_result.get("commit_sha", "")
+    await _emit_step_complete(
+        "git_push",
+        "Repository push complete" if commit_sha else "Repository created; support commit metadata unavailable",
+        config=config,
+        github_repo=github_repo_url,
+        commit_sha=commit_sha,
+    )
 
     ci_result = {"status": "skipped"}
     repair_attempts = 0
     if github_full_name and commit_sha:
+        await _emit_step_start("ci_test", "Running CI workflow", config=config, commit_sha=commit_sha)
         ci_result, all_files, repair_attempts = await _ci_repair_loop(
             github_full_name, commit_sha, all_files, max_retries=3
+        )
+        ci_status = ci_result.get("status", "skipped")
+        if ci_status in {"passed", "skipped"}:
+            await _emit_step_complete(
+                "ci_test",
+                "CI passed" if ci_status == "passed" else "CI skipped",
+                config=config,
+                ci_status=ci_status,
+                ci_url=ci_result.get("url", ""),
+                ci_repair_attempts=repair_attempts,
+            )
+        else:
+            await _emit_step_error(
+                "ci_test",
+                "CI failed" if ci_status == "failed" else "CI timed out",
+                config=config,
+                ci_status=ci_status,
+                ci_url=ci_result.get("url", ""),
+                ci_repair_attempts=repair_attempts,
+            )
+    else:
+        await _emit_step_complete(
+            "ci_test",
+            "CI skipped: no workflow commit available",
+            config=config,
+            ci_status="skipped",
         )
 
     ci_meta = {
@@ -125,17 +197,75 @@ async def deployer(state: VibeDeployState) -> dict:
                 topics=["ai", "fastapi", "digitalocean", "vibedeploy", "hackathon", "llm"],
                 homepage=github_repo_url,
             )
+        await _emit_step_error("app_spec", "App Spec skipped: DigitalOcean token missing", config=config)
         result = await _local_fallback_deploy(app_name, all_files, github_repo_url, "do_token_missing")
         result["deploy_result"].update(ci_meta)
         return result
 
+    await _emit_step_start("app_spec", "Generating App Platform specification", config=config)
     app_spec = build_app_spec(app_name, github_clone_url, has_frontend=has_frontend)
+    await _emit_step_complete(
+        "app_spec",
+        "App Platform specification ready",
+        config=config,
+        has_frontend=has_frontend,
+    )
+
+    deploy_progress = {
+        "build_started": False,
+        "build_completed": False,
+        "deploy_started": False,
+        "deploy_completed": False,
+    }
+
+    async def _track_do_phase(phase_name: str) -> None:
+        normalized = str(phase_name or "").upper()
+        if "BUILD" in normalized:
+            if not deploy_progress["build_started"]:
+                deploy_progress["build_started"] = True
+                await _emit_step_start("do_build", "DigitalOcean build started", config=config, do_phase=phase_name)
+            return
+
+        if "DEPLOY" in normalized:
+            if not deploy_progress["build_started"]:
+                deploy_progress["build_started"] = True
+                await _emit_step_start("do_build", "DigitalOcean build started", config=config, do_phase=phase_name)
+            if not deploy_progress["build_completed"]:
+                deploy_progress["build_completed"] = True
+                await _emit_step_complete("do_build", "DigitalOcean build complete", config=config, do_phase=phase_name)
+            if not deploy_progress["deploy_started"]:
+                deploy_progress["deploy_started"] = True
+                await _emit_step_start("do_deploy", "DigitalOcean deploy started", config=config, do_phase=phase_name)
+            return
+
+        if normalized == "ACTIVE":
+            if not deploy_progress["build_started"]:
+                deploy_progress["build_started"] = True
+                await _emit_step_start("do_build", "DigitalOcean build started", config=config, do_phase=phase_name)
+            if not deploy_progress["build_completed"]:
+                deploy_progress["build_completed"] = True
+                await _emit_step_complete("do_build", "DigitalOcean build complete", config=config, do_phase=phase_name)
+            if not deploy_progress["deploy_started"]:
+                deploy_progress["deploy_started"] = True
+                await _emit_step_start("do_deploy", "DigitalOcean deploy started", config=config, do_phase=phase_name)
+            if not deploy_progress["deploy_completed"]:
+                deploy_progress["deploy_completed"] = True
+                await _emit_step_complete("do_deploy", "DigitalOcean deploy complete", config=config, do_phase=phase_name)
+
+    await _emit_step_start("do_build", "Submitting App Platform build", config=config)
+    deploy_progress["build_started"] = True
     deploy_result = await _deploy_with_capacity_retry(app_name, github_clone_url, app_spec)
 
     if deploy_result.get("status") == "error":
         logger.error(
             "[DEPLOYER] DO app creation failed: %s",
             deploy_result.get("error", "unknown"),
+        )
+        await _emit_step_error(
+            "do_build",
+            f"App Platform build submission failed: {deploy_result.get('error', 'unknown')}",
+            config=config,
+            error=deploy_result.get("error", "unknown"),
         )
         result = await _local_fallback_deploy(
             app_name,
@@ -152,7 +282,7 @@ async def deployer(state: VibeDeployState) -> dict:
     deploy_repair_attempts = 0
 
     for attempt in range(3):
-        live_url = await wait_for_deployment(app_id) if app_id else ""
+        live_url = await wait_for_deployment(app_id, on_phase_change=_track_do_phase) if app_id else ""
         if live_url:
             break
 
@@ -189,6 +319,14 @@ async def deployer(state: VibeDeployState) -> dict:
     ci_meta["deploy_repair_attempts"] = deploy_repair_attempts
 
     if not live_url:
+        failed_node = "do_deploy" if deploy_progress["deploy_started"] or deploy_progress["build_completed"] else "do_build"
+        await _emit_step_error(
+            failed_node,
+            "DigitalOcean did not produce a live URL",
+            config=config,
+            app_id=app_id,
+            deploy_repair_attempts=deploy_repair_attempts,
+        )
         result = await _local_fallback_deploy(
             app_name,
             all_files,
@@ -199,11 +337,24 @@ async def deployer(state: VibeDeployState) -> dict:
         result["deploy_result"].update(ci_meta)
         return result
 
+    if not deploy_progress["build_completed"]:
+        deploy_progress["build_completed"] = True
+        await _emit_step_complete("do_build", "DigitalOcean build complete", config=config, app_id=app_id)
+    if not deploy_progress["deploy_started"]:
+        deploy_progress["deploy_started"] = True
+        await _emit_step_start("do_deploy", "DigitalOcean deploy started", config=config, app_id=app_id)
+    if not deploy_progress["deploy_completed"]:
+        deploy_progress["deploy_completed"] = True
+        await _emit_step_complete("do_deploy", "DigitalOcean deploy complete", config=config, app_id=app_id, live_url=live_url)
+
+    await _emit_step_start("verified", "Verifying live URL", config=config, live_url=live_url)
     url_verification = _verify_live_url(live_url)
     if url_verification.get("root_ok"):
         logger.info("[DEPLOYER] Live URL verified: %s → %s", live_url, url_verification)
+        await _emit_step_complete("verified", "Live URL verified", config=config, live_url=live_url)
     else:
         logger.warning("[DEPLOYER] Live URL verification failed: %s → %s", live_url, url_verification)
+        await _emit_step_error("verified", "Live URL verification failed", config=config, live_url=live_url)
 
     homepage = live_url or github_repo_url
     if github_full_name:

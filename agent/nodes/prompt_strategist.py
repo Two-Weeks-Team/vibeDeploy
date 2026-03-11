@@ -223,6 +223,19 @@ def _build_prompt_strategy(
     proof_points = _coerce_strings(experience_contract.get("proof_points"))
     tech_spec = generated_docs.get("tech_spec", "")
     api_spec = generated_docs.get("api_spec", "")
+    context_priority = [
+        "Generated docs (PRD, tech spec, API spec, DB schema) define the delivery contract first.",
+        "Blueprint manifest (required files, surfaces, states, and frontend/backend contract) overrides speculative implementation choices.",
+        "Official runtime model guidance tunes prompt shape for the active and fallback model families.",
+        "Specialist briefs constrain execution by frontend, backend, QA, and delivery concerns.",
+        "The final output contract remains strict JSON with complete file bodies only.",
+    ]
+    quality_gates = [
+        "Document-first execution: generated docs and blueprint beat improvisation.",
+        "Layered context delivery: shared delivery brief, target expert brief, model-family guidance, then final output contract.",
+        "Language-server discipline: valid imports, defined symbols, compile-safe file bodies, and exact type alignment.",
+        "No guessing: derive fields from the existing contract instead of inventing extra endpoints, props, or schema columns.",
+    ]
 
     frontend_guidance = _flatten_guidance(model_plan["frontend"], guidance_by_family)
     backend_guidance = _flatten_guidance(model_plan["backend"], guidance_by_family)
@@ -296,7 +309,9 @@ def _build_prompt_strategy(
 
     shared_prompt_appendix = "\n\n".join(
         [
-            "BKit Context Stack",
+            "Runtime Strategy Stack",
+            _render_brief("Context Priority Order", context_priority),
+            _render_brief("Runtime Quality Gates", quality_gates),
             specialist_briefs["cto_lead"],
             specialist_briefs["prompt_engineer"],
             specialist_briefs["qa_strategist"],
@@ -316,9 +331,11 @@ def _build_prompt_strategy(
     )
 
     return {
-        "strategy_version": "bkit-vibedeploy-1",
+        "strategy_version": "prompt-strategy-v1",
         "model_plan": model_plan,
         "model_guidance": guidance_by_family,
+        "context_priority": context_priority,
+        "quality_gates": quality_gates,
         "specialist_briefs": specialist_briefs,
         "shared_prompt_appendix": shared_prompt_appendix,
         "frontend_prompt_appendix": frontend_prompt_appendix,

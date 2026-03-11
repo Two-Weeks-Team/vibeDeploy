@@ -2,14 +2,14 @@ import json
 
 NODE_EVENTS = {
     "input_processor": {"phase": "input_processing", "message": "Analyzing your idea..."},
-    "run_council_agent": {"phase": "individual_analysis", "message": "Council members analyzing..."},
+    "run_council_agent": {"phase": "individual_analysis", "message": "Running named council analysis..."},
     "cross_examination": {"phase": "cross_examination", "message": "Council members debating..."},
-    "score_axis": {"phase": "scoring", "message": "Scoring axes..."},
+    "score_axis": {"phase": "scoring", "message": "Scoring named evaluation axes..."},
     "strategist_verdict": {"phase": "verdict", "message": "Strategist delivering verdict..."},
     "decision_gate": {"phase": "decision", "message": "Making decision..."},
     "doc_generator": {"phase": "doc_generation", "message": "Generating documentation..."},
     "blueprint_generator": {"phase": "blueprint", "message": "Creating file manifest..."},
-    "prompt_strategist": {"phase": "prompt_strategy", "message": "Assembling model-aware prompt kit..."},
+    "prompt_strategist": {"phase": "prompt_strategy", "message": "Building model-aware prompt strategy..."},
     "code_generator": {"phase": "code_generation", "message": "Generating code..."},
     "code_evaluator": {"phase": "code_evaluation", "message": "Evaluating code quality..."},
     "deployer": {"phase": "deployment", "message": "Deploying to DigitalOcean..."},

@@ -1,5 +1,6 @@
 import asyncio
 import os
+from collections.abc import Awaitable, Callable
 
 import httpx
 
@@ -46,11 +47,13 @@ async def wait_for_deployment(
     app_id: str,
     timeout_seconds: int = 420,
     poll_interval: int = 10,
+    on_phase_change: Callable[[str], Awaitable[None]] | None = None,
 ) -> str:
     if not app_id:
         return ""
 
     elapsed = 0
+    last_phase = ""
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
             while elapsed < timeout_seconds:
@@ -62,6 +65,11 @@ async def wait_for_deployment(
                 app = response.json().get("app", {})
                 active_deployment = app.get("active_deployment", {})
                 phase = active_deployment.get("phase", "UNKNOWN")
+
+                if phase != last_phase:
+                    last_phase = phase
+                    if on_phase_change is not None:
+                        await on_phase_change(phase)
 
                 if phase == "ACTIVE":
                     return app.get("live_url", app.get("default_ingress", ""))

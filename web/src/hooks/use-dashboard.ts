@@ -99,16 +99,25 @@ export function useDashboard() {
         return;
       }
 
-      const [s, r, b, d] = await Promise.all([
-        getDashboardStats(),
-        getDashboardResults(),
-        getDashboardBrainstorms(),
-        getDashboardDeployments(),
-      ]);
-      setStats(s);
-      setResults(r as unknown as MeetingResultFull[]);
-      setBrainstorms(b as unknown as BrainstormResultFull[]);
-      setDeployments(d);
+      const nextStats = await getDashboardStats().catch(() => null);
+      if (nextStats) {
+        setStats(nextStats);
+      }
+
+      const nextResults = await getDashboardResults().catch(() => null);
+      if (nextResults) {
+        setResults(nextResults as unknown as MeetingResultFull[]);
+      }
+
+      const nextBrainstorms = await getDashboardBrainstorms().catch(() => null);
+      if (nextBrainstorms) {
+        setBrainstorms(nextBrainstorms as unknown as BrainstormResultFull[]);
+      }
+
+      const nextDeployments = await getDashboardDeployments().catch(() => null);
+      if (nextDeployments) {
+        setDeployments(nextDeployments);
+      }
       setLastUpdated(Date.now());
     } finally {
       setLoading(false);

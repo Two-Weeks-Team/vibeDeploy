@@ -126,6 +126,34 @@ app.add_middleware(
 
 _NODE_EVENTS = NODE_EVENTS
 _sse = format_sse
+_AGENT_NODE_IDS = {
+    "architect": "architect",
+    "scout": "scout",
+    "catalyst": "catalyst",
+    "guardian": "guardian",
+    "advocate": "advocate",
+}
+_AGENT_SCORE_AXES = {
+    "architect": "technical_feasibility",
+    "scout": "market_viability",
+    "catalyst": "innovation_score",
+    "guardian": "risk_profile",
+    "advocate": "user_impact",
+}
+_SCORE_AXIS_NODE_IDS = {
+    "technical_feasibility": "score_tech",
+    "market_viability": "score_market",
+    "innovation_score": "score_innovation",
+    "risk_profile": "score_risk",
+    "user_impact": "score_user",
+}
+_SCORE_AXIS_LABELS = {
+    "technical_feasibility": "Tech Feasibility",
+    "market_viability": "Market Viability",
+    "innovation_score": "Innovation Score",
+    "risk_profile": "Risk Profile",
+    "user_impact": "User Impact",
+}
 
 
 async def _store_result(thread_id: str, state: dict):
@@ -264,6 +292,12 @@ async def _stream_pipeline(prompt: str, thread_id: str) -> AsyncGenerator[str, N
             name = event.get("name", "")
             data = event.get("data", {})
 
+            if kind == "on_custom_event":
+                payload = dict(data or {})
+                payload.setdefault("type", name)
+                yield _sse(name, payload)
+                continue
+
             if kind == "on_chain_start" and name in _NODE_EVENTS:
                 node_event = _NODE_EVENTS[name]
                 yield _sse(
@@ -275,6 +309,38 @@ async def _stream_pipeline(prompt: str, thread_id: str) -> AsyncGenerator[str, N
                         "message": node_event["message"],
                     },
                 )
+
+                input_data = data.get("input", {}) or {}
+                if name == "run_council_agent":
+                    agent_name = str(input_data.get("agent_name", "")).strip()
+                    agent_node = _AGENT_NODE_IDS.get(agent_name)
+                    if agent_node:
+                        yield _sse(
+                            "council.agent.start",
+                            {
+                                "type": "council.agent.start",
+                                "agent": agent_name,
+                                "node": agent_node,
+                                "phase": "individual_analysis",
+                                "message": f"{agent_name.title()} analysis started",
+                            },
+                        )
+                elif name == "score_axis":
+                    agent_name = str(input_data.get("agent_name", "")).strip()
+                    axis_name = _AGENT_SCORE_AXES.get(agent_name, "")
+                    axis_node = _SCORE_AXIS_NODE_IDS.get(axis_name)
+                    if axis_node:
+                        yield _sse(
+                            "scoring.axis.start",
+                            {
+                                "type": "scoring.axis.start",
+                                "agent": agent_name,
+                                "axis": axis_name,
+                                "node": axis_node,
+                                "phase": "scoring",
+                                "message": f"{_SCORE_AXIS_LABELS.get(axis_name, axis_name)} scoring started",
+                            },
+                        )
                 continue
 
             if kind != "on_chain_end" or name not in _NODE_EVENTS:
@@ -295,13 +361,33 @@ async def _stream_pipeline(prompt: str, thread_id: str) -> AsyncGenerator[str, N
             if name == "run_council_agent":
                 analyses = output.get("council_analysis", {}) or {}
                 for agent_name, analysis in analyses.items():
+                    agent_node = _AGENT_NODE_IDS.get(agent_name)
                     yield _sse(
                         "council.agent.analysis",
                         {
                             "type": "council.agent.analysis",
                             "agent": agent_name,
+                            "node": agent_node,
                             "score": analysis.get("score", 0),
                             "findings_count": len(analysis.get("findings", [])),
+                            "message": f"{agent_name.title()} analysis complete",
+                        },
+                    )
+            elif name == "score_axis":
+                scoring = output.get("scoring", {}) or {}
+                for axis_name, axis_data in scoring.items():
+                    if axis_name in {"final_score", "decision"} or not isinstance(axis_data, dict):
+                        continue
+                    axis_node = _SCORE_AXIS_NODE_IDS.get(axis_name)
+                    yield _sse(
+                        "scoring.axis.complete",
+                        {
+                            "type": "scoring.axis.complete",
+                            "axis": axis_name,
+                            "node": axis_node,
+                            "phase": "scoring",
+                            "score": axis_data.get("score", 0),
+                            "message": f"{_SCORE_AXIS_LABELS.get(axis_name, axis_name)} scoring complete",
                         },
                     )
             elif name == "strategist_verdict":
@@ -321,6 +407,7 @@ async def _stream_pipeline(prompt: str, thread_id: str) -> AsyncGenerator[str, N
                     "blueprint.complete",
                     {
                         "type": "blueprint.complete",
+                        "node": "blueprint",
                         "frontend_files": len(bp.get("frontend_files", {})),
                         "backend_files": len(bp.get("backend_files", {})),
                         "app_name": bp.get("app_name", ""),
@@ -333,6 +420,7 @@ async def _stream_pipeline(prompt: str, thread_id: str) -> AsyncGenerator[str, N
                     "prompt_strategy.complete",
                     {
                         "type": "prompt_strategy.complete",
+                        "node": "prompt_strategy",
                         "sources": len(source_index),
                         "frontend_model": strategy.get("model_plan", {}).get("frontend", {}).get("model", ""),
                         "backend_model": strategy.get("model_plan", {}).get("backend", {}).get("model", ""),
@@ -344,6 +432,7 @@ async def _stream_pipeline(prompt: str, thread_id: str) -> AsyncGenerator[str, N
                     "code_eval.result",
                     {
                         "type": "code_eval.result",
+                        "node": "code_eval",
                         "match_rate": eval_res.get("match_rate", 0),
                         "completeness": eval_res.get("completeness", 0),
                         "consistency": eval_res.get("consistency", 0),
@@ -360,6 +449,7 @@ async def _stream_pipeline(prompt: str, thread_id: str) -> AsyncGenerator[str, N
                     "code_gen.complete",
                     {
                         "type": "code_gen.complete",
+                        "node": "code_gen",
                         "frontend_files": len(frontend),
                         "backend_files": len(backend),
                         "has_frontend": len(frontend) >= 3,
@@ -381,6 +471,7 @@ async def _stream_pipeline(prompt: str, thread_id: str) -> AsyncGenerator[str, N
                     "deploy.complete",
                     {
                         "type": "deploy.complete",
+                        "node": "do_deploy",
                         "live_url": deploy.get("live_url", ""),
                         "github_repo": deploy.get("github_repo", ""),
                         "status": deploy.get("status", ""),

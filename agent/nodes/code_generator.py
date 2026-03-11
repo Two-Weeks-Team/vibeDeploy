@@ -396,7 +396,7 @@ def _build_frontend_prompt_messages(
         ),
     ]
     if strategy_appendix and _should_repeat_strategy_in_user(prompt_strategy, "frontend"):
-        user_sections.insert(2, "### Runtime Prompt Kit\n" + strategy_appendix)
+        user_sections.insert(2, "### Runtime Strategy Stack\n" + strategy_appendix)
 
     system_sections = [
         CODE_GENERATION_BASE_SYSTEM_PROMPT,
@@ -410,7 +410,7 @@ def _build_frontend_prompt_messages(
         ),
     ]
     if strategy_appendix:
-        system_sections.append("### Runtime Prompt Kit\n" + strategy_appendix)
+        system_sections.append("### Runtime Strategy Stack\n" + strategy_appendix)
 
     if _should_use_user_only_messages(prompt_strategy, "frontend"):
         return [{"role": "user", "content": "\n\n".join(section for section in [*system_sections, *user_sections] if section)}]
@@ -445,7 +445,7 @@ def _build_backend_prompt_messages(
         ),
     ]
     if strategy_appendix and _should_repeat_strategy_in_user(prompt_strategy, "backend"):
-        user_sections.insert(2, "### Runtime Prompt Kit\n" + strategy_appendix)
+        user_sections.insert(2, "### Runtime Strategy Stack\n" + strategy_appendix)
 
     system_sections = [
         CODE_GENERATION_BASE_SYSTEM_PROMPT,
@@ -458,7 +458,7 @@ def _build_backend_prompt_messages(
         ),
     ]
     if strategy_appendix:
-        system_sections.append("### Runtime Prompt Kit\n" + strategy_appendix)
+        system_sections.append("### Runtime Strategy Stack\n" + strategy_appendix)
 
     if _should_use_user_only_messages(prompt_strategy, "backend"):
         return [{"role": "user", "content": "\n\n".join(section for section in [*system_sections, *user_sections] if section)}]

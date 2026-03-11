@@ -286,11 +286,11 @@ def test_build_frontend_prompt_messages_repeat_strategy_for_deepseek_fallback():
     )
 
     assert messages[0]["role"] == "system"
-    assert "Runtime Prompt Kit" in messages[0]["content"]
+    assert "Runtime Strategy Stack" in messages[0]["content"]
     assert "/no_think" in messages[1]["content"]
     assert "DeepSeek compatibility note" in messages[1]["content"]
     assert "Missing src/app/page.tsx" in messages[0]["content"]
-    assert "Runtime Prompt Kit" in messages[1]["content"]
+    assert "Runtime Strategy Stack" in messages[1]["content"]
 
 
 def test_build_backend_prompt_messages_use_user_only_for_primary_deepseek():

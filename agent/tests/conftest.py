@@ -33,8 +33,8 @@ async def app_client(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[AsyncClie
     await s.close()
 
 
-def make_chain_event(kind: str, name: str, output: dict | None = None) -> dict[str, Any]:
-    ev: dict[str, Any] = {"event": kind, "name": name, "data": {}}
+def make_chain_event(kind: str, name: str, output: dict | None = None, data: dict | None = None) -> dict[str, Any]:
+    ev: dict[str, Any] = {"event": kind, "name": name, "data": dict(data or {})}
     if kind == "on_chain_end" and output is not None:
         ev["data"]["output"] = output
     return ev
@@ -70,7 +70,7 @@ def _eval_events():
             "input_processor",
             {"phase": "input_processing", "idea": {"title": "Test App"}, "idea_summary": "A test app"},
         ),
-        make_chain_event("on_chain_start", "run_council_agent"),
+        make_chain_event("on_chain_start", "run_council_agent", data={"input": {"agent_name": "architect"}}),
         make_chain_event(
             "on_chain_end",
             "run_council_agent",
@@ -82,8 +82,15 @@ def _eval_events():
             "cross_examination",
             {"phase": "cross_examination", "cross_examination": {"tech_feasibility": {"summary": "good"}}},
         ),
-        make_chain_event("on_chain_start", "score_axis"),
-        make_chain_event("on_chain_end", "score_axis", {"phase": "scoring"}),
+        make_chain_event("on_chain_start", "score_axis", data={"input": {"agent_name": "architect"}}),
+        make_chain_event(
+            "on_chain_end",
+            "score_axis",
+            {
+                "phase": "scoring",
+                "scoring": {"technical_feasibility": {"score": 80, "reasoning": "clear", "key_findings": ["solid"]}},
+            },
+        ),
         make_chain_event("on_chain_start", "strategist_verdict"),
         make_chain_event(
             "on_chain_end", "strategist_verdict", {"phase": "verdict", "scoring": {"final_score": 82, "decision": "GO"}}
@@ -97,6 +104,66 @@ def _eval_events():
         make_chain_event("on_chain_start", "code_generator"),
         make_chain_event("on_chain_end", "code_generator", {"phase": "code_generation"}),
         make_chain_event("on_chain_start", "deployer"),
+        make_chain_event(
+            "on_custom_event",
+            "deploy.step.start",
+            data={"type": "deploy.step.start", "node": "git_push", "phase": "git_push", "message": "Repository push started"},
+        ),
+        make_chain_event(
+            "on_custom_event",
+            "deploy.step.complete",
+            data={"type": "deploy.step.complete", "node": "git_push", "phase": "git_push", "message": "Repository push complete"},
+        ),
+        make_chain_event(
+            "on_custom_event",
+            "deploy.step.start",
+            data={"type": "deploy.step.start", "node": "ci_test", "phase": "ci_test", "message": "CI started"},
+        ),
+        make_chain_event(
+            "on_custom_event",
+            "deploy.step.complete",
+            data={"type": "deploy.step.complete", "node": "ci_test", "phase": "ci_test", "message": "CI complete"},
+        ),
+        make_chain_event(
+            "on_custom_event",
+            "deploy.step.start",
+            data={"type": "deploy.step.start", "node": "app_spec", "phase": "app_spec", "message": "App spec started"},
+        ),
+        make_chain_event(
+            "on_custom_event",
+            "deploy.step.complete",
+            data={"type": "deploy.step.complete", "node": "app_spec", "phase": "app_spec", "message": "App spec complete"},
+        ),
+        make_chain_event(
+            "on_custom_event",
+            "deploy.step.start",
+            data={"type": "deploy.step.start", "node": "do_build", "phase": "do_build", "message": "Build started"},
+        ),
+        make_chain_event(
+            "on_custom_event",
+            "deploy.step.complete",
+            data={"type": "deploy.step.complete", "node": "do_build", "phase": "do_build", "message": "Build complete"},
+        ),
+        make_chain_event(
+            "on_custom_event",
+            "deploy.step.start",
+            data={"type": "deploy.step.start", "node": "do_deploy", "phase": "do_deploy", "message": "Deploy started"},
+        ),
+        make_chain_event(
+            "on_custom_event",
+            "deploy.step.complete",
+            data={"type": "deploy.step.complete", "node": "do_deploy", "phase": "do_deploy", "message": "Deploy complete"},
+        ),
+        make_chain_event(
+            "on_custom_event",
+            "deploy.step.start",
+            data={"type": "deploy.step.start", "node": "verified", "phase": "verified", "message": "Verification started"},
+        ),
+        make_chain_event(
+            "on_custom_event",
+            "deploy.step.complete",
+            data={"type": "deploy.step.complete", "node": "verified", "phase": "verified", "message": "Verification complete"},
+        ),
         make_chain_event(
             "on_chain_end",
             "deployer",
@@ -116,12 +183,12 @@ def _nogo_events():
     return [
         make_chain_event("on_chain_start", "input_processor"),
         make_chain_event("on_chain_end", "input_processor", {"phase": "input_processing"}),
-        make_chain_event("on_chain_start", "run_council_agent"),
+        make_chain_event("on_chain_start", "run_council_agent", data={"input": {"agent_name": "architect"}}),
         make_chain_event("on_chain_end", "run_council_agent", {"phase": "individual_analysis", "council_analysis": {}}),
         make_chain_event("on_chain_start", "cross_examination"),
         make_chain_event("on_chain_end", "cross_examination", {"phase": "cross_examination"}),
-        make_chain_event("on_chain_start", "score_axis"),
-        make_chain_event("on_chain_end", "score_axis", {"phase": "scoring"}),
+        make_chain_event("on_chain_start", "score_axis", data={"input": {"agent_name": "architect"}}),
+        make_chain_event("on_chain_end", "score_axis", {"phase": "scoring", "scoring": {}}),
         make_chain_event("on_chain_start", "strategist_verdict"),
         make_chain_event(
             "on_chain_end",

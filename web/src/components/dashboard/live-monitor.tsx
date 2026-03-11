@@ -99,6 +99,16 @@ function EventFeed({ events }: { events: DashboardEvent[] }) {
                           {event.node}
                         </Badge>
                       )}
+                      {event.axis && !event.node && (
+                        <Badge variant="outline" className="h-4 px-1 text-[10px]">
+                          {String(event.axis)}
+                        </Badge>
+                      )}
+                      {event.agent && !event.node && (
+                        <Badge variant="outline" className="h-4 px-1 text-[10px]">
+                          {String(event.agent)}
+                        </Badge>
+                      )}
                       <Elapsed ts={event._timestamp as number | undefined} />
                     </div>
                   </div>
@@ -231,7 +241,7 @@ export function LiveMonitor({ activePipelines, events, nodeStatuses, connected }
                 <div>
                   <h3 className="text-sm font-medium text-muted-foreground">Architecture View</h3>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Live node states align to the exact council, repair, build, and ship path currently in flight.
+                    Live node states align to the exact named steps now in flight, including the five council agents, the five score axes, prompt strategy, CI, build, deploy, and live verification.
                   </p>
                 </div>
                 <PipelineViz pipeline={activePipeline.type} activeNodes={nodeStatuses} />
@@ -274,7 +284,7 @@ export function LiveMonitor({ activePipelines, events, nodeStatuses, connected }
                 <div>
                   <h3 className="text-sm font-medium text-muted-foreground">Architecture Preview</h3>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Prompt intake, multi-agent council, repair loop, code generation, CI, and live deployment are all represented in one continuous view.
+                    The preview keeps every named step visible from Input Processor through Verified Live so the next run can be traced without hidden stages.
                   </p>
                 </div>
                 <PipelineViz pipeline="evaluation" className="h-[780px] lg:h-[820px]" />

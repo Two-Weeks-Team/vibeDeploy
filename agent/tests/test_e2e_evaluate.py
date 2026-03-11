@@ -15,7 +15,12 @@ async def test_evaluate_sse_stream_go(app_client, mock_eval_graph):
     assert "council.phase.start" in event_types
     assert "council.node.start" in event_types
     assert "council.node.complete" in event_types
+    assert "council.agent.start" in event_types
     assert "council.agent.analysis" in event_types
+    assert "scoring.axis.start" in event_types
+    assert "scoring.axis.complete" in event_types
+    assert "deploy.step.start" in event_types
+    assert "deploy.step.complete" in event_types
     assert "council.verdict" in event_types
     assert "deploy.complete" in event_types
     assert "council.phase.complete" in event_types

@@ -41,9 +41,31 @@ const SCORE_AXIS_TO_VIZ_ID: Record<string, string> = {
   risk_profile: "score_risk",
   user_impact: "score_user",
 };
+const DIRECT_VIZ_NODE_IDS = new Set([
+  "architect",
+  "scout",
+  "catalyst",
+  "guardian",
+  "advocate",
+  "score_tech",
+  "score_market",
+  "score_innovation",
+  "score_risk",
+  "score_user",
+  "git_push",
+  "ci_test",
+  "app_spec",
+  "do_build",
+  "do_deploy",
+  "verified",
+  "prompt_strategy",
+  "blueprint",
+  "code_gen",
+  "code_eval",
+]);
 
 function resolveVizNodeId(nodeName: string): string | null {
-  return NODE_NAME_TO_VIZ_ID[nodeName] ?? null;
+  return NODE_NAME_TO_VIZ_ID[nodeName] ?? (DIRECT_VIZ_NODE_IDS.has(nodeName) ? nodeName : null);
 }
 
 let _eventSeq = 0;
@@ -122,28 +144,20 @@ export function usePipelineMonitor() {
               setEvents((prev: DashboardEvent[]) => [data, ...prev].slice(0, MAX_EVENTS));
 
               if (data.node) {
-                const vizId = resolveVizNodeId(data.node);
+                const vizId = resolveVizNodeId(String(data.node));
                 if (vizId) {
                   if (data.type.includes(".node.start")) {
                     updateNode(vizId, "active");
                   } else if (data.type.includes(".node.complete")) {
                     updateNode(vizId, "complete");
+                  } else if (data.type === "council.agent.analysis" || data.type === "scoring.axis.complete") {
+                    updateNode(vizId, "complete");
+                  } else if (data.type.includes(".start")) {
+                    updateNode(vizId, "active");
+                  } else if (data.type.includes(".complete")) {
+                    updateNode(vizId, "complete");
                   } else if (data.type.includes(".error")) {
                     updateNode(vizId, "error");
-                  }
-                }
-
-                if (data.node === "run_council_agent") {
-                  const status: PipelineNodeStatus = data.type.includes(".node.start") ? "active" : "complete";
-                  for (const agentVizId of Object.values(AGENT_TO_VIZ_ID)) {
-                    updateNode(agentVizId, status);
-                  }
-                }
-
-                if (data.node === "score_axis") {
-                  const status: PipelineNodeStatus = data.type.includes(".node.start") ? "active" : "complete";
-                  for (const scoreVizId of Object.values(SCORE_AXIS_TO_VIZ_ID)) {
-                    updateNode(scoreVizId, status);
                   }
                 }
               }
@@ -159,21 +173,10 @@ export function usePipelineMonitor() {
                 updateNode("verdict", "complete");
               }
 
-              if (data.node === "code_evaluator" && data.type.includes(".node.complete")) {
-                updateNode("git_push", "active");
-              }
-
-              if (data.node === "deployer") {
-                if (data.type.includes(".node.start")) {
-                  updateNode("git_push", "complete");
-                  updateNode("ci_test", "active");
-                  updateNode("app_spec", "active");
-                } else if (data.type.includes(".node.complete")) {
-                  updateNode("ci_test", "complete");
-                  updateNode("app_spec", "complete");
-                  updateNode("do_build", "complete");
-                  updateNode("do_deploy", "complete");
-                  updateNode("verified", "complete");
+              if (data.type === "scoring.axis.complete" && data.axis) {
+                const scoreVizId = SCORE_AXIS_TO_VIZ_ID[String(data.axis)];
+                if (scoreVizId) {
+                  updateNode(scoreVizId, "complete");
                 }
               }
 

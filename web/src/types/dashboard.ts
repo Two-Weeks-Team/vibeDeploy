@@ -99,6 +99,8 @@ export interface DashboardEvent {
   node?: string;
   message?: string;
   agent?: string;
+  axis?: string;
+  stage?: string;
   score?: number;
   final_score?: number;
   decision?: string;

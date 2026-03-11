@@ -5,7 +5,7 @@ import asyncpg
 
 _pool: asyncpg.Pool | None = None
 _DEFAULT_POOL_MIN_SIZE = 1
-_DEFAULT_POOL_MAX_SIZE = 4
+_DEFAULT_POOL_MAX_SIZE = 1
 _DEFAULT_POOL_RETRIES = 5
 _DEFAULT_POOL_RETRY_DELAY = 2.0
 

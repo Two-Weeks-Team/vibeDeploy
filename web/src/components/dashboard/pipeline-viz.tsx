@@ -176,19 +176,9 @@ const brainstormPhaseLabels: PhaseLabel[] = [
   { label: "SYNTH", y: 85, color: "text-purple-400/80" },
 ];
 
-const evalCallouts: CalloutDef[] = [
-  { label: "Run Council Agent", x: 84, y: 16.1, className: "border-blue-500/30 bg-blue-500/12 text-blue-200" },
-  { label: "Score Axis", x: 84, y: 34.4, className: "border-blue-500/30 bg-blue-500/12 text-blue-200" },
-  { label: "Repair loop", x: 8, y: 63.2, className: "border-orange-500/30 bg-orange-500/12 text-orange-200" },
-  { label: "GO route", x: 8, y: 71.2, className: "border-emerald-500/30 bg-emerald-500/12 text-emerald-200" },
-  { label: "Prompt strategy", x: 56, y: 63.8, className: "border-sky-500/30 bg-sky-500/12 text-sky-200" },
-  { label: "Ship chain", x: 79, y: 88.5, className: "border-cyan-500/30 bg-cyan-500/12 text-cyan-200" },
-];
+const evalCallouts: CalloutDef[] = [];
 
-const brainstormCallouts: CalloutDef[] = [
-  { label: "Five-agent fan-out", x: 14, y: 28, className: "border-slate-500/30 bg-slate-500/10 text-slate-200" },
-  { label: "Synthesis lane", x: 74, y: 85, className: "border-purple-500/30 bg-purple-500/12 text-purple-200" },
-];
+const brainstormCallouts: CalloutDef[] = [];
 
 const GO_NODES = new Set(["doc_gen", "blueprint", "prompt_strategy", "code_gen", "code_eval", "git_push", "ci_test", "app_spec", "do_build", "do_deploy", "verified"]);
 const CONDITIONAL_NODES = new Set(["fix_storm", "scope_down"]);

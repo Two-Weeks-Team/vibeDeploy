@@ -11,7 +11,7 @@ def test_infer_model_family_classifies_supported_codegen_families():
 
 
 @pytest.mark.asyncio
-async def test_prompt_strategist_builds_bkit_style_prompt_layers(monkeypatch):
+async def test_prompt_strategist_builds_layered_prompt_strategy(monkeypatch):
     async def _fake_collect(families: set[str]) -> dict[str, dict]:
         return {
             family: {
@@ -62,10 +62,13 @@ async def test_prompt_strategist_builds_bkit_style_prompt_layers(monkeypatch):
     strategy = result["prompt_strategy"]
 
     assert result["phase"] == "prompt_strategy"
-    assert strategy["strategy_version"] == "bkit-vibedeploy-1"
+    assert strategy["strategy_version"] == "prompt-strategy-v1"
+    assert strategy["context_priority"]
+    assert strategy["quality_gates"]
     assert "CTO Lead" in strategy["frontend_prompt_appendix"]
     assert "Frontend Architect" in strategy["frontend_prompt_appendix"]
     assert "Backend Expert" in strategy["backend_prompt_appendix"]
     assert "Prompt Engineer" in strategy["shared_prompt_appendix"]
+    assert "Runtime Quality Gates" in strategy["shared_prompt_appendix"]
     assert "Cross-Model Output Contract" in strategy["cross_model_user_contract"]
     assert strategy["source_index"]
