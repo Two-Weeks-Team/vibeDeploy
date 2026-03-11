@@ -20,6 +20,7 @@ const NODE_NAME_TO_VIZ_ID: Record<string, string> = {
   scope_down: "scope_down",
   doc_generator: "doc_gen",
   blueprint_generator: "blueprint",
+  prompt_strategist: "prompt_strategy",
   code_generator: "code_gen",
   code_evaluator: "code_eval",
   deployer: "do_deploy",

@@ -1,6 +1,6 @@
 import pytest
 
-from agent.llm import ainvoke_with_retry
+from agent.llm import MODEL_CONFIG, ainvoke_with_retry, get_runtime_model_config
 
 
 class _RetryLLM:
@@ -59,3 +59,16 @@ async def test_ainvoke_with_retry_uses_fallback_model(monkeypatch):
     assert primary.calls == 1
     assert fallback.calls == 3
     assert response["ok"] is True
+
+
+def test_runtime_model_config_prefers_env_overrides(monkeypatch):
+    monkeypatch.setenv("VIBEDEPLOY_MODEL_CODE_GEN", "alibaba-qwen3-32b")
+    monkeypatch.setenv("VIBEDEPLOY_MODEL_CODE_GEN_FRONTEND", "openai-gpt-oss-20b")
+    monkeypatch.setenv("VIBEDEPLOY_MODEL_COUNCIL", "deepseek-r1-distill-llama-70b")
+
+    runtime = get_runtime_model_config()
+
+    assert runtime["code_gen"] == "alibaba-qwen3-32b"
+    assert runtime["code_gen_frontend"] == "openai-gpt-oss-20b"
+    assert MODEL_CONFIG["code_gen_backend"] == "alibaba-qwen3-32b"
+    assert MODEL_CONFIG["council"] == "deepseek-r1-distill-llama-70b"

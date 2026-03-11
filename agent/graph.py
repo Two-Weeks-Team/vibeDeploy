@@ -12,6 +12,7 @@ from .nodes.doc_generator import doc_generator
 from .nodes.enrich import enrich_idea
 from .nodes.fix_storm import fix_storm, scope_down
 from .nodes.input_processor import input_processor
+from .nodes.prompt_strategist import prompt_strategist
 from .nodes.vibe_council import (
     cross_examination,
     fan_out_analysis,
@@ -48,6 +49,7 @@ def create_graph():
     workflow.add_node("scope_down", scope_down)
     workflow.add_node("doc_generator", doc_generator)
     workflow.add_node("blueprint_generator", blueprint_generator)
+    workflow.add_node("prompt_strategist", prompt_strategist)
     workflow.add_node("code_generator", code_generator)
     workflow.add_node("code_evaluator", code_evaluator)
     workflow.add_node("deployer", deployer)
@@ -77,7 +79,8 @@ def create_graph():
     workflow.add_edge("scope_down", "doc_generator")
 
     workflow.add_edge("doc_generator", "blueprint_generator")
-    workflow.add_edge("blueprint_generator", "code_generator")
+    workflow.add_edge("blueprint_generator", "prompt_strategist")
+    workflow.add_edge("prompt_strategist", "code_generator")
     workflow.add_edge("code_generator", "code_evaluator")
 
     workflow.add_conditional_edges(

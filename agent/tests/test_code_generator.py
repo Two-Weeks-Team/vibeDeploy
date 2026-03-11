@@ -1,6 +1,8 @@
 import json
 
 from agent.nodes.code_generator import (
+    _build_backend_prompt_messages,
+    _build_frontend_prompt_messages,
     _normalize_backend_files,
     _normalize_cross_stack,
     _normalize_files_dict,
@@ -263,6 +265,56 @@ def test_parse_json_response_extracts_balanced_json_when_trailing_text_exists():
     parsed = _parse_json_response(response, {"files": {}}, label="frontend")
 
     assert parsed["files"]["src/app/page.tsx"].startswith("export default function Page")
+
+
+def test_build_frontend_prompt_messages_repeat_strategy_for_deepseek_fallback():
+    prompt_strategy = {
+        "model_plan": {
+            "frontend": {
+                "family": "openai_gpt_oss",
+                "fallback_families": ["deepseek_r1", "qwen3"],
+            }
+        },
+        "frontend_prompt_appendix": "Frontend Architect:\n- Preserve the design system.",
+        "cross_model_user_contract": "Cross-Model Output Contract:\n- Return only JSON.",
+    }
+
+    messages = _build_frontend_prompt_messages(
+        context='{"idea": "demo"}',
+        prompt_strategy=prompt_strategy,
+        eval_feedback="Missing src/app/page.tsx",
+    )
+
+    assert messages[0]["role"] == "system"
+    assert "Runtime Prompt Kit" in messages[0]["content"]
+    assert "/no_think" in messages[1]["content"]
+    assert "DeepSeek compatibility note" in messages[1]["content"]
+    assert "Missing src/app/page.tsx" in messages[0]["content"]
+    assert "Runtime Prompt Kit" in messages[1]["content"]
+
+
+def test_build_backend_prompt_messages_use_user_only_for_primary_deepseek():
+    prompt_strategy = {
+        "model_plan": {
+            "backend": {
+                "family": "deepseek_r1",
+                "fallback_families": [],
+            }
+        },
+        "backend_prompt_appendix": "Backend Expert:\n- Keep routes contract-safe.",
+        "cross_model_user_contract": "Cross-Model Output Contract:\n- Return only JSON.",
+    }
+
+    messages = _build_backend_prompt_messages(
+        context='{"idea": "demo"}',
+        prompt_strategy=prompt_strategy,
+        eval_feedback="Fix response field names",
+    )
+
+    assert len(messages) == 1
+    assert messages[0]["role"] == "user"
+    assert "Backend Expert" in messages[0]["content"]
+    assert "Fix response field names" in messages[0]["content"]
 
 
 def test_normalize_frontend_files_adds_chart_dependencies_when_imported():

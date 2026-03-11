@@ -242,12 +242,13 @@ export default function DashboardPage() {
                   <div>
                     <h2 className="text-lg font-semibold">Architecture Overview</h2>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      One prompt fans into the council, routes through repair or GO, then runs all the way through code, CI, and live deployment.
+                      One prompt fans into the council, loops through repair-driven reanalysis when needed, passes a model-aware prompt strategist stage, then runs through code, CI, and live deployment.
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     <Badge variant="outline" className="border-blue-500/20 bg-blue-500/10 text-blue-200">Council</Badge>
                     <Badge variant="outline" className="border-orange-500/20 bg-orange-500/10 text-orange-200">Repair loop</Badge>
+                    <Badge variant="outline" className="border-sky-500/20 bg-sky-500/10 text-sky-200">Prompt strategy</Badge>
                     <Badge variant="outline" className="border-emerald-500/20 bg-emerald-500/10 text-emerald-200">GO route</Badge>
                     <Badge variant="outline" className="border-cyan-500/20 bg-cyan-500/10 text-cyan-200">Ship chain</Badge>
                   </div>

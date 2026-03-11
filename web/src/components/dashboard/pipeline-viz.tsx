@@ -58,33 +58,34 @@ const fadeUp = {
 };
 
 const evalNodes: NodeDef[] = [
-  { id: "input", label: "Input", x: 50, y: 4, emoji: "📝" },
-  { id: "enrich", label: "Enrich", x: 50, y: 11, emoji: "✨" },
+  { id: "input", label: "Input Processor", x: 50, y: 4, emoji: "📝" },
+  { id: "enrich", label: "Enrich Idea", x: 50, y: 11, emoji: "✨" },
   { id: "architect", label: "Architect", x: 10, y: 20, emoji: "🏗️" },
   { id: "scout", label: "Scout", x: 30, y: 20, emoji: "🔭" },
   { id: "catalyst", label: "Catalyst", x: 50, y: 20, emoji: "⚡" },
   { id: "guardian", label: "Guardian", x: 70, y: 20, emoji: "🛡️" },
   { id: "advocate", label: "Advocate", x: 90, y: 20, emoji: "🎯" },
-  { id: "cross_exam", label: "Cross-Exam", x: 50, y: 29, emoji: "⚔️" },
-  { id: "score_tech", label: "Tech", x: 10, y: 38, emoji: "📊" },
-  { id: "score_market", label: "Market", x: 30, y: 38, emoji: "📊" },
-  { id: "score_innovation", label: "Innovation", x: 50, y: 38, emoji: "📊" },
-  { id: "score_risk", label: "Risk", x: 70, y: 38, emoji: "📊" },
-  { id: "score_user", label: "User", x: 90, y: 38, emoji: "📊" },
-  { id: "verdict", label: "Vibe Score", x: 50, y: 47, emoji: "🏛️", glow: true },
+  { id: "cross_exam", label: "Cross Examination", x: 50, y: 29, emoji: "⚔️" },
+  { id: "score_tech", label: "Tech Feasibility", x: 10, y: 38, emoji: "📊" },
+  { id: "score_market", label: "Market Viability", x: 30, y: 38, emoji: "📊" },
+  { id: "score_innovation", label: "Innovation Score", x: 50, y: 38, emoji: "📊" },
+  { id: "score_risk", label: "Risk Profile", x: 70, y: 38, emoji: "📊" },
+  { id: "score_user", label: "User Impact", x: 90, y: 38, emoji: "📊" },
+  { id: "verdict", label: "Strategist Verdict", x: 50, y: 47, emoji: "🏛️", glow: true },
   { id: "decision", label: "Decision Gate", x: 50, y: 53, emoji: "🚦" },
-  { id: "fix_storm", label: "Fix-Storm", x: 24, y: 60, emoji: "🔧" },
-  { id: "scope_down", label: "Scope-Down", x: 70, y: 60, emoji: "📐" },
-  { id: "doc_gen", label: "Specs", x: 20, y: 68, emoji: "📄" },
-  { id: "blueprint", label: "Blueprint", x: 50, y: 68, emoji: "🗺️" },
-  { id: "code_gen", label: "Code Gen", x: 80, y: 68, emoji: "💻" },
-  { id: "code_eval", label: "Eval", x: 50, y: 76, emoji: "✅" },
+  { id: "fix_storm", label: "Fix Storm", x: 22, y: 60, emoji: "🔧" },
+  { id: "scope_down", label: "Scope Down", x: 70, y: 60, emoji: "📐" },
+  { id: "doc_gen", label: "Doc Generator", x: 18, y: 68, emoji: "📄" },
+  { id: "blueprint", label: "Blueprint Generator", x: 44, y: 68, emoji: "🗺️" },
+  { id: "prompt_strategy", label: "Prompt Strategist", x: 62, y: 68, emoji: "🧭" },
+  { id: "code_gen", label: "Code Generator", x: 80, y: 68, emoji: "💻" },
+  { id: "code_eval", label: "Code Evaluator", x: 50, y: 76, emoji: "✅" },
   { id: "git_push", label: "Git Push", x: 8, y: 86, emoji: "📦" },
   { id: "ci_test", label: "CI Test", x: 24, y: 86, emoji: "⚙️" },
   { id: "app_spec", label: "App Spec", x: 40, y: 86, emoji: "📋" },
   { id: "do_build", label: "Build", x: 56, y: 86, emoji: "🏗️" },
   { id: "do_deploy", label: "Deploy", x: 72, y: 86, emoji: "🚀" },
-  { id: "verified", label: "Live", x: 88, y: 86, emoji: "✅", glow: true },
+  { id: "verified", label: "Verified Live", x: 88, y: 86, emoji: "✅", glow: true },
 ];
 
 const evalEdges: EdgeDef[] = [
@@ -114,9 +115,14 @@ const evalEdges: EdgeDef[] = [
   { source: "decision", target: "fix_storm" },
   { source: "decision", target: "scope_down" },
   { source: "fix_storm", target: "architect" },
+  { source: "fix_storm", target: "scout" },
+  { source: "fix_storm", target: "catalyst" },
+  { source: "fix_storm", target: "guardian" },
+  { source: "fix_storm", target: "advocate" },
   { source: "scope_down", target: "doc_gen" },
   { source: "doc_gen", target: "blueprint" },
-  { source: "blueprint", target: "code_gen" },
+  { source: "blueprint", target: "prompt_strategy" },
+  { source: "prompt_strategy", target: "code_gen" },
   { source: "code_gen", target: "code_eval" },
   { source: "code_eval", target: "git_push" },
   { source: "code_eval", target: "code_gen" },
@@ -171,8 +177,11 @@ const brainstormPhaseLabels: PhaseLabel[] = [
 ];
 
 const evalCallouts: CalloutDef[] = [
-  { label: "Repair loop", x: 12, y: 61.5, className: "border-orange-500/30 bg-orange-500/12 text-orange-200" },
-  { label: "GO route", x: 12, y: 70, className: "border-emerald-500/30 bg-emerald-500/12 text-emerald-200" },
+  { label: "Run Council Agent", x: 84, y: 16.1, className: "border-blue-500/30 bg-blue-500/12 text-blue-200" },
+  { label: "Score Axis", x: 84, y: 34.4, className: "border-blue-500/30 bg-blue-500/12 text-blue-200" },
+  { label: "Repair loop", x: 8, y: 63.2, className: "border-orange-500/30 bg-orange-500/12 text-orange-200" },
+  { label: "GO route", x: 8, y: 71.2, className: "border-emerald-500/30 bg-emerald-500/12 text-emerald-200" },
+  { label: "Prompt strategy", x: 56, y: 63.8, className: "border-sky-500/30 bg-sky-500/12 text-sky-200" },
   { label: "Ship chain", x: 79, y: 88.5, className: "border-cyan-500/30 bg-cyan-500/12 text-cyan-200" },
 ];
 
@@ -181,7 +190,7 @@ const brainstormCallouts: CalloutDef[] = [
   { label: "Synthesis lane", x: 74, y: 85, className: "border-purple-500/30 bg-purple-500/12 text-purple-200" },
 ];
 
-const GO_NODES = new Set(["doc_gen", "blueprint", "code_gen", "code_eval", "git_push", "ci_test", "app_spec", "do_build", "do_deploy", "verified"]);
+const GO_NODES = new Set(["doc_gen", "blueprint", "prompt_strategy", "code_gen", "code_eval", "git_push", "ci_test", "app_spec", "do_build", "do_deploy", "verified"]);
 const CONDITIONAL_NODES = new Set(["fix_storm", "scope_down"]);
 const BOTTOM_NODES = new Set([...GO_NODES, ...CONDITIONAL_NODES]);
 
@@ -207,9 +216,13 @@ const EVAL_PARTICLE_ROUTES: ParticleRoute[] = [
   ["cross_exam", "score_risk", "verdict"],
   ["cross_exam", "score_user", "verdict"],
   ["verdict", "decision"],
-  ["decision", "fix_storm", "architect"],
+  ["decision", "fix_storm", "architect", "cross_exam"],
+  ["decision", "fix_storm", "scout", "cross_exam"],
+  ["decision", "fix_storm", "catalyst", "cross_exam"],
+  ["decision", "fix_storm", "guardian", "cross_exam"],
+  ["decision", "fix_storm", "advocate", "cross_exam"],
   ["decision", "scope_down", "doc_gen"],
-  ["decision", "doc_gen", "blueprint", "code_gen", "code_eval"],
+  ["decision", "doc_gen", "blueprint", "prompt_strategy", "code_gen", "code_eval"],
   ["code_eval", "git_push", "ci_test", "app_spec", "do_build", "do_deploy", "verified"],
 ];
 

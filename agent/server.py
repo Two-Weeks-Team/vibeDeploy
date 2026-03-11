@@ -29,7 +29,7 @@ from starlette.responses import StreamingResponse
 
 from .cost import estimate_pipeline_cost
 from .db.store import ResultStore
-from .llm import MODEL_CONFIG
+from .llm import get_runtime_model_config
 from .sse import NODE_EVENTS, format_sse
 
 _AGENT_DIR = Path(__file__).resolve().parent
@@ -324,6 +324,18 @@ async def _stream_pipeline(prompt: str, thread_id: str) -> AsyncGenerator[str, N
                         "frontend_files": len(bp.get("frontend_files", {})),
                         "backend_files": len(bp.get("backend_files", {})),
                         "app_name": bp.get("app_name", ""),
+                    },
+                )
+            elif name == "prompt_strategist":
+                strategy = output.get("prompt_strategy", {}) or {}
+                source_index = strategy.get("source_index", []) or []
+                yield _sse(
+                    "prompt_strategy.complete",
+                    {
+                        "type": "prompt_strategy.complete",
+                        "sources": len(source_index),
+                        "frontend_model": strategy.get("model_plan", {}).get("frontend", {}).get("model", ""),
+                        "backend_model": strategy.get("model_plan", {}).get("backend", {}).get("model", ""),
                     },
                 )
             elif name == "code_evaluator":
@@ -739,11 +751,12 @@ async def cost_estimate():
 @app.get("/api/models")
 @app.get("/models")
 async def models():
+    runtime_models = get_runtime_model_config()
     return {
-        "models": MODEL_CONFIG,
+        "models": runtime_models,
         "vendors": {
-            "anthropic": [k for k, v in MODEL_CONFIG.items() if v.startswith("anthropic-")],
-            "openai": [k for k, v in MODEL_CONFIG.items() if v.startswith("openai-")],
+            "anthropic": [k for k, v in runtime_models.items() if v.startswith("anthropic-")],
+            "openai": [k for k, v in runtime_models.items() if v.startswith("openai-")],
         },
     }
 

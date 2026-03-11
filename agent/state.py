@@ -89,6 +89,7 @@ class VibeDeployState(TypedDict):
 
     # Blueprint
     blueprint: Optional[Dict]
+    prompt_strategy: Optional[Dict]
 
     # Code
     frontend_code: Optional[Dict]

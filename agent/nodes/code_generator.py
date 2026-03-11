@@ -211,6 +211,7 @@ async def code_generator(state: VibeDeployState) -> dict:
     generated_docs = state.get("generated_docs", {})
     idea = state.get("idea", {})
     blueprint = state.get("blueprint", {}) or {}
+    prompt_strategy = state.get("prompt_strategy", {}) or {}
     code_eval_result = state.get("code_eval_result")
     frontend_model = MODEL_CONFIG.get("code_gen_frontend", MODEL_CONFIG["code_gen"])
     backend_model = MODEL_CONFIG.get("code_gen_backend", MODEL_CONFIG["code_gen"])
@@ -241,6 +242,7 @@ async def code_generator(state: VibeDeployState) -> dict:
     frontend_code = await _generate_frontend_files(
         frontend_llm,
         context,
+        prompt_strategy=prompt_strategy,
         eval_feedback=eval_feedback,
         fallback_models=get_rate_limit_fallback_models(frontend_model),
     )
@@ -248,6 +250,7 @@ async def code_generator(state: VibeDeployState) -> dict:
     backend_code = await _generate_backend_files(
         backend_llm,
         context,
+        prompt_strategy=prompt_strategy,
         eval_feedback=eval_feedback,
         fallback_models=get_rate_limit_fallback_models(backend_model),
     )
@@ -269,6 +272,7 @@ async def code_generator(state: VibeDeployState) -> dict:
             frontend_llm,
             context,
             retry=True,
+            prompt_strategy=prompt_strategy,
             fallback_models=get_rate_limit_fallback_models(frontend_model),
         )
         frontend_code, backend_code = _normalize_cross_stack(frontend_code, backend_code)
@@ -305,106 +309,6 @@ async def code_generator(state: VibeDeployState) -> dict:
     }
 
 
-async def _generate_frontend_files(
-    llm,
-    context: str,
-    retry: bool = False,
-    eval_feedback: str | None = None,
-    fallback_models: list[str] | None = None,
-) -> dict[str, str]:
-    extra_instruction = ""
-    if retry:
-        extra_instruction = (
-            "\n\nCRITICAL: Your previous response could not be parsed as valid JSON. "
-            'You MUST return ONLY a valid JSON object like: {"files": {"path": "content", ...}}. '
-            "No markdown, no explanation — ONLY the JSON object."
-        )
-    if eval_feedback:
-        extra_instruction += f"\n\nPREVIOUS EVALUATION FEEDBACK (fix these issues):\n{eval_feedback}"
-
-    response = await ainvoke_with_retry(
-        llm,
-        [
-            {
-                "role": "system",
-                "content": (
-                    f"{CODE_GENERATION_BASE_SYSTEM_PROMPT}\n\n"
-                    f"{FRONTEND_SYSTEM_PROMPT}\n\n"
-                    "Return JSON object with exactly one top-level key: 'files'. "
-                    "EVERY files[path] value must be a string containing the full file contents. "
-                    "For JSON files like package.json or tsconfig.json, embed the file body as a JSON string, "
-                    "not as a nested object."
-                    f"{extra_instruction}"
-                ),
-            },
-            {
-                "role": "user",
-                "content": (
-                    "Generate frontend files from this product context.\n\n"
-                    "### Product Context\n"
-                    f"{context}\n\n"
-                    "### Execution Notes\n"
-                    "- Convert the PRD, tech spec, and blueprint into a visually distinctive product, not a generic dashboard.\n"
-                    "- Treat any design_direction, visual_style_hints, ux_highlights, demo_story, and blueprint experience_contract as hard requirements.\n"
-                    "- The generated src/app/page.tsx must compose multiple domain components from the blueprint manifest, not only a hero form.\n"
-                    "- Build the first-run experience for judges seeing the app for the first time in a live demo.\n"
-                ),
-            },
-        ],
-        fallback_models=fallback_models,
-    )
-
-    parsed = _parse_json_response(response.content, {"files": {}}, label="frontend")
-    files = parsed.get("files", {})
-    return _normalize_frontend_files(_normalize_files_dict(files))
-
-
-async def _generate_backend_files(
-    llm,
-    context: str,
-    eval_feedback: str | None = None,
-    fallback_models: list[str] | None = None,
-) -> dict[str, str]:
-    extra_instruction = ""
-    if eval_feedback:
-        extra_instruction = f"\n\nPREVIOUS EVALUATION FEEDBACK (fix these issues):\n{eval_feedback}"
-
-    response = await ainvoke_with_retry(
-        llm,
-        [
-            {
-                "role": "system",
-                "content": (
-                    f"{CODE_GENERATION_BASE_SYSTEM_PROMPT}\n\n"
-                    f"{BACKEND_SYSTEM_PROMPT}\n\n"
-                    "Return JSON object with exactly one top-level key: 'files'. "
-                    "EVERY files[path] value must be a string containing the full file contents. "
-                    "For JSON files, return the file body as a JSON string, not as a nested object."
-                    f"{extra_instruction}"
-                ),
-            },
-            {
-                "role": "user",
-                "content": (
-                    "Generate backend files from this product context. "
-                    "AI features must be integral to business endpoints.\n\n"
-                    "### Product Context\n"
-                    f"{context}\n\n"
-                    "### Execution Notes\n"
-                    "- Preserve the frontend/backend contract exactly for endpoint paths and request field names.\n"
-                    "- Preserve the frontend/backend contract for response field names too, so the frontend can safely render returned data.\n"
-                    "- Keep routes robust behind DigitalOcean ingress by avoiding APIRouter(prefix='/api').\n"
-                ),
-            },
-        ],
-        fallback_models=fallback_models,
-    )
-
-    parsed = _parse_json_response(response.content, {"files": {}}, label="backend")
-    files = parsed.get("files", {})
-    return _normalize_backend_files(_normalize_files_dict(files))
-
-
 def _build_eval_feedback(code_eval_result: dict | None) -> str | None:
     if not code_eval_result or code_eval_result.get("passed", False):
         return None
@@ -416,6 +320,210 @@ def _build_eval_feedback(code_eval_result: dict | None) -> str | None:
     if code_eval_result.get("missing_backend"):
         parts.append(f"Missing backend files: {', '.join(code_eval_result['missing_backend'])}")
     return "\n".join(parts) if parts else None
+
+
+def _get_prompt_target_bundle(prompt_strategy: dict | None, target: str) -> dict:
+    model_plan = (prompt_strategy or {}).get("model_plan", {}) or {}
+    bundle = dict(model_plan.get(target, {}) or {})
+    family = bundle.get("family", "generic")
+    fallback_families = list(bundle.get("fallback_families", []) or [])
+    bundle["family"] = family
+    bundle["fallback_families"] = fallback_families
+    bundle["families"] = _unique_strings([family, *fallback_families])
+    return bundle
+
+
+def _build_cross_model_user_contract(prompt_strategy: dict | None, target: str) -> str:
+    bundle = _get_prompt_target_bundle(prompt_strategy, target)
+    contract = ((prompt_strategy or {}).get("cross_model_user_contract") or "").strip()
+    lines: list[str] = []
+
+    if "qwen3" in bundle["families"]:
+        lines.append("/no_think")
+
+    if contract:
+        lines.append(contract)
+
+    if "deepseek_r1" in bundle["families"]:
+        lines.append(
+            "DeepSeek compatibility note:\n"
+            "- All critical instructions are repeated in this user message.\n"
+            "- Do not add explanation outside the final JSON payload."
+        )
+
+    return "\n\n".join(lines)
+
+
+def _should_use_user_only_messages(prompt_strategy: dict | None, target: str) -> bool:
+    bundle = _get_prompt_target_bundle(prompt_strategy, target)
+    return bundle.get("family") == "deepseek_r1"
+
+
+def _should_repeat_strategy_in_user(prompt_strategy: dict | None, target: str) -> bool:
+    bundle = _get_prompt_target_bundle(prompt_strategy, target)
+    return "deepseek_r1" in bundle["families"]
+
+
+def _build_frontend_prompt_messages(
+    *,
+    context: str,
+    prompt_strategy: dict | None,
+    retry: bool = False,
+    eval_feedback: str | None = None,
+) -> list[dict[str, str]]:
+    extra_instruction = ""
+    if retry:
+        extra_instruction = (
+            "\n\nCRITICAL: Your previous response could not be parsed as valid JSON. "
+            'You MUST return ONLY a valid JSON object like: {"files": {"path": "content", ...}}. '
+            "No markdown, no explanation — ONLY the JSON object."
+        )
+    if eval_feedback:
+        extra_instruction += f"\n\nPREVIOUS EVALUATION FEEDBACK (fix these issues):\n{eval_feedback}"
+
+    strategy_appendix = ((prompt_strategy or {}).get("frontend_prompt_appendix") or "").strip()
+    cross_model_contract = _build_cross_model_user_contract(prompt_strategy, "frontend")
+    user_sections = [
+        "Generate frontend files from this product context.",
+        cross_model_contract,
+        "### Product Context\n" + context,
+        (
+            "### Execution Notes\n"
+            "- Convert the PRD, tech spec, and blueprint into a visually distinctive product, not a generic dashboard.\n"
+            "- Treat any design_direction, visual_style_hints, ux_highlights, demo_story, and blueprint experience_contract as hard requirements.\n"
+            "- The generated src/app/page.tsx must compose multiple domain components from the blueprint manifest, not only a hero form.\n"
+            "- Build the first-run experience for judges seeing the app for the first time in a live demo.\n"
+        ),
+    ]
+    if strategy_appendix and _should_repeat_strategy_in_user(prompt_strategy, "frontend"):
+        user_sections.insert(2, "### Runtime Prompt Kit\n" + strategy_appendix)
+
+    system_sections = [
+        CODE_GENERATION_BASE_SYSTEM_PROMPT,
+        FRONTEND_SYSTEM_PROMPT,
+        (
+            "Return JSON object with exactly one top-level key: 'files'. "
+            "EVERY files[path] value must be a string containing the full file contents. "
+            "For JSON files like package.json or tsconfig.json, embed the file body as a JSON string, "
+            "not as a nested object."
+            f"{extra_instruction}"
+        ),
+    ]
+    if strategy_appendix:
+        system_sections.append("### Runtime Prompt Kit\n" + strategy_appendix)
+
+    if _should_use_user_only_messages(prompt_strategy, "frontend"):
+        return [{"role": "user", "content": "\n\n".join(section for section in [*system_sections, *user_sections] if section)}]
+
+    return [
+        {"role": "system", "content": "\n\n".join(section for section in system_sections if section)},
+        {"role": "user", "content": "\n\n".join(section for section in user_sections if section)},
+    ]
+
+
+def _build_backend_prompt_messages(
+    *,
+    context: str,
+    prompt_strategy: dict | None,
+    eval_feedback: str | None = None,
+) -> list[dict[str, str]]:
+    extra_instruction = ""
+    if eval_feedback:
+        extra_instruction = f"\n\nPREVIOUS EVALUATION FEEDBACK (fix these issues):\n{eval_feedback}"
+
+    strategy_appendix = ((prompt_strategy or {}).get("backend_prompt_appendix") or "").strip()
+    cross_model_contract = _build_cross_model_user_contract(prompt_strategy, "backend")
+    user_sections = [
+        "Generate backend files from this product context. AI features must be integral to business endpoints.",
+        cross_model_contract,
+        "### Product Context\n" + context,
+        (
+            "### Execution Notes\n"
+            "- Preserve the frontend/backend contract exactly for endpoint paths and request field names.\n"
+            "- Preserve the frontend/backend contract for response field names too, so the frontend can safely render returned data.\n"
+            "- Keep routes robust behind DigitalOcean ingress by avoiding APIRouter(prefix='/api').\n"
+        ),
+    ]
+    if strategy_appendix and _should_repeat_strategy_in_user(prompt_strategy, "backend"):
+        user_sections.insert(2, "### Runtime Prompt Kit\n" + strategy_appendix)
+
+    system_sections = [
+        CODE_GENERATION_BASE_SYSTEM_PROMPT,
+        BACKEND_SYSTEM_PROMPT,
+        (
+            "Return JSON object with exactly one top-level key: 'files'. "
+            "EVERY files[path] value must be a string containing the full file contents. "
+            "For JSON files, return the file body as a JSON string, not as a nested object."
+            f"{extra_instruction}"
+        ),
+    ]
+    if strategy_appendix:
+        system_sections.append("### Runtime Prompt Kit\n" + strategy_appendix)
+
+    if _should_use_user_only_messages(prompt_strategy, "backend"):
+        return [{"role": "user", "content": "\n\n".join(section for section in [*system_sections, *user_sections] if section)}]
+
+    return [
+        {"role": "system", "content": "\n\n".join(section for section in system_sections if section)},
+        {"role": "user", "content": "\n\n".join(section for section in user_sections if section)},
+    ]
+
+
+async def _generate_frontend_files(
+    llm,
+    context: str,
+    retry: bool = False,
+    prompt_strategy: dict | None = None,
+    eval_feedback: str | None = None,
+    fallback_models: list[str] | None = None,
+) -> dict[str, str]:
+    response = await ainvoke_with_retry(
+        llm,
+        _build_frontend_prompt_messages(
+            context=context,
+            prompt_strategy=prompt_strategy,
+            retry=retry,
+            eval_feedback=eval_feedback,
+        ),
+        fallback_models=fallback_models,
+    )
+
+    parsed = _parse_json_response(response.content, {"files": {}}, label="frontend")
+    files = parsed.get("files", {})
+    return _normalize_frontend_files(_normalize_files_dict(files))
+
+
+async def _generate_backend_files(
+    llm,
+    context: str,
+    prompt_strategy: dict | None = None,
+    eval_feedback: str | None = None,
+    fallback_models: list[str] | None = None,
+) -> dict[str, str]:
+    response = await ainvoke_with_retry(
+        llm,
+        _build_backend_prompt_messages(
+            context=context,
+            prompt_strategy=prompt_strategy,
+            eval_feedback=eval_feedback,
+        ),
+        fallback_models=fallback_models,
+    )
+
+    parsed = _parse_json_response(response.content, {"files": {}}, label="backend")
+    files = parsed.get("files", {})
+    return _normalize_backend_files(_normalize_files_dict(files))
+
+
+def _unique_strings(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for value in values:
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        ordered.append(value)
+    return ordered
 
 
 def _normalize_files_dict(files: object) -> dict[str, str]:

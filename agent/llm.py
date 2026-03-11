@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import os
+from collections.abc import Iterator
 
 DO_INFERENCE_BASE_URL = "https://inference.do-ai.run/v1"
 DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS = float(os.getenv("LLM_REQUEST_TIMEOUT_SECONDS", "90"))
@@ -19,7 +20,7 @@ _llm_semaphore: asyncio.Semaphore | None = None
 #   doc_gen: anthropic-claude-4.6-sonnet
 #   web_search: openai-gpt-5-mini
 #   image: openai-gpt-image-1
-MODEL_CONFIG = {
+DEFAULT_MODEL_CONFIG = {
     "council": "deepseek-r1-distill-llama-70b",
     "strategist": "deepseek-r1-distill-llama-70b",
     "cross_exam": "deepseek-r1-distill-llama-70b",
@@ -35,6 +36,92 @@ MODEL_CONFIG = {
     "decision": "deepseek-r1-distill-llama-70b",
     "web_search": "mistral-nemo-instruct-2407",
 }
+
+_MODEL_ENV_OVERRIDES = {
+    "council": ("VIBEDEPLOY_MODEL_COUNCIL", "VIBEDEPLOY_MODEL_ANALYSIS", "VIBEDEPLOY_MODEL_ALL"),
+    "strategist": ("VIBEDEPLOY_MODEL_STRATEGIST", "VIBEDEPLOY_MODEL_ANALYSIS", "VIBEDEPLOY_MODEL_ALL"),
+    "cross_exam": ("VIBEDEPLOY_MODEL_CROSS_EXAM", "VIBEDEPLOY_MODEL_ANALYSIS", "VIBEDEPLOY_MODEL_ALL"),
+    "code_gen": ("VIBEDEPLOY_MODEL_CODE_GEN", "DO_INFERENCE_MODEL", "VIBEDEPLOY_MODEL_ALL"),
+    "code_gen_frontend": (
+        "VIBEDEPLOY_MODEL_CODE_GEN_FRONTEND",
+        "VIBEDEPLOY_MODEL_CODE_GEN",
+        "DO_INFERENCE_MODEL",
+        "VIBEDEPLOY_MODEL_ALL",
+    ),
+    "code_gen_backend": (
+        "VIBEDEPLOY_MODEL_CODE_GEN_BACKEND",
+        "VIBEDEPLOY_MODEL_CODE_GEN",
+        "DO_INFERENCE_MODEL",
+        "VIBEDEPLOY_MODEL_ALL",
+    ),
+    "ci_repair": ("VIBEDEPLOY_MODEL_CI_REPAIR", "VIBEDEPLOY_MODEL_ALL"),
+    "doc_gen": ("VIBEDEPLOY_MODEL_DOC_GEN", "VIBEDEPLOY_MODEL_ALL"),
+    "image": ("VIBEDEPLOY_MODEL_IMAGE", "VIBEDEPLOY_MODEL_ALL"),
+    "brainstorm": ("VIBEDEPLOY_MODEL_BRAINSTORM", "VIBEDEPLOY_MODEL_ALL"),
+    "brainstorm_synthesis": ("VIBEDEPLOY_MODEL_BRAINSTORM_SYNTHESIS", "VIBEDEPLOY_MODEL_ALL"),
+    "input": ("VIBEDEPLOY_MODEL_INPUT", "VIBEDEPLOY_MODEL_ALL"),
+    "decision": ("VIBEDEPLOY_MODEL_DECISION", "VIBEDEPLOY_MODEL_ALL"),
+    "web_search": ("VIBEDEPLOY_MODEL_WEB_SEARCH", "VIBEDEPLOY_MODEL_ALL"),
+}
+
+
+def get_model_for_role(role: str, default: str | None = None) -> str:
+    fallback = DEFAULT_MODEL_CONFIG.get(role, default or "")
+    for env_key in _MODEL_ENV_OVERRIDES.get(role, ()):
+        value = os.getenv(env_key, "").strip()
+        if value:
+            return value
+    return fallback
+
+
+def get_runtime_model_config() -> dict[str, str]:
+    return {role: get_model_for_role(role, default=value) for role, value in DEFAULT_MODEL_CONFIG.items()}
+
+
+def _coerce_temperature_for_model(model: str, requested: float) -> float:
+    normalized = model.lower()
+    if "deepseek-r1" in normalized and requested < 0.5:
+        return 0.6
+    return requested
+
+
+class _RuntimeModelConfig(dict):
+    def __init__(self, defaults: dict[str, str]):
+        super().__init__(defaults)
+        self._defaults = dict(defaults)
+
+    def __getitem__(self, key: str) -> str:
+        if key not in self._defaults:
+            raise KeyError(key)
+        return get_model_for_role(key, default=self._defaults[key])
+
+    def get(self, key: str, default=None) -> str | None:
+        if key in self._defaults:
+            return get_model_for_role(key, default=self._defaults[key])
+        return default
+
+    def items(self):
+        for key in self._defaults:
+            yield key, self[key]
+
+    def keys(self):
+        return self._defaults.keys()
+
+    def values(self):
+        for key in self._defaults:
+            yield self[key]
+
+    def copy(self):
+        return get_runtime_model_config()
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._defaults)
+
+    def __len__(self) -> int:
+        return len(self._defaults)
+
+
+MODEL_CONFIG = _RuntimeModelConfig(DEFAULT_MODEL_CONFIG)
 
 
 def _strip_openai_prefix(model: str) -> str:
@@ -85,7 +172,7 @@ def _clone_llm_with_model(llm, model: str):
 
     return get_llm(
         model=model,
-        temperature=float(temperature),
+        temperature=_coerce_temperature_for_model(model, float(temperature)),
         max_tokens=max_tokens,
         request_timeout=request_timeout,
     )
@@ -190,7 +277,7 @@ def get_llm(
             model=model,
             api_key=inference_key,
             base_url=DO_INFERENCE_BASE_URL,
-            temperature=temperature,
+            temperature=_coerce_temperature_for_model(model, temperature),
             max_tokens=effective_max_tokens,
             request_timeout=effective_timeout,
         )
@@ -199,7 +286,7 @@ def get_llm(
 
     return ChatOpenAI(
         model=_strip_openai_prefix(model),
-        temperature=temperature,
+        temperature=_coerce_temperature_for_model(model, temperature),
         max_tokens=effective_max_tokens,
         request_timeout=effective_timeout,
     )

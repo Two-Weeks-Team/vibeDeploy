@@ -9,6 +9,7 @@ NODE_EVENTS = {
     "decision_gate": {"phase": "decision", "message": "Making decision..."},
     "doc_generator": {"phase": "doc_generation", "message": "Generating documentation..."},
     "blueprint_generator": {"phase": "blueprint", "message": "Creating file manifest..."},
+    "prompt_strategist": {"phase": "prompt_strategy", "message": "Assembling model-aware prompt kit..."},
     "code_generator": {"phase": "code_generation", "message": "Generating code..."},
     "code_evaluator": {"phase": "code_evaluation", "message": "Evaluating code quality..."},
     "deployer": {"phase": "deployment", "message": "Deploying to DigitalOcean..."},
