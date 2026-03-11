@@ -83,6 +83,10 @@ async def blueprint_generator(state: VibeDeployState) -> dict:
     idea = state.get("idea", {})
 
     doc_model = MODEL_CONFIG["doc_gen"]
+    fallback_models = get_rate_limit_fallback_models(doc_model)
+    if _should_use_template_blueprint(fallback_models):
+        return {"blueprint": _build_template_blueprint(idea), "phase": "blueprint"}
+
     llm = get_llm(model=doc_model, temperature=0.2, max_tokens=4000)
 
     context = json.dumps(
@@ -97,7 +101,7 @@ async def blueprint_generator(state: VibeDeployState) -> dict:
             {"role": "system", "content": BLUEPRINT_SYSTEM_PROMPT},
             {"role": "user", "content": f"Create a file manifest for this application:\n\n{context}"},
         ],
-        fallback_models=get_rate_limit_fallback_models(doc_model),
+        fallback_models=fallback_models,
     )
 
     raw = content_to_str(response.content).strip()
@@ -130,6 +134,63 @@ async def blueprint_generator(state: VibeDeployState) -> dict:
     return {"blueprint": blueprint, "phase": "blueprint"}
 
 
+def _should_use_template_blueprint(fallback_models: list[str]) -> bool:
+    return not fallback_models
+
+
+def _build_template_blueprint(idea: dict) -> dict:
+    app_name = _slugify(idea.get("name") or idea.get("tagline") or "vibedeploy-app")
+    visual_direction = _coerce_string_list(idea.get("visual_style_hints"))[:2]
+    required_surfaces = _coerce_string_list(idea.get("must_have_surfaces"))[:5]
+    proof_points = _coerce_string_list(idea.get("proof_points"))[:5]
+    non_negotiables = _coerce_string_list(idea.get("experience_non_negotiables"))[:5]
+
+    blueprint = {
+        "app_name": app_name,
+        "design_system": {
+            "visual_direction": ", ".join(visual_direction) if visual_direction else "editorial showcase workspace",
+            "color_tokens": ["background", "primary", "accent", "card", "muted"],
+            "typography": "display serif with clean sans body",
+            "motion_principles": ["staggered reveal", "soft hover lift", "panel transitions"],
+            "ui_constraints": ["avoid generic admin templates", "keep the first screen demo-ready"],
+        },
+        "frontend_files": {},
+        "backend_files": {},
+        "shared_constants": {
+            "api_base_url": "/api",
+            "env_vars": ["DATABASE_URL", "DIGITALOCEAN_INFERENCE_KEY"],
+            "theme_tokens": ["background", "foreground", "primary", "accent", "card"],
+        },
+        "experience_contract": {
+            "required_surfaces": required_surfaces or ["hero", "primary workspace", "results panel", "saved library"],
+            "required_states": ["loading", "empty", "error", "success"],
+            "proof_points": proof_points or ["visible recent activity", "credible result framing", "shareable outputs"],
+            "interaction_style": "guided, tactile, and demo-friendly",
+        },
+        "frontend_backend_contract": [
+            {
+                "frontend_file": "src/lib/api.ts",
+                "calls": "POST /api/plan",
+                "backend_file": "routes.py",
+                "request_fields": ["query", "preferences"],
+                "response_fields": ["summary", "items", "score"],
+            },
+            {
+                "frontend_file": "src/lib/api.ts",
+                "calls": "POST /api/insights",
+                "backend_file": "routes.py",
+                "request_fields": ["selection", "context"],
+                "response_fields": ["insights", "next_actions", "highlights"],
+            },
+        ],
+    }
+
+    if non_negotiables:
+        blueprint["design_system"]["ui_constraints"].extend(non_negotiables)
+
+    return _normalize_blueprint(blueprint, idea)
+
+
 def _normalize_blueprint(blueprint: dict, idea: dict) -> dict:
     if not isinstance(blueprint, dict):
         return blueprint
@@ -149,6 +210,20 @@ def _normalize_blueprint(blueprint: dict, idea: dict) -> dict:
     )
     frontend_files.setdefault("src/app/globals.css", {"purpose": "global styles", "imports_from": [], "exports": []})
     frontend_files.setdefault("src/lib/api.ts", {"purpose": "API client", "imports_from": [], "exports": ["fetchItems"]})
+    backend_files.setdefault("requirements.txt", {"purpose": "python deps", "imports_from": [], "exports": []})
+    backend_files.setdefault(
+        "main.py",
+        {"purpose": "FastAPI app entry", "imports_from": ["routes", "models"], "exports": ["app"]},
+    )
+    backend_files.setdefault("models.py", {"purpose": "SQLAlchemy models", "imports_from": [], "exports": ["Base", "engine"]})
+    backend_files.setdefault(
+        "routes.py",
+        {"purpose": "API routes", "imports_from": ["models", "ai_service"], "exports": ["router"]},
+    )
+    backend_files.setdefault(
+        "ai_service.py",
+        {"purpose": "DO inference client", "imports_from": [], "exports": ["call_inference"]},
+    )
 
     page_meta = frontend_files.get("src/app/page.tsx")
     if not isinstance(page_meta, dict):
@@ -282,6 +357,13 @@ def _normalize_blueprint(blueprint: dict, idea: dict) -> dict:
     normalized["experience_contract"] = experience_contract
     normalized.setdefault("frontend_backend_contract", [])
     return normalized
+
+
+def _slugify(value: str) -> str:
+    clean = re.sub(r"[^a-zA-Z0-9\s-]", "", value).strip().lower()
+    clean = re.sub(r"[\s_]+", "-", clean)
+    clean = re.sub(r"-+", "-", clean)
+    return clean or "vibedeploy-app"
 
 
 def _coerce_string_list(value: object) -> list[str]:

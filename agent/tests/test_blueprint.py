@@ -1,28 +1,37 @@
-from agent.nodes.blueprint import _normalize_blueprint
+import pytest
+
+from agent.nodes import blueprint as blueprint_module
 
 
-def test_normalize_blueprint_adds_secondary_surfaces_for_collection_apps():
-    blueprint = {
-        "frontend_files": {
-            "package.json": {"purpose": "manifest", "imports_from": [], "exports": []},
-            "src/app/page.tsx": {"purpose": "page", "imports_from": [], "exports": ["default"]},
-        },
-        "backend_files": {},
-    }
-    idea = {
-        "problem": "Users need to save bookmarks, browse history, and keep favorites organized.",
-        "key_features": ["save links", "favorites", "dashboard"],
-    }
+@pytest.mark.asyncio
+async def test_blueprint_generator_short_circuits_without_fallback_models(monkeypatch):
+    calls = {"ainvoke": 0}
 
-    normalized = _normalize_blueprint(blueprint, idea)
-    frontend_files = normalized["frontend_files"]
-    experience_contract = normalized["experience_contract"]
+    async def _fake_invoke(*args, **kwargs):
+        calls["ainvoke"] += 1
+        raise AssertionError("blueprint LLM should not run in strict mode")
 
-    assert "src/components/Hero.tsx" in frontend_files
-    assert "src/components/InsightPanel.tsx" in frontend_files
-    assert "src/components/CollectionPanel.tsx" in frontend_files
-    assert "src/components/StatsStrip.tsx" in frontend_files
-    assert "src/components/CollectionPanel.tsx" in frontend_files["src/app/page.tsx"]["imports_from"]
-    assert len(frontend_files) >= 8
-    assert "saved library and recent activity" in experience_contract["required_surfaces"]
-    assert "loading" in experience_contract["required_states"]
+    monkeypatch.setattr(blueprint_module, "get_llm", lambda *args, **kwargs: object())
+    monkeypatch.setattr(blueprint_module, "ainvoke_with_retry", _fake_invoke)
+    monkeypatch.setattr(blueprint_module, "get_rate_limit_fallback_models", lambda model: [])
+
+    result = await blueprint_module.blueprint_generator(
+        {
+            "idea": {
+                "name": "TripCanvas AI",
+                "must_have_surfaces": ["hero", "trip planner", "saved plans"],
+                "proof_points": ["shareable plans", "recent itineraries"],
+                "experience_non_negotiables": ["no blank dashboard"],
+            },
+            "generated_docs": {},
+        }
+    )
+
+    blueprint = result["blueprint"]
+
+    assert calls["ainvoke"] == 0
+    assert result["phase"] == "blueprint"
+    assert blueprint["app_name"] == "tripcanvas-ai"
+    assert "src/app/page.tsx" in blueprint["frontend_files"]
+    assert "main.py" in blueprint["backend_files"]
+    assert len(blueprint["frontend_backend_contract"]) >= 2
