@@ -14,7 +14,7 @@ from gradient_adk import RequestContext, entrypoint
 
 _INFERENCE_URL = "https://inference.do-ai.run/v1/chat/completions"
 _MODEL = "openai-gpt-oss-120b"
-_REASONING_MODEL = "deepseek-r1-distill-llama-70b"
+_REASONING_MODEL = "openai-gpt-oss-120b"
 
 _COUNCIL_AGENTS = {
     "architect": "You are the Architect — technical lead analyzing feasibility, complexity, tech stack, and whether the primary workflow can be shipped as a polished DigitalOcean app. Score technical_feasibility 0-100.",

@@ -11,30 +11,23 @@ DEFAULT_LLM_MAX_CONCURRENCY = max(1, int(os.getenv("LLM_MAX_CONCURRENCY", "2")))
 logger = logging.getLogger(__name__)
 _llm_semaphore: asyncio.Semaphore | None = None
 
-# Open-source models via DO Serverless Inference (no subscription tier restrictions)
-# Commercial models (Anthropic/OpenAI) temporarily unavailable — DO Support ticket pending.
-# When commercial access is restored, switch back to:
-#   council/brainstorm/input: anthropic-claude-4.6-sonnet
-#   strategist/cross_exam/brainstorm_synthesis/decision: openai-gpt-5.2
-#   code_gen/ci_repair: anthropic-claude-opus-4.6
-#   doc_gen: anthropic-claude-4.6-sonnet
-#   web_search: openai-gpt-5-mini
-#   image: openai-gpt-image-1
+# Text generation defaults are unified on gpt-oss-120b so every LLM stage follows
+# the same runtime profile unless an explicit env override is provided.
 DEFAULT_MODEL_CONFIG = {
-    "council": "deepseek-r1-distill-llama-70b",
-    "strategist": "deepseek-r1-distill-llama-70b",
-    "cross_exam": "deepseek-r1-distill-llama-70b",
+    "council": "openai-gpt-oss-120b",
+    "strategist": "openai-gpt-oss-120b",
+    "cross_exam": "openai-gpt-oss-120b",
     "code_gen": "openai-gpt-oss-120b",
     "code_gen_frontend": "openai-gpt-oss-120b",
     "code_gen_backend": "openai-gpt-oss-120b",
-    "ci_repair": "deepseek-r1-distill-llama-70b",
-    "doc_gen": "deepseek-r1-distill-llama-70b",
+    "ci_repair": "openai-gpt-oss-120b",
+    "doc_gen": "openai-gpt-oss-120b",
     "image": "fal-ai/flux/schnell",
-    "brainstorm": "deepseek-r1-distill-llama-70b",
-    "brainstorm_synthesis": "deepseek-r1-distill-llama-70b",
-    "input": "deepseek-r1-distill-llama-70b",
-    "decision": "deepseek-r1-distill-llama-70b",
-    "web_search": "mistral-nemo-instruct-2407",
+    "brainstorm": "openai-gpt-oss-120b",
+    "brainstorm_synthesis": "openai-gpt-oss-120b",
+    "input": "openai-gpt-oss-120b",
+    "decision": "openai-gpt-oss-120b",
+    "web_search": "openai-gpt-oss-120b",
 }
 
 _MODEL_ENV_OVERRIDES = {
@@ -180,9 +173,10 @@ def _clone_llm_with_model(llm, model: str):
 
 def get_rate_limit_fallback_models(model: str) -> list[str]:
     fallbacks = {
-        "openai-gpt-oss-120b": ["alibaba-qwen3-32b", "deepseek-r1-distill-llama-70b"],
-        "deepseek-r1-distill-llama-70b": ["alibaba-qwen3-32b", "openai-gpt-oss-120b"],
-        "alibaba-qwen3-32b": ["deepseek-r1-distill-llama-70b", "openai-gpt-oss-120b"],
+        "openai-gpt-oss-120b": ["openai-gpt-oss-20b", "alibaba-qwen3-32b"],
+        "openai-gpt-oss-20b": ["openai-gpt-oss-120b", "alibaba-qwen3-32b"],
+        "alibaba-qwen3-32b": ["openai-gpt-oss-20b", "openai-gpt-oss-120b"],
+        "deepseek-r1-distill-llama-70b": ["openai-gpt-oss-120b", "openai-gpt-oss-20b"],
     }
     return list(fallbacks.get(model, []))
 

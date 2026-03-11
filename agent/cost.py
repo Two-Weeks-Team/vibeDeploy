@@ -90,10 +90,13 @@ def estimate_pipeline_cost() -> dict:
         ("openai-gpt-oss-120b", 2000, 4000, "guardian"),
         ("openai-gpt-oss-120b", 2000, 4000, "catalyst"),
         ("openai-gpt-oss-120b", 2000, 4000, "advocate"),
-        ("deepseek-r1-distill-llama-70b", 8000, 6000, "cross_examination"),
-        ("deepseek-r1-distill-llama-70b", 10000, 5000, "strategist_verdict"),
-        ("alibaba-qwen3-32b", 3000, 8000, "doc_generation"),
+        ("openai-gpt-oss-120b", 8000, 6000, "cross_examination"),
+        ("openai-gpt-oss-120b", 10000, 5000, "strategist_verdict"),
+        ("openai-gpt-oss-120b", 3000, 8000, "doc_generation"),
         ("openai-gpt-oss-120b", 5000, 12000, "code_generation"),
+        ("openai-gpt-oss-120b", 2500, 4000, "brainstorm"),
+        ("openai-gpt-oss-120b", 2500, 3500, "brainstorm_synthesis"),
+        ("openai-gpt-oss-120b", 1500, 2500, "web_search"),
         ("fal-ai/flux/schnell", 500, 500, "image_generation"),
     ]
 

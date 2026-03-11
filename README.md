@@ -260,19 +260,19 @@ Every app below was generated from a **single sentence** — debated by the Vibe
 | Role | Model | Type | Cost (per 1M tokens) |
 |------|-------|------|---------------------|
 | Council (5 agents) | `openai-gpt-oss-120b` | Open-Source (120B) | $0.10 / $0.70 |
-| Strategist | `deepseek-r1-distill-llama-70b` | Open-Source (70B) | $0.99 / $0.99 |
-| Cross-Examination | `deepseek-r1-distill-llama-70b` | Open-Source (70B) | $0.99 / $0.99 |
+| Strategist | `openai-gpt-oss-120b` | Open-Source (120B) | $0.10 / $0.70 |
+| Cross-Examination | `openai-gpt-oss-120b` | Open-Source (120B) | $0.10 / $0.70 |
 | Code Generation | `openai-gpt-oss-120b` | Open-Source (120B) | $0.10 / $0.70 |
 | CI Repair | `openai-gpt-oss-120b` | Open-Source (120B) | $0.10 / $0.70 |
-| Doc Generation | `alibaba-qwen3-32b` | Open-Source (32B) | $0.25 / $0.55 |
+| Doc Generation | `openai-gpt-oss-120b` | Open-Source (120B) | $0.10 / $0.70 |
 | Input Processing | `openai-gpt-oss-120b` | Open-Source (120B) | $0.10 / $0.70 |
-| Decision Gate | `deepseek-r1-distill-llama-70b` | Open-Source (70B) | $0.99 / $0.99 |
+| Decision Gate | `openai-gpt-oss-120b` | Open-Source (120B) | $0.10 / $0.70 |
 | Brainstorm Agents | `openai-gpt-oss-120b` | Open-Source (120B) | $0.10 / $0.70 |
-| Brainstorm Synthesis | `deepseek-r1-distill-llama-70b` | Open-Source (70B) | $0.99 / $0.99 |
-| Web Search | `mistral-nemo-instruct-2407` | Open-Source (12B) | $0.30 / $0.30 |
+| Brainstorm Synthesis | `openai-gpt-oss-120b` | Open-Source (120B) | $0.10 / $0.70 |
+| Web Search | `openai-gpt-oss-120b` | Open-Source (120B) | $0.10 / $0.70 |
 | Image Generation | `fal-ai/flux/schnell` | Open-Source (fal) | ~$0.003 / image |
 
-**Multi-model open-source AI: 4 model families via DO Serverless Inference**
+**Unified open-source LLM runtime: gpt-oss-120b via DO Serverless Inference**
 **Cost per full deployment: ~$0.12** | $200 credits = ~1,600+ deployments
 
 ---

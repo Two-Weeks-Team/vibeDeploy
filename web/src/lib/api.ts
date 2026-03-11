@@ -1,7 +1,7 @@
-const AGENT_URL =
+export const AGENT_URL =
   process.env.NEXT_PUBLIC_AGENT_URL ?? "http://localhost:8080";
 
-const DASHBOARD_API_URL = AGENT_URL.includes("ondigitalocean.app")
+export const DASHBOARD_API_URL = AGENT_URL.includes("ondigitalocean.app")
   ? `${AGENT_URL}/api`
   : AGENT_URL;
 

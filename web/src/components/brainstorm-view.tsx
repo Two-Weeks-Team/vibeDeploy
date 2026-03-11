@@ -6,11 +6,9 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
+import { DASHBOARD_API_URL, getBrainstormResult, type BrainstormResult } from "@/lib/api";
 import { createSSEClient, type SSEEvent } from "@/lib/sse-client";
-import { getBrainstormResult, type BrainstormResult } from "@/lib/api";
 import { cn } from "@/lib/utils";
-
-const AGENT_URL = process.env.NEXT_PUBLIC_AGENT_URL ?? "http://localhost:8080";
 
 type AgentKey = "architect" | "scout" | "guardian" | "catalyst" | "advocate";
 
@@ -127,7 +125,7 @@ export function BrainstormView({ sessionId }: { sessionId: string }) {
 
   useEffect(() => {
     const stop = createSSEClient({
-      url: `${AGENT_URL}/brainstorm`,
+      url: `${DASHBOARD_API_URL}/brainstorm`,
       body: {
         prompt: "Run brainstorm and stream all events.",
         config: { configurable: { thread_id: sessionId } },

@@ -11,6 +11,7 @@ import { VibeScore } from "@/components/vibe-score";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { DASHBOARD_API_URL } from "@/lib/api";
 import { createSSEClient, type SSEEvent } from "@/lib/sse-client";
 
 type AgentKey = "architect" | "scout" | "guardian" | "catalyst" | "advocate" | "strategist";
@@ -22,8 +23,6 @@ type AnalysisEntry = {
   score: number;
   findingsCount: number;
 };
-
-const AGENT_URL = process.env.NEXT_PUBLIC_AGENT_URL ?? "http://localhost:8080";
 
 const PHASES = ["Input", "Analysis", "Debate", "Scoring", "Verdict", "Build", "Deploy"] as const;
 
@@ -168,7 +167,7 @@ export function MeetingView({ meetingId }: { meetingId: string }) {
 
   useEffect(() => {
     const stop = createSSEClient({
-      url: `${AGENT_URL}/run`,
+      url: `${DASHBOARD_API_URL}/run`,
       body: {
         prompt: "Run the council meeting and stream all events.",
         config: { configurable: { thread_id: meetingId } },
