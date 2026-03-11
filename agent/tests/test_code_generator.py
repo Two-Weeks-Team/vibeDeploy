@@ -580,6 +580,54 @@ def test_normalize_backend_files_relaxes_preferences_and_context_request_types()
     assert "context: Any =" in normalized["models.py"]
 
 
+def test_normalize_backend_files_aligns_ai_response_shapes_with_frontend_contract():
+    files = {
+        "routes.py": (
+            "from pydantic import BaseModel\n"
+            "from typing import List\n\n"
+            "class PlanResponse(BaseModel):\n"
+            "    summary: str\n"
+            "    items: List[str]\n"
+            "    score: float\n\n"
+            "class InsightsResponse(BaseModel):\n"
+            "    insights: str\n"
+            "    next_actions: List[str]\n"
+            "    highlights: List[str]\n\n"
+            'SYSTEM_PLAN = "Return JSON with keys: summary (string), items (list of strings), score (float)."\n'
+            'SYSTEM_INSIGHTS = "Return JSON with keys: insights (string), next_actions (list of strings), highlights (list of strings)."\n'
+        ),
+        "ai_service.py": (
+            "import json\n\n"
+            "async def call_inference(messages):\n"
+            "    try:\n"
+            '        json_str = "{\\"summary\\": \\"ok\\"}"\n'
+            "        result = json.loads(json_str)\n"
+            "        return result\n"
+            "    except Exception as e:\n"
+            "        fallback = {\n"
+            '            "summary": "AI service unavailable",\n'
+            '            "items": [],\n'
+            '            "score": 0.0,\n'
+            '            "insights": "AI service unavailable",\n'
+            '            "next_actions": [],\n'
+            '            "highlights": [],\n'
+            '            "note": "AI is temporarily unavailable. Please try again later."\n'
+            "        }\n"
+            "        return fallback\n"
+        ),
+    }
+
+    normalized = _normalize_backend_files(files)
+
+    assert "items: list[dict[str, object]]" in normalized["routes.py"]
+    assert "insights: list[str]" in normalized["routes.py"]
+    assert "items (list of objects with title, detail, score)" in normalized["routes.py"]
+    assert "insights (list of strings)" in normalized["routes.py"]
+    assert "_normalize_inference_payload" in normalized["ai_service.py"]
+    assert "return _normalize_inference_payload(result)" in normalized["ai_service.py"]
+    assert 'return _coerce_unstructured_payload("AI service fallback")' in normalized["ai_service.py"]
+
+
 @pytest.mark.asyncio
 async def test_code_generator_regenerates_only_missing_frontend(monkeypatch):
     state = {

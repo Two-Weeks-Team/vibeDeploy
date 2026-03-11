@@ -1305,6 +1305,7 @@ def _normalize_frontend_files(files: dict[str, str]) -> dict[str, str]:
 def _normalize_backend_files(files: dict[str, str]) -> dict[str, str]:
     normalized = dict(files)
     normalized = _normalize_backend_api_routes(normalized)
+    normalized = _normalize_backend_response_shapes(normalized)
     normalized = _normalize_backend_database_url_guards(normalized)
     normalized = _normalize_backend_auth_scheme_references(normalized)
     normalized = _normalize_backend_flexible_request_fields(normalized)
@@ -1998,6 +1999,23 @@ def _inject_optional_api_prefix_middleware(content: str) -> str:
     return updated
 
 
+def _normalize_backend_response_shapes(files: dict[str, str]) -> dict[str, str]:
+    normalized = dict(files)
+    routes_content = normalized.get("routes.py", "")
+    if not routes_content:
+        return normalized
+
+    updated = routes_content
+    updated = updated.replace("items: List[str]", "items: list[dict[str, object]]")
+    updated = updated.replace("items: list[str]", "items: list[dict[str, object]]")
+    updated = updated.replace("insights: str", "insights: list[str]")
+    updated = updated.replace("insights: String", "insights: list[str]")
+    updated = updated.replace("items (list of strings)", "items (list of objects with title, detail, score)")
+    updated = updated.replace("insights (string)", "insights (list of strings)")
+    normalized["routes.py"] = updated
+    return normalized
+
+
 def _normalize_backend_ai_fallbacks(files: dict[str, str]) -> dict[str, str]:
     normalized: dict[str, str] = {}
     for path, content in files.items():
@@ -2018,6 +2036,18 @@ def _normalize_backend_ai_fallbacks(files: dict[str, str]) -> dict[str, str]:
             updated = updated.replace(
                 "return {'note': 'AI service is temporarily unavailable. Please try again later.'}",
                 'return _coerce_unstructured_payload("AI service fallback")',
+            )
+            updated = re.sub(
+                r"fallback\s*=\s*\{[\s\S]*?['\"]summary['\"]\s*:\s*['\"]AI service unavailable['\"][\s\S]*?\}\s*return fallback",
+                'return _coerce_unstructured_payload("AI service fallback")',
+                updated,
+                count=1,
+            )
+            updated = re.sub(
+                r"(result\s*=\s*json\.loads\(json_str\)\s*\n)(\s*)return result\b",
+                r"\1\2return _normalize_inference_payload(result)",
+                updated,
+                count=1,
             )
 
             if "def _coerce_unstructured_payload" not in updated:
@@ -2047,6 +2077,61 @@ def _normalize_backend_ai_fallbacks(files: dict[str, str]) -> dict[str, str]:
                     '        "score": 88,\n'
                     '        "insights": [f"Lead with {headline} on the first screen.", "Keep one clear action visible throughout the flow."],\n'
                     '        "next_actions": ["Review the generated plan.", "Save the strongest output for the demo finale."],\n'
+                    '        "highlights": highlights,\n'
+                    "    }\n"
+                )
+                helper += (
+                    "\n"
+                    "def _normalize_inference_payload(payload: object) -> dict[str, object]:\n"
+                    "    if not isinstance(payload, dict):\n"
+                    "        return _coerce_unstructured_payload(str(payload))\n"
+                    "    normalized = dict(payload)\n"
+                    '    summary = str(normalized.get("summary") or normalized.get("note") or "AI-generated plan ready")\n'
+                    '    raw_items = normalized.get("items")\n'
+                    "    items: list[dict[str, object]] = []\n"
+                    "    if isinstance(raw_items, list):\n"
+                    "        for index, entry in enumerate(raw_items[:3], start=1):\n"
+                    "            if isinstance(entry, dict):\n"
+                    '                title = str(entry.get("title") or f"Stage {index}")\n'
+                    '                detail = str(entry.get("detail") or entry.get("description") or title)\n'
+                    '                score = float(entry.get("score") or min(96, 80 + index * 4))\n'
+                    "            else:\n"
+                    '                label = str(entry).strip() or f"Stage {index}"\n'
+                    '                title = f"Stage {index}: {label.title()}"\n'
+                    '                detail = f"Use {label} to move the request toward a demo-ready outcome."\n'
+                    "                score = float(min(96, 80 + index * 4))\n"
+                    '            items.append({"title": title, "detail": detail, "score": score})\n'
+                    "    if not items:\n"
+                    '        items = _coerce_unstructured_payload(summary).get("items", [])\n'
+                    '    raw_insights = normalized.get("insights")\n'
+                    "    if isinstance(raw_insights, list):\n"
+                    "        insights = [str(entry) for entry in raw_insights if str(entry).strip()]\n"
+                    '    elif isinstance(raw_insights, str) and raw_insights.strip():\n'
+                    "        insights = [raw_insights.strip()]\n"
+                    "    else:\n"
+                    "        insights = []\n"
+                    '    next_actions = normalized.get("next_actions")\n'
+                    "    if isinstance(next_actions, list):\n"
+                    "        next_actions = [str(entry) for entry in next_actions if str(entry).strip()]\n"
+                    "    else:\n"
+                    "        next_actions = []\n"
+                    '    highlights = normalized.get("highlights")\n'
+                    "    if isinstance(highlights, list):\n"
+                    "        highlights = [str(entry) for entry in highlights if str(entry).strip()]\n"
+                    "    else:\n"
+                    "        highlights = []\n"
+                    "    if not insights and not next_actions and not highlights:\n"
+                    "        fallback = _coerce_unstructured_payload(summary)\n"
+                    '        insights = fallback.get("insights", [])\n'
+                    '        next_actions = fallback.get("next_actions", [])\n'
+                    '        highlights = fallback.get("highlights", [])\n'
+                    "    return {\n"
+                    "        **normalized,\n"
+                    '        "summary": summary,\n'
+                    '        "items": items,\n'
+                    '        "score": float(normalized.get("score") or 88),\n'
+                    '        "insights": insights,\n'
+                    '        "next_actions": next_actions,\n'
                     '        "highlights": highlights,\n'
                     "    }\n"
                 )
