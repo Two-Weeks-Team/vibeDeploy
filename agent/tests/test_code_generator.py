@@ -569,7 +569,7 @@ def test_normalize_backend_files_relaxes_preferences_and_context_request_types()
             "from typing import Any, List\n\n"
             "class PlanRequest:\n"
             "    preferences: Dict[str, Any] = {}\n"
-            "    context: Dict[str, Any] = {}\n"
+            "    context: List[str] = []\n"
             "    query: str = ''\n"
         )
     }

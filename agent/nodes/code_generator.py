@@ -1437,7 +1437,10 @@ def _normalize_backend_database_url_guards(files: dict[str, str]) -> dict[str, s
 
 def _normalize_backend_flexible_request_fields(files: dict[str, str]) -> dict[str, str]:
     normalized: dict[str, str] = {}
-    pattern = re.compile(r"^(\s*)(preferences|context)(\s*:\s*)Dict\[[^\]]+\](\s*=)", flags=re.MULTILINE)
+    pattern = re.compile(
+        r"^(\s*)(preferences|context)(\s*:\s*)(?:Dict\[[^\]]+\]|List\[[^\]]+\]|list\[[^\]]+\])(\s*=)",
+        flags=re.MULTILINE,
+    )
 
     for path, content in files.items():
         updated = content
