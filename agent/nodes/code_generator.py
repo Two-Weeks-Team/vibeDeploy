@@ -406,17 +406,11 @@ def _should_force_frontend_fallback(code_eval_result: dict | None) -> bool:
     if not isinstance(code_eval_result, dict) or code_eval_result.get("passed", False):
         return False
 
-    missing_frontend = code_eval_result.get("missing_frontend") or []
     try:
         iteration = int(code_eval_result.get("iteration", 0) or 0)
     except (TypeError, ValueError):
         iteration = 0
-    try:
-        experience = float(code_eval_result.get("experience", 100) or 100)
-    except (TypeError, ValueError):
-        experience = 100.0
-
-    return iteration >= 1 and (bool(missing_frontend) or experience < 75.0)
+    return iteration >= 1
 
 
 def _should_regenerate_target(
