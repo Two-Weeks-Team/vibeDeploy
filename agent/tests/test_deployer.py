@@ -4,6 +4,7 @@ from agent.nodes.deployer import (
     _apply_deterministic_repairs,
     _build_table_prefix,
     _ensure_frontend_lockfile,
+    _get_deploy_blocker,
     _generate_ci_yml,
     _ensure_unique_backend_table_prefix,
     _is_do_app_limit_error,
@@ -223,6 +224,39 @@ def test_generate_ci_yml_frontend_install_falls_back_when_lockfile_is_empty_or_i
 
     assert "if [ -s package-lock.json ]; then" in yml
     assert "npm ci || npm install" in yml
+
+
+def test_get_deploy_blocker_rejects_docs_only_bundle():
+    blocker = _get_deploy_blocker(
+        frontend_code={},
+        backend_code={},
+        blueprint={
+            "frontend_files": {"package.json": {}, "src/app/page.tsx": {}},
+            "backend_files": {"main.py": {}, "requirements.txt": {}},
+        },
+    )
+
+    assert blocker == "missing backend files: main.py, requirements.txt"
+
+
+def test_get_deploy_blocker_accepts_full_stack_bundle():
+    blocker = _get_deploy_blocker(
+        frontend_code={
+            "package.json": '{"name":"demo","private":true}',
+            "src/app/layout.tsx": "export default function Layout({ children }) { return <html><body>{children}</body></html>; }",
+            "src/app/page.tsx": "export default function Page() { return <main>Demo</main>; }",
+        },
+        backend_code={
+            "main.py": "from fastapi import FastAPI\napp = FastAPI()\n",
+            "requirements.txt": "fastapi\nuvicorn\n",
+        },
+        blueprint={
+            "frontend_files": {"package.json": {}, "src/app/page.tsx": {}},
+            "backend_files": {"main.py": {}, "requirements.txt": {}},
+        },
+    )
+
+    assert blocker is None
 
 
 def test_apply_deterministic_repairs_fixes_typescript_nullable_property_access():
