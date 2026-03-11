@@ -3,7 +3,7 @@ import re
 
 from ..llm import MODEL_CONFIG, ainvoke_with_retry, get_llm, get_rate_limit_fallback_models
 from ..state import VibeDeployState
-from ..tools.youtube import extract_youtube_transcript, is_youtube_url
+from ..tools.youtube import extract_first_youtube_url, extract_youtube_transcript, is_youtube_url
 
 IDEA_EXTRACTION_PROMPT = (
     "You are an expert product and experience strategist. Given the user's raw input "
@@ -38,16 +38,27 @@ async def input_processor(state: VibeDeployState) -> dict:
             "phase": "error",
         }
 
-    input_type = "youtube" if is_youtube_url(raw_input) else "text"
+    youtube_url = extract_first_youtube_url(raw_input) if is_youtube_url(raw_input) else None
+    input_type = "youtube" if youtube_url else "text"
     transcript = None
     idea_context = raw_input
 
     if input_type == "youtube":
-        transcript = await extract_youtube_transcript(raw_input)
+        transcript = await extract_youtube_transcript(youtube_url or raw_input)
+        additional_guidance = raw_input.replace(youtube_url or raw_input, "", 1).strip()
         if transcript and not transcript.startswith("[Error"):
-            idea_context = f"YouTube video content:\n{transcript[:4000]}\n\nOriginal URL: {raw_input}"
+            context_parts = [
+                f"YouTube video content:\n{transcript[:4000]}",
+                f"Original URL: {youtube_url}",
+            ]
+            if additional_guidance:
+                context_parts.append(f"Additional user instructions:\n{additional_guidance}")
+            idea_context = "\n\n".join(context_parts)
         else:
-            idea_context = f"YouTube URL (content unavailable): {raw_input}"
+            context_parts = [f"YouTube URL (content unavailable): {youtube_url}"]
+            if additional_guidance:
+                context_parts.append(f"Additional user instructions:\n{additional_guidance}")
+            idea_context = "\n\n".join(context_parts)
 
     input_model = MODEL_CONFIG["input"]
     llm = get_llm(

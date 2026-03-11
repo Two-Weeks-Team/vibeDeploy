@@ -19,6 +19,20 @@ def is_youtube_url(text: str) -> bool:
     return any(re.search(p, text) for p in patterns)
 
 
+def extract_first_youtube_url(text: str) -> Optional[str]:
+    patterns = [
+        r"(?:https?://)?(?:www\.)?youtube\.com/watch\?v=[\w-]+(?:[^\s)]*)?",
+        r"(?:https?://)?(?:www\.)?youtu\.be/[\w-]+(?:[^\s)]*)?",
+        r"(?:https?://)?(?:www\.)?youtube\.com/embed/[\w-]+(?:[^\s)]*)?",
+        r"(?:https?://)?(?:www\.)?youtube\.com/shorts/[\w-]+(?:[^\s)]*)?",
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, text)
+        if match:
+            return match.group(0)
+    return None
+
+
 def extract_video_id(url: str) -> Optional[str]:
     patterns = [
         r"(?:youtube\.com/watch\?v=|youtu\.be/|youtube\.com/embed/|youtube\.com/shorts/)([\w-]+)",
