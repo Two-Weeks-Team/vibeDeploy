@@ -73,7 +73,7 @@ const evalNodes: NodeDef[] = [
   { id: "score_user", label: "User", x: 90, y: 38, emoji: "📊" },
   { id: "verdict", label: "Vibe Score", x: 50, y: 47, emoji: "🏛️", glow: true },
   { id: "decision", label: "Decision Gate", x: 50, y: 53, emoji: "🚦" },
-  { id: "fix_storm", label: "Fix-Storm", x: 30, y: 60, emoji: "🔧" },
+  { id: "fix_storm", label: "Fix-Storm", x: 24, y: 60, emoji: "🔧" },
   { id: "scope_down", label: "Scope-Down", x: 70, y: 60, emoji: "📐" },
   { id: "doc_gen", label: "Specs", x: 20, y: 68, emoji: "📄" },
   { id: "blueprint", label: "Blueprint", x: 50, y: 68, emoji: "🗺️" },
@@ -195,11 +195,22 @@ const EDGE_COLORS: Record<NodeStatus, string> = {
 const PARTICLE_DUR_SECONDS = 12;
 const PARTICLE_DUR = "12s";
 const EVAL_PARTICLE_ROUTES: ParticleRoute[] = [
-  ["input", "enrich", "architect", "cross_exam", "score_tech", "verdict", "decision", "doc_gen", "blueprint", "code_gen", "code_eval", "git_push", "ci_test", "app_spec", "do_build", "do_deploy", "verified"],
-  ["input", "enrich", "scout", "cross_exam", "score_market", "verdict", "decision", "doc_gen", "blueprint", "code_gen", "code_eval", "git_push", "ci_test", "app_spec", "do_build", "do_deploy", "verified"],
-  ["input", "enrich", "catalyst", "cross_exam", "score_innovation", "verdict", "decision", "doc_gen", "blueprint", "code_gen", "code_eval", "git_push", "ci_test", "app_spec", "do_build", "do_deploy", "verified"],
-  ["input", "enrich", "guardian", "cross_exam", "score_risk", "verdict", "decision", "doc_gen", "blueprint", "code_gen", "code_eval", "git_push", "ci_test", "app_spec", "do_build", "do_deploy", "verified"],
-  ["input", "enrich", "advocate", "cross_exam", "score_user", "verdict", "decision", "doc_gen", "blueprint", "code_gen", "code_eval", "git_push", "ci_test", "app_spec", "do_build", "do_deploy", "verified"],
+  ["input", "enrich"],
+  ["enrich", "architect", "cross_exam"],
+  ["enrich", "scout", "cross_exam"],
+  ["enrich", "catalyst", "cross_exam"],
+  ["enrich", "guardian", "cross_exam"],
+  ["enrich", "advocate", "cross_exam"],
+  ["cross_exam", "score_tech", "verdict"],
+  ["cross_exam", "score_market", "verdict"],
+  ["cross_exam", "score_innovation", "verdict"],
+  ["cross_exam", "score_risk", "verdict"],
+  ["cross_exam", "score_user", "verdict"],
+  ["verdict", "decision"],
+  ["decision", "fix_storm", "architect"],
+  ["decision", "scope_down", "doc_gen"],
+  ["decision", "doc_gen", "blueprint", "code_gen", "code_eval"],
+  ["code_eval", "git_push", "ci_test", "app_spec", "do_build", "do_deploy", "verified"],
 ];
 
 const BS_PARTICLE_ROUTES: ParticleRoute[] = [
