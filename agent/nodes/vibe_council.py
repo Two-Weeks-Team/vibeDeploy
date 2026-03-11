@@ -208,16 +208,23 @@ async def score_axis(input: dict) -> dict:
 
 async def strategist_verdict(state: VibeDeployState) -> dict:
     scoring = state.get("scoring", {})
+    council_analysis = state.get("council_analysis", {}) or {}
 
     tech = scoring.get("technical_feasibility", {}).get("score", 0)
     market = scoring.get("market_viability", {}).get("score", 0)
     innovation = scoring.get("innovation_score", {}).get("score", 0)
     risk = scoring.get("risk_profile", {}).get("score", 0)
     user_impact = scoring.get("user_impact", {}).get("score", 0)
+    fallback_agents = sorted(
+        agent_name
+        for agent_name, analysis in council_analysis.items()
+        if isinstance(analysis, dict) and analysis.get("fallback")
+    )
 
     final_score = tech * 0.25 + market * 0.20 + innovation * 0.20 + (100 - risk) * 0.20 + user_impact * 0.15
+    go_threshold = 68 if fallback_agents else 70
 
-    if final_score >= 70:
+    if final_score >= go_threshold:
         decision = "GO"
     elif final_score >= 50:
         decision = "CONDITIONAL"
@@ -248,6 +255,8 @@ async def strategist_verdict(state: VibeDeployState) -> dict:
             ),
             "final_score": round(final_score, 2),
             "decision": decision,
+            "go_threshold": go_threshold,
+            "fallback_agents": fallback_agents,
         },
         "phase": "verdict_delivered",
     }
