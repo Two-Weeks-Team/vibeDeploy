@@ -691,20 +691,18 @@ def _extract_template_seed(context: str) -> dict[str, object]:
 
     title = str(idea.get("name") or "VibeLaunch").strip() or "VibeLaunch"
     tagline = str(idea.get("tagline") or "Turn an idea into a polished demo.").strip()
-    features = [str(item).strip() for item in idea.get("key_features", []) if str(item).strip()]
+    features = _seed_text_list(idea.get("key_features"))
     if not features:
         features = ["Guided workflow", "Insights panel", "Saved sessions"]
-    proof_points = [str(item).strip() for item in idea.get("proof_points", []) if str(item).strip()]
+    proof_points = _seed_text_list(idea.get("proof_points"))
     if not proof_points:
         proof_points = ["Shareable outputs", "Visible recent activity", "Clear next actions"]
-    surfaces = [str(item).strip() for item in idea.get("must_have_surfaces", []) if str(item).strip()]
-    trust_surfaces = [str(item).strip() for item in idea.get("trust_surfaces", []) if str(item).strip()]
-    output_entities = [str(item).strip() for item in idea.get("output_entities", []) if str(item).strip()]
-    sample_seed_data = [str(item).strip() for item in idea.get("sample_seed_data", []) if str(item).strip()]
-    reference_objects = [str(item).strip() for item in idea.get("reference_objects", []) if str(item).strip()]
-    signature_demo_moments = [
-        str(item).strip() for item in idea.get("signature_demo_moments", []) if str(item).strip()
-    ]
+    surfaces = _seed_text_list(idea.get("must_have_surfaces"))
+    trust_surfaces = _seed_text_list(idea.get("trust_surfaces"))
+    output_entities = _seed_text_list(idea.get("output_entities"))
+    sample_seed_data = _seed_text_list(idea.get("sample_seed_data"))
+    reference_objects = _seed_text_list(idea.get("reference_objects"))
+    signature_demo_moments = _seed_text_list(idea.get("signature_demo_moments"))
     input_labels = idea.get("input_labels") if isinstance(idea.get("input_labels"), dict) else {}
 
     layout_archetype = str(idea.get("layout_archetype") or "").strip().lower()
@@ -1677,6 +1675,100 @@ def _unique_strings(values: list[str]) -> list[str]:
         seen.add(value)
         ordered.append(value)
     return ordered
+
+
+def _seed_text_list(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+
+    return _unique_strings([text for item in value if (text := _stringify_seed_item(item))])
+
+
+def _stringify_seed_item(item: object) -> str:
+    if item is None:
+        return ""
+
+    if isinstance(item, str):
+        return item.strip()
+
+    if isinstance(item, (int, float, bool)):
+        return str(item).strip()
+
+    if not isinstance(item, dict):
+        return str(item).strip()
+
+    trip_fields = [
+        _dict_text(item, "city"),
+        _dict_text(item, "vibe"),
+        _quantified_label(item.get("days"), "day"),
+        _currency_label(item.get("budget_per_day")),
+    ]
+    trip_summary = " · ".join(part for part in trip_fields if part)
+    if trip_summary:
+        return trip_summary
+
+    for primary_key, secondary_keys in (
+        ("name", ("description", "detail", "summary")),
+        ("title", ("description", "detail", "summary")),
+        ("label", ("description", "detail", "summary")),
+        ("neighborhood", ("highlight", "rain_alt", "detail")),
+        ("surface", ("description", "detail")),
+        ("object", ("description", "detail")),
+    ):
+        primary = _dict_text(item, primary_key)
+        if not primary:
+            continue
+        secondary = next((_dict_text(item, key) for key in secondary_keys if _dict_text(item, key)), "")
+        if secondary:
+            return f"{primary} - {secondary}"
+        return primary
+
+    scalar_pairs: list[str] = []
+    for key, value in item.items():
+        if isinstance(value, (list, dict)) or value is None:
+            continue
+        scalar_text = str(value).strip()
+        if not scalar_text:
+            continue
+        scalar_pairs.append(f"{key.replace('_', ' ')}: {scalar_text}")
+        if len(scalar_pairs) == 3:
+            break
+    return " · ".join(scalar_pairs)
+
+
+def _dict_text(item: dict[object, object], key: str) -> str:
+    value = item.get(key)
+    if value is None:
+        return ""
+    return str(value).strip()
+
+
+def _quantified_label(value: object, singular: str) -> str:
+    if value is None or value == "":
+        return ""
+    if isinstance(value, (int, float)):
+        amount = int(value) if isinstance(value, float) and value.is_integer() else value
+        return f"{amount} {singular}{'' if amount == 1 else 's'}"
+    text = str(value).strip()
+    if not text:
+        return ""
+    if text.lower().endswith(singular) or text.lower().endswith(f"{singular}s"):
+        return text
+    return f"{text} {singular}s"
+
+
+def _currency_label(value: object) -> str:
+    if value is None or value == "":
+        return ""
+    if isinstance(value, (int, float)):
+        amount = int(value) if isinstance(value, float) and value.is_integer() else value
+        return f"${amount}/day"
+    text = str(value).strip()
+    if not text:
+        return ""
+    if text.startswith("$") or "/day" in text.lower():
+        return text
+    return f"{text}/day"
 
 
 def _normalize_files_dict(files: object) -> dict[str, str]:

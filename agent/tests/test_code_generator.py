@@ -792,6 +792,46 @@ def test_fallback_frontend_bundle_varies_layout_markup_and_reference_objects():
     assert ".layout-operations-console .hero" in console["src/app/globals.css"]
 
 
+def test_extract_template_seed_formats_structured_idea_lists_for_readable_ui_copy():
+    seed = code_generator_module._extract_template_seed(
+        json.dumps(
+            {
+                "idea": {
+                    "name": "RoutePostcard",
+                    "key_features": [
+                        {
+                            "name": "Mood-Driven Planner",
+                            "description": "Choose city, vibe, trip length, and budget in one panel.",
+                        },
+                        {
+                            "name": "Cinematic Postcard Storyboard",
+                            "description": "Render a three-card editorial spread.",
+                        },
+                    ],
+                    "sample_seed_data": [
+                        {
+                            "city": "Seoul",
+                            "vibe": "vibrant nightlife",
+                            "days": 3,
+                            "budget_per_day": 120,
+                            "postcards": [{"neighborhood": "Hongdae"}],
+                        }
+                    ],
+                    "reference_objects": [
+                        {"label": "Budget slider", "description": "Daily cap indicator"},
+                        {"label": "Postcard card", "description": "Image + caption + map"},
+                    ],
+                }
+            },
+            ensure_ascii=False,
+        )
+    )
+
+    assert seed["features"] == ["Mood-Driven Planner - Choose city, vibe, trip length, and budget in one panel.", "Cinematic Postcard Storyboard - Render a three-card editorial spread."]
+    assert seed["sample_seed_data"] == ["Seoul · vibrant nightlife · 3 days · $120/day"]
+    assert seed["reference_objects"] == ["Budget slider - Daily cap indicator", "Postcard card - Image + caption + map"]
+
+
 @pytest.mark.asyncio
 async def test_generate_backend_files_uses_deterministic_fallback_on_llm_error(monkeypatch):
     async def _fail(*args, **kwargs):
