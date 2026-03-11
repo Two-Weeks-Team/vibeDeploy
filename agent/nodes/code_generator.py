@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 _MIN_FRONTEND_FILES = 3  # At least package.json + 2 source files
 _MIN_BACKEND_FILES = 2  # At least main.py + requirements.txt
 _CODEGEN_MODEL_MAX_ATTEMPTS = 2
-_STRICT_PRIMARY_CODEGEN_MAX_ATTEMPTS = 6
+_STRICT_PRIMARY_CODEGEN_MAX_ATTEMPTS = 3
 _STACK_GENERATION_PAUSE_SECONDS = 2
 _FONT_DEFAULT_WEIGHTS = {
     "Merriweather": ["400", "700"],
