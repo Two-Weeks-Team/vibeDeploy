@@ -577,6 +577,40 @@ def test_codegen_max_attempts_stays_high_without_fallback_models():
 
 
 @pytest.mark.asyncio
+async def test_generate_frontend_files_uses_deterministic_fallback_on_llm_error(monkeypatch):
+    async def _fail(*args, **kwargs):
+        raise RuntimeError("Error code: 429 - rate limit exceeded")
+
+    monkeypatch.setattr(code_generator_module, "ainvoke_with_retry", _fail)
+
+    files = await code_generator_module._generate_frontend_files(
+        object(),
+        json.dumps({"idea": {"name": "TripCanvas AI", "tagline": "Plan cinematic journeys"}}, ensure_ascii=False),
+    )
+
+    assert "src/app/page.tsx" in files
+    assert "src/lib/api.ts" in files
+    assert "src/components/PlannerPanel.tsx" in files
+
+
+@pytest.mark.asyncio
+async def test_generate_backend_files_uses_deterministic_fallback_on_llm_error(monkeypatch):
+    async def _fail(*args, **kwargs):
+        raise RuntimeError("Error code: 429 - rate limit exceeded")
+
+    monkeypatch.setattr(code_generator_module, "ainvoke_with_retry", _fail)
+
+    files = await code_generator_module._generate_backend_files(
+        object(),
+        json.dumps({"idea": {"name": "TripCanvas AI", "tagline": "Plan cinematic journeys"}}, ensure_ascii=False),
+    )
+
+    assert "main.py" in files
+    assert "routes.py" in files
+    assert "ai_service.py" in files
+
+
+@pytest.mark.asyncio
 async def test_code_generator_merges_new_backend_files_into_existing_bundle(monkeypatch):
     state = {
         "generated_docs": {},

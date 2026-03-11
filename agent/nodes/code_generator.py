@@ -604,21 +604,25 @@ async def _generate_frontend_files(
     fallback_models: list[str] | None = None,
     max_attempts: int = 6,
 ) -> dict[str, str]:
-    response = await ainvoke_with_retry(
-        llm,
-        _build_frontend_prompt_messages(
-            context=context,
-            prompt_strategy=prompt_strategy,
-            retry=retry,
-            eval_feedback=eval_feedback,
-        ),
-        max_attempts=max_attempts,
-        fallback_models=fallback_models,
-    )
+    try:
+        response = await ainvoke_with_retry(
+            llm,
+            _build_frontend_prompt_messages(
+                context=context,
+                prompt_strategy=prompt_strategy,
+                retry=retry,
+                eval_feedback=eval_feedback,
+            ),
+            max_attempts=max_attempts,
+            fallback_models=fallback_models,
+        )
 
-    parsed = _parse_json_response(response.content, {"files": {}}, label="frontend")
-    files = parsed.get("files", {})
-    return _normalize_frontend_files(_normalize_files_dict(files))
+        parsed = _parse_json_response(response.content, {"files": {}}, label="frontend")
+        files = parsed.get("files", {})
+        return _normalize_frontend_files(_normalize_files_dict(files))
+    except Exception as exc:
+        logger.warning("[CODE_GEN] Falling back to deterministic frontend scaffold: %s", str(exc)[:200])
+        return _build_fallback_frontend_bundle(context)
 
 
 async def _generate_backend_files(
@@ -630,21 +634,460 @@ async def _generate_backend_files(
     fallback_models: list[str] | None = None,
     max_attempts: int = 6,
 ) -> dict[str, str]:
-    response = await ainvoke_with_retry(
-        llm,
-        _build_backend_prompt_messages(
-            context=context,
-            prompt_strategy=prompt_strategy,
-            retry=retry,
-            eval_feedback=eval_feedback,
-        ),
-        max_attempts=max_attempts,
-        fallback_models=fallback_models,
+    try:
+        response = await ainvoke_with_retry(
+            llm,
+            _build_backend_prompt_messages(
+                context=context,
+                prompt_strategy=prompt_strategy,
+                retry=retry,
+                eval_feedback=eval_feedback,
+            ),
+            max_attempts=max_attempts,
+            fallback_models=fallback_models,
+        )
+
+        parsed = _parse_json_response(response.content, {"files": {}}, label="backend")
+        files = parsed.get("files", {})
+        return _normalize_backend_files(_normalize_files_dict(files))
+    except Exception as exc:
+        logger.warning("[CODE_GEN] Falling back to deterministic backend scaffold: %s", str(exc)[:200])
+        return _build_fallback_backend_bundle(context)
+
+
+def _extract_template_seed(context: str) -> dict[str, object]:
+    try:
+        payload = json.loads(context)
+    except Exception:
+        payload = {}
+
+    idea = payload.get("idea", {}) if isinstance(payload, dict) else {}
+    if not isinstance(idea, dict):
+        idea = {}
+
+    title = str(idea.get("name") or "VibeLaunch").strip() or "VibeLaunch"
+    tagline = str(idea.get("tagline") or "Turn an idea into a polished demo.").strip()
+    features = [str(item).strip() for item in idea.get("key_features", []) if str(item).strip()]
+    if not features:
+        features = ["Guided workflow", "Insights panel", "Saved sessions"]
+    proof_points = [str(item).strip() for item in idea.get("proof_points", []) if str(item).strip()]
+    if not proof_points:
+        proof_points = ["Shareable outputs", "Visible recent activity", "Clear next actions"]
+
+    return {
+        "title": title,
+        "tagline": tagline,
+        "slug": re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-") or "vibelaunch",
+        "features": features[:4],
+        "proof_points": proof_points[:4],
+    }
+
+
+def _build_fallback_frontend_bundle(context: str) -> dict[str, str]:
+    seed = _extract_template_seed(context)
+    title = str(seed["title"])
+    tagline = str(seed["tagline"])
+    features = list(seed["features"])
+    proof_points = list(seed["proof_points"])
+
+    title_json = json.dumps(title)
+    tagline_json = json.dumps(tagline)
+    features_json = json.dumps(features)
+    proof_points_json = json.dumps(proof_points)
+
+    return _normalize_frontend_files(
+        {
+            "package.json": json.dumps({"name": str(seed["slug"]), "private": True}, indent=2),
+            "src/app/layout.tsx": f"""import type {{ Metadata }} from "next";
+import type {{ ReactNode }} from "react";
+import "./globals.css";
+
+export const metadata: Metadata = {{
+  title: {title_json},
+  description: {tagline_json},
+}};
+
+export default function RootLayout({{ children }}: {{ children: ReactNode }}) {{
+  return (
+    <html lang="en">
+      <body>{{children}}</body>
+    </html>
+  );
+}}
+""",
+            "src/app/page.tsx": f'''"use client";
+
+import {{ useState }} from "react";
+import Hero from "@/components/Hero";
+import InsightPanel from "@/components/InsightPanel";
+import PlannerPanel from "@/components/PlannerPanel";
+import StatePanel from "@/components/StatePanel";
+import {{ createInsights, createPlan }} from "@/lib/api";
+
+const APP_NAME = {title_json};
+const TAGLINE = {tagline_json};
+const FEATURE_CHIPS = {features_json};
+const PROOF_POINTS = {proof_points_json};
+
+type PlanItem = {{ title: string; detail: string; score: number }};
+type InsightPayload = {{ insights: string[]; next_actions: string[]; highlights: string[] }};
+type PlanPayload = {{ summary: string; score: number; items: PlanItem[]; insights?: InsightPayload }};
+
+export default function Page() {{
+  const [query, setQuery] = useState("");
+  const [preferences, setPreferences] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [plan, setPlan] = useState<PlanPayload | null>(null);
+  const [saved, setSaved] = useState<PlanPayload[]>([]);
+
+  async function handleGenerate() {{
+    setLoading(true);
+    setError("");
+    try {{
+      const nextPlan = await createPlan({{ query, preferences }});
+      const insightPayload = await createInsights({{
+        selection: nextPlan.items?.[0]?.title ?? query,
+        context: preferences || query,
+      }});
+      const composed = {{ ...nextPlan, insights: insightPayload }};
+      setPlan(composed);
+      setSaved((previous) => [composed, ...previous].slice(0, 3));
+    }} catch (err) {{
+      setError(err instanceof Error ? err.message : "Request failed");
+    }} finally {{
+      setLoading(false);
+    }}
+  }}
+
+  return (
+    <main className="page-shell">
+      <Hero appName={{APP_NAME}} tagline={{TAGLINE}} proofPoints={{PROOF_POINTS}} />
+      <section className="content-grid">
+        <PlannerPanel
+          query={{query}}
+          preferences={{preferences}}
+          onQueryChange={{setQuery}}
+          onPreferencesChange={{setPreferences}}
+          onGenerate={{handleGenerate}}
+          loading={{loading}}
+          features={{FEATURE_CHIPS}}
+        />
+        <div className="stack">
+          {{error ? <StatePanel title="Request blocked" tone="error" detail={{error}} /> : null}}
+          {{!plan && !error ? (
+            <StatePanel
+              title="Ready for the live demo"
+              tone="neutral"
+              detail="Use the planner to generate a polished working session with saved outputs and insight cards."
+            />
+          ) : null}}
+          {{plan ? <InsightPanel plan={{plan}} /> : null}}
+        </div>
+      </section>
+      <section className="saved-section">
+        <div className="section-heading">
+          <span className="eyebrow">Saved Sessions</span>
+          <h2>Recent outputs stay visible for a judge-friendly walkthrough.</h2>
+        </div>
+        <div className="saved-grid">
+          {{saved.map((entry, index) => (
+            <article className="saved-card" key={{`${{entry.summary}}-${{index}}`}}>
+              <span className="saved-score">Score {{entry.score}}</span>
+              <h3>{{entry.summary}}</h3>
+              <ul>
+                {{entry.items.slice(0, 2).map((item) => (
+                  <li key={{item.title}}>{{item.title}}</li>
+                ))}}
+              </ul>
+            </article>
+          ))}}
+        </div>
+      </section>
+    </main>
+  );
+}}
+''',
+            "src/app/globals.css": """:root {
+  --background: #f3efe4;
+  --foreground: #1f1a17;
+  --primary: #0f5f52;
+  --accent: #d98c3f;
+  --card: rgba(255, 252, 246, 0.86);
+  --muted: rgba(31, 26, 23, 0.62);
+  --border: rgba(31, 26, 23, 0.12);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background:
+  radial-gradient(circle at top left, rgba(217, 140, 63, 0.28), transparent 30%),
+  radial-gradient(circle at top right, rgba(15, 95, 82, 0.22), transparent 28%),
+  var(--background);
+  color: var(--foreground);
+  font-family: Georgia, "Times New Roman", serif;
+}
+a { color: inherit; text-decoration: none; }
+button, textarea { font: inherit; }
+.page-shell { max-width: 1200px; margin: 0 auto; padding: 32px 20px 80px; }
+.hero, .planner-panel, .insight-panel, .status-panel, .saved-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  box-shadow: 0 24px 70px rgba(31, 26, 23, 0.08);
+}
+.hero { padding: 28px; margin-bottom: 24px; }
+.hero h1, .section-heading h2 { margin: 0; font-size: clamp(2rem, 5vw, 4rem); line-height: 0.94; }
+.hero p, .section-heading p { color: var(--muted); max-width: 60ch; }
+.eyebrow { display: inline-flex; padding: 8px 12px; border-radius: 999px; background: rgba(15,95,82,0.08); color: var(--primary); font-size: 0.78rem; letter-spacing: 0.12em; text-transform: uppercase; }
+.hero-proof-list, .feature-list, .insight-list, .saved-card ul { padding-left: 18px; color: var(--muted); }
+.content-grid { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 20px; }
+.stack { display: grid; gap: 20px; }
+.planner-panel, .insight-panel, .status-panel { padding: 24px; }
+.planner-panel textarea { width: 100%; min-height: 140px; margin-top: 12px; border-radius: 18px; border: 1px solid var(--border); padding: 16px; background: rgba(255,255,255,0.7); }
+.controls { display: grid; gap: 12px; }
+.button-row { display: flex; gap: 12px; align-items: center; }
+.primary-button { border: none; border-radius: 999px; background: var(--primary); color: white; padding: 14px 22px; cursor: pointer; }
+.feature-chips { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+.feature-chip, .saved-score { display: inline-flex; padding: 8px 12px; border-radius: 999px; background: rgba(217,140,63,0.12); color: var(--accent); }
+.score-pill { display: inline-flex; padding: 10px 14px; border-radius: 999px; background: rgba(15,95,82,0.1); color: var(--primary); font-weight: 600; }
+.item-card { margin-top: 12px; padding: 16px; border-radius: 18px; background: rgba(255,255,255,0.72); border: 1px solid var(--border); }
+.saved-section { margin-top: 28px; }
+.saved-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-top: 16px; }
+.saved-card { padding: 18px; }
+@media (max-width: 900px) {{
+  .content-grid {{ grid-template-columns: 1fr; }}
+}}
+""",
+            "src/lib/api.ts": """const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
+
+async function request<T>(path: string, body: Record<string, unknown>): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const raw = await res.text();
+    throw new Error(raw || "Request failed");
+  }
+  return res.json();
+}
+
+export async function createPlan(body: { query: string; preferences: string }) {
+  return request<{ summary: string; score: number; items: Array<{ title: string; detail: string; score: number }> }>(
+    "/api/plan",
+    body,
+  );
+}
+
+export async function createInsights(body: { selection: string; context: string }) {
+  return request<{ insights: string[]; next_actions: string[]; highlights: string[] }>("/api/insights", body);
+}
+""",
+            "src/components/Hero.tsx": """type HeroProps = {
+  appName: string;
+  tagline: string;
+  proofPoints: string[];
+};
+
+export default function Hero({ appName, tagline, proofPoints }: HeroProps) {
+  return (
+    <section className="hero">
+      <span className="eyebrow">Hackathon Showcase</span>
+      <h1>{appName}</h1>
+      <p>{tagline}</p>
+      <ul className="hero-proof-list">
+        {proofPoints.map((point) => (
+          <li key={point}>{point}</li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+""",
+            "src/components/PlannerPanel.tsx": """type PlannerPanelProps = {
+  query: string;
+  preferences: string;
+  onQueryChange: (value: string) => void;
+  onPreferencesChange: (value: string) => void;
+  onGenerate: () => void;
+  loading: boolean;
+  features: string[];
+};
+
+export default function PlannerPanel({
+  query,
+  preferences,
+  onQueryChange,
+  onPreferencesChange,
+  onGenerate,
+  loading,
+  features,
+}: PlannerPanelProps) {
+  return (
+    <section className="planner-panel">
+      <span className="eyebrow">Primary Workflow</span>
+      <div className="controls">
+        <textarea value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="Describe the session you want to generate." />
+        <textarea value={preferences} onChange={(event) => onPreferencesChange(event.target.value)} placeholder="Add constraints, style cues, or priorities." />
+        <div className="button-row">
+          <button className="primary-button" onClick={onGenerate} disabled={loading}>
+            {loading ? "Generating..." : "Generate showcase plan"}
+          </button>
+        </div>
+      </div>
+      <div className="feature-chips">
+        {features.map((feature) => (
+          <span className="feature-chip" key={feature}>{feature}</span>
+        ))}
+      </div>
+    </section>
+  );
+}
+""",
+            "src/components/InsightPanel.tsx": """type PlanPayload = {
+  summary: string;
+  score: number;
+  items: Array<{ title: string; detail: string; score: number }>;
+  insights?: { insights: string[]; next_actions: string[]; highlights: string[] };
+};
+
+export default function InsightPanel({ plan }: { plan: PlanPayload }) {
+  return (
+    <section className="insight-panel">
+      <span className="score-pill">Readiness score {plan.score}</span>
+      <h2>{plan.summary}</h2>
+      {plan.items.map((item) => (
+        <article className="item-card" key={item.title}>
+          <h3>{item.title}</h3>
+          <p>{item.detail}</p>
+        </article>
+      ))}
+      {plan.insights ? (
+        <ul className="insight-list">
+          {plan.insights.highlights.concat(plan.insights.next_actions).map((entry) => (
+            <li key={entry}>{entry}</li>
+          ))}
+        </ul>
+      ) : null}
+    </section>
+  );
+}
+""",
+            "src/components/StatePanel.tsx": """export default function StatePanel({
+  title,
+  detail,
+  tone,
+}: {
+  title: string;
+  detail: string;
+  tone: "neutral" | "error";
+}) {
+  return (
+    <section className="status-panel">
+      <span className="eyebrow">{tone === "error" ? "Attention" : "Ready"}</span>
+      <h2>{title}</h2>
+      <p>{detail}</p>
+    </section>
+  );
+}
+""",
+        }
     )
 
-    parsed = _parse_json_response(response.content, {"files": {}}, label="backend")
-    files = parsed.get("files", {})
-    return _normalize_backend_files(_normalize_files_dict(files))
+
+def _build_fallback_backend_bundle(context: str) -> dict[str, str]:
+    seed = _extract_template_seed(context)
+    title_json = json.dumps(str(seed["title"]))
+    tagline_json = json.dumps(str(seed["tagline"]))
+    features_json = json.dumps(list(seed["features"]))
+    proof_points_json = json.dumps(list(seed["proof_points"]))
+
+    return _normalize_backend_files(
+        {
+            "requirements.txt": "fastapi\nuvicorn[standard]\npydantic\n",
+            "main.py": """from fastapi import FastAPI
+from routes import router
+
+app = FastAPI(title="Generated Showcase API")
+app.include_router(router)
+""",
+            "models.py": """from pydantic import BaseModel
+
+
+class PlanRequest(BaseModel):
+    query: str = ""
+    preferences: str = ""
+
+
+class InsightRequest(BaseModel):
+    selection: str = ""
+    context: str = ""
+""",
+            "routes.py": """from fastapi import APIRouter
+
+from ai_service import build_insights, build_plan
+from models import InsightRequest, PlanRequest
+
+router = APIRouter()
+
+
+@router.get("/health")
+async def health():
+    return {"ok": True}
+
+
+@router.post("/api/plan")
+async def create_plan(payload: PlanRequest):
+    return build_plan(payload.query, payload.preferences)
+
+
+@router.post("/api/insights")
+async def create_insights(payload: InsightRequest):
+    return build_insights(payload.selection, payload.context)
+""",
+            "ai_service.py": f"""APP_NAME = {title_json}
+APP_TAGLINE = {tagline_json}
+KEY_FEATURES = {features_json}
+PROOF_POINTS = {proof_points_json}
+
+
+def build_plan(query: str, preferences: str) -> dict:
+    subject = (query or APP_TAGLINE).strip() or APP_NAME
+    guidance = (preferences or "Prioritize a polished live demo with clear momentum.").strip()
+    items = []
+    for index, feature in enumerate(KEY_FEATURES[:3], start=1):
+        items.append(
+            {{
+                "title": f"Stage {{index}}: {{feature}}",
+                "detail": f"Apply {{feature.lower()}} to '{{subject}}' while respecting: {{guidance}}.",
+                "score": min(96, 72 + index * 6),
+            }}
+        )
+    return {{
+        "summary": f"{{APP_NAME}} shaped '{{subject}}' into a judge-ready working session.",
+        "score": 88,
+        "items": items,
+    }}
+
+
+def build_insights(selection: str, context: str) -> dict:
+    focus = (selection or APP_NAME).strip()
+    base_context = (context or APP_TAGLINE).strip()
+    return {{
+        "insights": [
+            f"Lead with {{focus}} so the first screen proves value instantly.",
+            f"Use {{base_context}} as the narrative thread across the workflow.",
+        ],
+        "next_actions": [
+            f"Save the strongest {{focus.lower()}} output as the demo finale.",
+            "Keep one guided CTA visible at every stage.",
+        ],
+        "highlights": PROOF_POINTS[:3],
+    }}
+""",
+        }
+    )
 
 
 def _unique_strings(values: list[str]) -> list[str]:
