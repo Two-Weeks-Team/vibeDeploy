@@ -90,3 +90,11 @@ def test_route_decision_scopes_down_after_second_conditional_failure():
     route = route_decision({"scoring": {"decision": "CONDITIONAL"}, "eval_iteration": 1})
 
     assert route == "scope_down"
+
+
+def test_route_decision_fast_tracks_borderline_conditional_scores():
+    from agent.nodes.decision_gate import route_decision
+
+    route = route_decision({"scoring": {"decision": "CONDITIONAL", "final_score": 63.45}, "eval_iteration": 0})
+
+    assert route == "doc_generator"
