@@ -895,7 +895,7 @@ async def _local_fallback_deploy(
     web_dir = base_dir / "web"
     package_json_path = web_dir / "package.json"
     if package_json_path.exists():
-        frontend_install = ["npm", "ci"] if (web_dir / "package-lock.json").exists() else ["npm", "install"]
+        frontend_install = ["npm", "ci"] if _has_usable_package_lock_file(web_dir / "package-lock.json") else ["npm", "install"]
         await _spawn_background_process(frontend_install, web_dir)
 
     backend_main = base_dir / "main.py"
@@ -949,12 +949,16 @@ async def _ensure_frontend_lockfile(files: dict[str, str]) -> dict[str, str]:
     if not isinstance(package_json, str) or not package_json.strip():
         return files
 
-    package_lock = await _generate_package_lock(package_json)
-    if not package_lock:
+    existing_lock = files.get("web/package-lock.json", "")
+    if _has_usable_package_lock(existing_lock):
         return files
 
+    package_lock = await _generate_package_lock(package_json)
     prepared = dict(files)
-    prepared["web/package-lock.json"] = package_lock
+    if _has_usable_package_lock(package_lock):
+        prepared["web/package-lock.json"] = package_lock
+    else:
+        prepared.pop("web/package-lock.json", None)
     return prepared
 
 
@@ -991,6 +995,28 @@ async def _generate_package_lock(package_json: str) -> str:
             return ""
 
         return lockfile_path.read_text(encoding="utf-8")
+
+
+def _has_usable_package_lock(content: str) -> bool:
+    if not isinstance(content, str) or not content.strip():
+        return False
+
+    try:
+        parsed = json.loads(content)
+    except json.JSONDecodeError:
+        return False
+
+    return isinstance(parsed, dict) and isinstance(parsed.get("lockfileVersion"), int)
+
+
+def _has_usable_package_lock_file(lockfile_path: Path) -> bool:
+    if not lockfile_path.exists():
+        return False
+
+    try:
+        return _has_usable_package_lock(lockfile_path.read_text(encoding="utf-8"))
+    except OSError:
+        return False
 
 
 async def _spawn_background_process(command: list[str], cwd: Path) -> None:
@@ -1202,7 +1228,7 @@ uvicorn main:app --reload --port 8000
 
 # Frontend (new terminal)
 cd web
-npm ci
+npm install
 npm run dev
 ```
 
@@ -1239,7 +1265,7 @@ static_sites:
       repo: {github_org}/{app_name.lower().replace(" ", "-")}
       branch: master
     source_dir: web
-    build_command: npm ci && npm run build
+    build_command: if [ -s package-lock.json ]; then npm ci || npm install; else npm install; fi && npm run build
     output_dir: web/.next
 ```
 
@@ -1299,8 +1325,8 @@ def _generate_ci_yml(has_frontend: bool = False) -> str:
           node-version: "22"
       - name: Install frontend dependencies
         run: |
-          if [ -f package-lock.json ]; then
-            npm ci
+          if [ -s package-lock.json ]; then
+            npm ci || npm install
           elif [ -f package.json ]; then
             npm install
           else

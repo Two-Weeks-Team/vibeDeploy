@@ -4,6 +4,7 @@ from agent.nodes.deployer import (
     _apply_deterministic_repairs,
     _build_table_prefix,
     _ensure_frontend_lockfile,
+    _generate_ci_yml,
     _ensure_unique_backend_table_prefix,
     _is_do_app_limit_error,
     _reclaim_do_app_capacity,
@@ -189,12 +190,39 @@ async def test_ensure_frontend_lockfile_adds_generated_lockfile(monkeypatch):
     assert '"lockfileVersion": 3' in updated["web/package-lock.json"]
 
 
-def test_build_app_spec_uses_npm_ci_for_frontend_build():
+@pytest.mark.asyncio
+async def test_ensure_frontend_lockfile_replaces_empty_lockfile(monkeypatch):
+    async def fake_generate_package_lock(_package_json: str) -> str:
+        return '{\n  "name": "paw-health",\n  "lockfileVersion": 3,\n  "packages": {}\n}\n'
+
+    monkeypatch.setattr("agent.nodes.deployer._generate_package_lock", fake_generate_package_lock)
+
+    files = {
+        "main.py": "print('ok')\n",
+        "web/package.json": '{ "name": "paw-health", "private": true }\n',
+        "web/package-lock.json": "",
+    }
+
+    updated = await _ensure_frontend_lockfile(files)
+
+    assert '"lockfileVersion": 3' in updated["web/package-lock.json"]
+
+
+def test_build_app_spec_frontend_build_command_falls_back_to_npm_install():
     spec = build_app_spec("pawhealth", "https://github.com/Two-Weeks-Team/pawhealth-162626.git", has_frontend=True)
 
     web_service = next(service for service in spec["services"] if service["name"].endswith("-web"))
 
-    assert web_service["build_command"] == "npm ci && npm run build"
+    assert web_service["build_command"] == (
+        "if [ -s package-lock.json ]; then npm ci || npm install; else npm install; fi && npm run build"
+    )
+
+
+def test_generate_ci_yml_frontend_install_falls_back_when_lockfile_is_empty_or_invalid():
+    yml = _generate_ci_yml(has_frontend=True)
+
+    assert "if [ -s package-lock.json ]; then" in yml
+    assert "npm ci || npm install" in yml
 
 
 def test_apply_deterministic_repairs_fixes_typescript_nullable_property_access():

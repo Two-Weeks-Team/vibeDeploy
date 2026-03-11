@@ -285,7 +285,7 @@ def build_app_spec(
                 "branch": branch,
                 "deploy_on_push": True,
             },
-            "build_command": "npm ci && npm run build",
+            "build_command": "if [ -s package-lock.json ]; then npm ci || npm install; else npm install; fi && npm run build",
             "run_command": "npm start",
             "http_port": 3000,
             "instance_count": 1,
