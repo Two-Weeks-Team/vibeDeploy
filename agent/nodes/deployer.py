@@ -525,6 +525,12 @@ _PYDANTIC_FIELD_CLASH_RE = re.compile(
 _NEXT_METADATA_CLIENT_ERROR_RE = re.compile(r'export "metadata" from a component marked with "use client"')
 _UNTERMINATED_STRING_ERROR_RE = re.compile(r"Unterminated string constant")
 _DUPLICATE_SSLMODE_ERROR_RE = re.compile(r"invalid sslmode value", re.IGNORECASE)
+_LAYOUT_LITERAL_COMPARISON_ERROR_RE = re.compile(
+    r"(?P<path>\.?/?[^\s:][^\n:]*):(?P<line>\d+):\d+\s*\n"
+    r"Type error: This comparison appears to be unintentional because the types "
+    r"'(?P<current>[^']+)' and '(?P<other>[^']+)' have no overlap\.",
+    re.MULTILINE,
+)
 _CLIENT_COMPONENT_SIGNAL_RE = re.compile(
     r"\b(useState|useEffect|useRef|useReducer|useTransition|useDeferredValue)\b|"
     r"\bstartTransition\b|"
@@ -614,6 +620,7 @@ async def _repair_code_from_errors(files: dict[str, str], error_logs: str) -> di
 
 def _apply_deterministic_repairs(files: dict[str, str], error_logs: str) -> dict[str, str]:
     repaired = _apply_typescript_nullability_repairs(files, error_logs)
+    repaired = _apply_layout_literal_type_repairs(repaired, error_logs)
     repaired = _apply_missing_sqlalchemy_import_repairs(repaired, error_logs)
     repaired = _apply_duplicate_sslmode_repairs(repaired, error_logs)
     repaired = _apply_next_layout_boundary_repairs(repaired, error_logs)
@@ -680,6 +687,32 @@ def _apply_missing_sqlalchemy_import_repairs(files: dict[str, str], error_logs: 
 
             repaired_content = _add_sqlalchemy_import(content, missing_name)
             if repaired_content == content:
+                continue
+
+            updated_files[candidate_path] = repaired_content
+            changed = True
+            break
+
+    return updated_files if changed else files
+
+
+def _apply_layout_literal_type_repairs(files: dict[str, str], error_logs: str) -> dict[str, str]:
+    updated_files = dict(files)
+    changed = False
+
+    for match in _LAYOUT_LITERAL_COMPARISON_ERROR_RE.finditer(error_logs):
+        for candidate_path in _candidate_paths_from_error(match.group("path")):
+            content = updated_files.get(candidate_path)
+            if not isinstance(content, str) or "const LAYOUT" not in content:
+                continue
+
+            repaired_content, replacements = re.subn(
+                r'const\s+LAYOUT\s*=\s*(["\'][^"\']+["\'])\s*;',
+                r"const LAYOUT: string = \1;",
+                content,
+                count=1,
+            )
+            if not replacements or repaired_content == content:
                 continue
 
             updated_files[candidate_path] = repaired_content

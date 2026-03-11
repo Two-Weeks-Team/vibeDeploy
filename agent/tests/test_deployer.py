@@ -297,6 +297,29 @@ def test_get_deploy_blocker_accepts_full_stack_bundle():
     assert blocker is None
 
 
+def test_apply_deterministic_repairs_relaxes_layout_literal_type_errors():
+    files = {
+        "web/src/app/page.tsx": (
+            '"use client";\n\n'
+            'const LAYOUT = "operations_console";\n\n'
+            "export default function Page() {\n"
+            '  if (LAYOUT === "storyboard") return <main>Storyboard</main>;\n'
+            '  if (LAYOUT === "operations_console") return <main>Console</main>;\n'
+            "  return null;\n"
+            "}\n"
+        )
+    }
+    error_logs = (
+        "./src/app/page.tsx:117:9\n"
+        "Type error: This comparison appears to be unintentional because the types "
+        "'\"operations_console\"' and '\"storyboard\"' have no overlap.\n"
+    )
+
+    repaired = _apply_deterministic_repairs(files, error_logs)
+
+    assert 'const LAYOUT: string = "operations_console";' in repaired["web/src/app/page.tsx"]
+
+
 def test_apply_deterministic_repairs_fixes_typescript_nullable_property_access():
     files = {
         "web/src/app/page.tsx": (

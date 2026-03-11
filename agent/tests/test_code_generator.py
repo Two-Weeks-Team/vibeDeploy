@@ -782,11 +782,12 @@ def test_fallback_frontend_bundle_varies_layout_markup_and_reference_objects():
     )
 
     assert "src/components/ReferenceShelf.tsx" in storyboard
-    assert 'const LAYOUT = "storyboard"' in storyboard["src/app/page.tsx"]
+    assert 'type LayoutKind = "storyboard" | "operations_console" | "studio" | "atlas" | "notebook" | "lab";' in storyboard["src/app/page.tsx"]
+    assert 'const LAYOUT: LayoutKind = "storyboard"' in storyboard["src/app/page.tsx"]
     assert "storyboard-stage" in storyboard["src/app/page.tsx"]
     assert "Day 1 route" in storyboard["src/app/page.tsx"]
     assert "route" in storyboard["src/app/page.tsx"]
-    assert 'const LAYOUT = "operations_console"' in console["src/app/page.tsx"]
+    assert 'const LAYOUT: LayoutKind = "operations_console"' in console["src/app/page.tsx"]
     assert "console-grid" in console["src/app/page.tsx"]
     assert "Opening cue" in console["src/app/page.tsx"]
     assert ".layout-operations-console .hero" in console["src/app/globals.css"]
