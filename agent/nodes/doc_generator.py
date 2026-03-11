@@ -31,6 +31,12 @@ async def doc_generator(state: VibeDeployState) -> dict:
     )
 
     context = _build_context(idea, council_analysis, scoring)
+    if _should_use_template_docs(fallback_models):
+        return {
+            "generated_docs": _build_template_docs(idea),
+            "phase": "docs_generated",
+        }
+
     prd = await _generate_markdown_doc(
         llm,
         PRD_SYSTEM_PROMPT,
@@ -186,6 +192,23 @@ def _fallback_markdown_doc(title: str, idea: dict, reason: str) -> str:
         lines.extend(["", "## Core Features", *[f"- {feature}" for feature in features[:6]]])
     lines.extend(["", "## Delivery Note", f"- Fallback document generated because doc generation was unavailable: {reason}."])
     return "\n".join(lines).strip()
+
+
+def _should_use_template_docs(fallback_models: list[str]) -> bool:
+    return not fallback_models
+
+
+def _build_template_docs(idea: dict) -> dict[str, str]:
+    app_name = _slugify(idea.get("name") or idea.get("tagline") or "vibedeploy-app")
+    repo_placeholder = f"https://github.com/example/{app_name}.git"
+    baseline_spec = build_app_spec(app_name, repo_placeholder)
+    return {
+        "prd": _fallback_markdown_doc("Product Requirements", idea, "template_docs_enabled"),
+        "tech_spec": _fallback_markdown_doc("Technical Specification", idea, "template_docs_enabled"),
+        "api_spec": _fallback_markdown_doc("API Specification", idea, "template_docs_enabled"),
+        "db_schema": _fallback_markdown_doc("Database Schema", idea, "template_docs_enabled"),
+        "app_spec_yaml": yaml.safe_dump(baseline_spec, sort_keys=False, allow_unicode=False),
+    }
 
 
 def _slugify(value: str) -> str:
