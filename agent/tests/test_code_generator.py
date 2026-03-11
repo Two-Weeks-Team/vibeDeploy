@@ -565,10 +565,15 @@ async def test_code_generator_regenerates_only_missing_frontend(monkeypatch):
 
     assert calls["frontend"] == 1
     assert calls["backend"] == 0
-    assert calls["max_attempts"] == [code_generator_module._CODEGEN_MODEL_MAX_ATTEMPTS]
+    assert calls["max_attempts"] == [code_generator_module._codegen_max_attempts([])]
     assert "src/app/page.tsx" in result["frontend_code"]
     assert "main.py" in result["backend_code"]
     assert "requirements.txt" in result["backend_code"]
+
+
+def test_codegen_max_attempts_stays_high_without_fallback_models():
+    assert code_generator_module._codegen_max_attempts([]) == code_generator_module._STRICT_PRIMARY_CODEGEN_MAX_ATTEMPTS
+    assert code_generator_module._codegen_max_attempts(["openai-gpt-oss-20b"]) == code_generator_module._CODEGEN_MODEL_MAX_ATTEMPTS
 
 
 @pytest.mark.asyncio

@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 _MIN_FRONTEND_FILES = 3  # At least package.json + 2 source files
 _MIN_BACKEND_FILES = 2  # At least main.py + requirements.txt
 _CODEGEN_MODEL_MAX_ATTEMPTS = 2
+_STRICT_PRIMARY_CODEGEN_MAX_ATTEMPTS = 6
 _STACK_GENERATION_PAUSE_SECONDS = 2
 _FONT_DEFAULT_WEIGHTS = {
     "Merriweather": ["400", "700"],
@@ -232,6 +233,10 @@ async def code_generator(state: VibeDeployState) -> dict:
     existing_backend_code = _normalize_backend_files(_normalize_files_dict(state.get("backend_code") or {}))
     frontend_model = MODEL_CONFIG.get("code_gen_frontend", MODEL_CONFIG["code_gen"])
     backend_model = MODEL_CONFIG.get("code_gen_backend", MODEL_CONFIG["code_gen"])
+    frontend_fallback_models = get_rate_limit_fallback_models(frontend_model)
+    backend_fallback_models = get_rate_limit_fallback_models(backend_model)
+    frontend_max_attempts = _codegen_max_attempts(frontend_fallback_models)
+    backend_max_attempts = _codegen_max_attempts(backend_fallback_models)
 
     frontend_llm = get_llm(
         model=frontend_model,
@@ -277,8 +282,8 @@ async def code_generator(state: VibeDeployState) -> dict:
             context,
             prompt_strategy=prompt_strategy,
             eval_feedback=eval_feedback,
-            fallback_models=get_rate_limit_fallback_models(frontend_model),
-            max_attempts=_CODEGEN_MODEL_MAX_ATTEMPTS,
+            fallback_models=frontend_fallback_models,
+            max_attempts=frontend_max_attempts,
         )
         frontend_code = _merge_generated_files(existing_frontend_code, generated_frontend, label="frontend")
     else:
@@ -293,8 +298,8 @@ async def code_generator(state: VibeDeployState) -> dict:
             context,
             prompt_strategy=prompt_strategy,
             eval_feedback=eval_feedback,
-            fallback_models=get_rate_limit_fallback_models(backend_model),
-            max_attempts=_CODEGEN_MODEL_MAX_ATTEMPTS,
+            fallback_models=backend_fallback_models,
+            max_attempts=backend_max_attempts,
         )
         backend_code = _merge_generated_files(existing_backend_code, generated_backend, label="backend")
     else:
@@ -320,8 +325,8 @@ async def code_generator(state: VibeDeployState) -> dict:
             retry=True,
             prompt_strategy=prompt_strategy,
             eval_feedback=eval_feedback,
-            fallback_models=get_rate_limit_fallback_models(frontend_model),
-            max_attempts=_CODEGEN_MODEL_MAX_ATTEMPTS,
+            fallback_models=frontend_fallback_models,
+            max_attempts=frontend_max_attempts,
         )
         frontend_code = _merge_generated_files(frontend_code, retried_frontend, label="frontend")
         frontend_code, backend_code = _normalize_cross_stack(frontend_code, backend_code)
@@ -350,8 +355,8 @@ async def code_generator(state: VibeDeployState) -> dict:
             retry=True,
             prompt_strategy=prompt_strategy,
             eval_feedback=eval_feedback,
-            fallback_models=get_rate_limit_fallback_models(backend_model),
-            max_attempts=_CODEGEN_MODEL_MAX_ATTEMPTS,
+            fallback_models=backend_fallback_models,
+            max_attempts=backend_max_attempts,
         )
         backend_code = _merge_generated_files(backend_code, retried_backend, label="backend")
         frontend_code, backend_code = _normalize_cross_stack(frontend_code, backend_code)
@@ -1470,6 +1475,12 @@ def _normalize_backend_ai_fallbacks(files: dict[str, str]) -> dict[str, str]:
                     updated = f"{helper}\n\n{updated}"
         normalized[path] = updated
     return normalized
+
+
+def _codegen_max_attempts(fallback_models: list[str]) -> int:
+    if fallback_models:
+        return _CODEGEN_MODEL_MAX_ATTEMPTS
+    return _STRICT_PRIMARY_CODEGEN_MAX_ATTEMPTS
 
 
 def _normalize_backend_async_ai_calls(files: dict[str, str]) -> dict[str, str]:
