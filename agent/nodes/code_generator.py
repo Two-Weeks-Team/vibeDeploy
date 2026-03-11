@@ -511,6 +511,8 @@ def _build_frontend_prompt_messages(
             "- Convert the PRD, tech spec, and blueprint into a visually distinctive product, not a generic dashboard.\n"
             "- Treat any design_direction, visual_style_hints, ux_highlights, demo_story, and blueprint experience_contract as hard requirements.\n"
             "- The generated src/app/page.tsx must compose multiple domain components from the blueprint manifest, not only a hero form.\n"
+            "- If a layout_archetype exists, the DOM structure, section ordering, and spatial rhythm must visibly embody that archetype.\n"
+            "- Storyboard, operations console, studio, atlas, and notebook products must not collapse into the same repeated scaffold.\n"
             "- Use the domain's own nouns and surface names. Do not default to the same hero/workspace/feature/collection wording across unrelated products.\n"
             "- Build the first-run experience for judges seeing the app for the first time in a live demo.\n"
         ),
@@ -677,6 +679,8 @@ def _extract_template_seed(context: str) -> dict[str, object]:
     surfaces = [str(item).strip() for item in idea.get("must_have_surfaces", []) if str(item).strip()]
     trust_surfaces = [str(item).strip() for item in idea.get("trust_surfaces", []) if str(item).strip()]
     output_entities = [str(item).strip() for item in idea.get("output_entities", []) if str(item).strip()]
+    sample_seed_data = [str(item).strip() for item in idea.get("sample_seed_data", []) if str(item).strip()]
+    reference_objects = [str(item).strip() for item in idea.get("reference_objects", []) if str(item).strip()]
     signature_demo_moments = [
         str(item).strip() for item in idea.get("signature_demo_moments", []) if str(item).strip()
     ]
@@ -723,6 +727,8 @@ def _extract_template_seed(context: str) -> dict[str, object]:
         "surface_labels": surface_labels,
         "placeholders": placeholders,
         "stats": stats,
+        "sample_seed_data": sample_seed_data[:4] or reference_objects[:4] or features[:4],
+        "reference_objects": reference_objects[:5] or output_entities[:5] or features[:5],
         "palette": palette,
         "collection_title": (
             f"{interface_metaphor.title()} stays visible after each run."
@@ -731,6 +737,9 @@ def _extract_template_seed(context: str) -> dict[str, object]:
         ),
         "support_title": (
             trust_surfaces[0].title() if trust_surfaces else "Supporting evidence and proof points"
+        ),
+        "reference_title": (
+            surfaces[2].title() if len(surfaces) > 2 else "Signature demo objects"
         ),
         "button_label": primary_action_label,
     }
@@ -856,27 +865,6 @@ def _build_fallback_frontend_bundle(context: str) -> dict[str, str]:
     proof_points = list(seed["proof_points"])
     palette = dict(seed["palette"])
 
-    title_json = json.dumps(title)
-    tagline_json = json.dumps(tagline)
-    features_json = json.dumps(features)
-    proof_points_json = json.dumps(proof_points)
-    surface_labels_json = json.dumps(seed["surface_labels"])
-    placeholders_json = json.dumps(seed["placeholders"])
-    stats_json = json.dumps(seed["stats"])
-    ready_title_json = json.dumps(str(seed["ready_title"]))
-    ready_detail_json = json.dumps(str(seed["ready_detail"]))
-    collection_title_json = json.dumps(str(seed["collection_title"]))
-    support_title_json = json.dumps(str(seed["support_title"]))
-    button_label_json = json.dumps(str(seed["button_label"]))
-    background_css = str(palette["background"])
-    foreground_css = str(palette["foreground"])
-    primary_css = str(palette["primary"])
-    accent_css = str(palette["accent"])
-    card_css = str(palette["card"])
-    muted_css = str(palette["muted"])
-    border_css = str(palette["border"])
-    font_css = str(palette["font"])
-
     return _normalize_frontend_files(
         {
             "package.json": json.dumps({"name": str(seed["slug"]), "private": True}, indent=2),
@@ -885,8 +873,8 @@ import type {{ ReactNode }} from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {{
-  title: {title_json},
-  description: {tagline_json},
+  title: {json.dumps(title)},
+  description: {json.dumps(tagline)},
 }};
 
 export default function RootLayout({{ children }}: {{ children: ReactNode }}) {{
@@ -897,165 +885,8 @@ export default function RootLayout({{ children }}: {{ children: ReactNode }}) {{
   );
 }}
 """,
-            "src/app/page.tsx": f'''"use client";
-
-import {{ useState }} from "react";
-import CollectionPanel from "@/components/CollectionPanel";
-import FeaturePanel from "@/components/FeaturePanel";
-import Hero from "@/components/Hero";
-import InsightPanel from "@/components/InsightPanel";
-import StatePanel from "@/components/StatePanel";
-import StatsStrip from "@/components/StatsStrip";
-import WorkspacePanel from "@/components/WorkspacePanel";
-import {{ createInsights, createPlan }} from "@/lib/api";
-
-const APP_NAME = {title_json};
-const TAGLINE = {tagline_json};
-const FEATURE_CHIPS = {features_json};
-const PROOF_POINTS = {proof_points_json};
-const SURFACE_LABELS = {surface_labels_json};
-const PLACEHOLDERS = {placeholders_json};
-const DEFAULT_STATS = {stats_json};
-const READY_TITLE = {ready_title_json};
-const READY_DETAIL = {ready_detail_json};
-const COLLECTION_TITLE = {collection_title_json};
-const SUPPORT_TITLE = {support_title_json};
-const BUTTON_LABEL = {button_label_json};
-
-type PlanItem = {{ title: string; detail: string; score: number }};
-type InsightPayload = {{ insights: string[]; next_actions: string[]; highlights: string[] }};
-type PlanPayload = {{ summary: string; score: number; items: PlanItem[]; insights?: InsightPayload }};
-
-export default function Page() {{
-  const [query, setQuery] = useState("");
-  const [preferences, setPreferences] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [plan, setPlan] = useState<PlanPayload | null>(null);
-  const [saved, setSaved] = useState<PlanPayload[]>([]);
-
-  async function handleGenerate() {{
-    setLoading(true);
-    setError("");
-    try {{
-      const nextPlan = await createPlan({{ query, preferences }});
-      const insightPayload = await createInsights({{
-        selection: nextPlan.items?.[0]?.title ?? query,
-        context: preferences || query,
-      }});
-      const composed = {{ ...nextPlan, insights: insightPayload }};
-      setPlan(composed);
-      setSaved((previous) => [composed, ...previous].slice(0, 4));
-    }} catch (err) {{
-      setError(err instanceof Error ? err.message : "Request failed");
-    }} finally {{
-      setLoading(false);
-    }}
-  }}
-
-  const stats = DEFAULT_STATS.map((stat, index) => {{
-    if (index === 0) return {{ ...stat, value: String(FEATURE_CHIPS.length) }};
-    if (index === 1) return {{ ...stat, value: String(saved.length) }};
-    if (index === 2) return {{ ...stat, value: plan ? String(plan.score) : stat.value }};
-    return stat;
-  }});
-
-  return (
-    <main className="page-shell">
-      <Hero
-        appName={{APP_NAME}}
-        tagline={{TAGLINE}}
-        proofPoints={{PROOF_POINTS}}
-        eyebrow={{SURFACE_LABELS.hero}}
-      />
-      <StatsStrip stats={{stats}} />
-      <section className="content-grid">
-        <WorkspacePanel
-          query={{query}}
-          preferences={{preferences}}
-          onQueryChange={{setQuery}}
-          onPreferencesChange={{setPreferences}}
-          onGenerate={{handleGenerate}}
-          loading={{loading}}
-          features={{FEATURE_CHIPS}}
-          eyebrow={{SURFACE_LABELS.workspace}}
-          queryPlaceholder={{PLACEHOLDERS.query}}
-          preferencesPlaceholder={{PLACEHOLDERS.preferences}}
-          actionLabel={{BUTTON_LABEL}}
-        />
-        <div className="stack">
-          {{error ? <StatePanel eyebrow="Request blocked" title="Request blocked" tone="error" detail={{error}} /> : null}}
-          {{!plan && !error ? (
-            <StatePanel
-              eyebrow={{SURFACE_LABELS.result}}
-              title={{READY_TITLE}}
-              tone="neutral"
-              detail={{READY_DETAIL}}
-            />
-          ) : null}}
-          {{plan ? <InsightPanel plan={{plan}} eyebrow={{SURFACE_LABELS.result}} /> : null}}
-          <FeaturePanel eyebrow={{SURFACE_LABELS.support}} title={{SUPPORT_TITLE}} features={{FEATURE_CHIPS}} proofPoints={{PROOF_POINTS}} />
-        </div>
-      </section>
-      <CollectionPanel eyebrow={{SURFACE_LABELS.collection}} title={{COLLECTION_TITLE}} saved={{saved}} />
-    </main>
-  );
-}}
-''',
-            "src/app/globals.css": (
-                ":root {\n"
-                f"  --background: {background_css};\n"
-                f"  --foreground: {foreground_css};\n"
-                f"  --primary: {primary_css};\n"
-                f"  --accent: {accent_css};\n"
-                f"  --card: {card_css};\n"
-                f"  --muted: {muted_css};\n"
-                f"  --border: {border_css};\n"
-                "}\n\n"
-                "* { box-sizing: border-box; }\n"
-                "html, body { margin: 0; padding: 0; background:\n"
-                "  radial-gradient(circle at top left, rgba(217, 140, 63, 0.28), transparent 30%),\n"
-                "  radial-gradient(circle at top right, rgba(15, 95, 82, 0.22), transparent 28%),\n"
-                "  var(--background);\n"
-                "  color: var(--foreground);\n"
-                f"  font-family: {font_css};\n"
-                "}\n"
-                "a { color: inherit; text-decoration: none; }\n"
-                "button, textarea { font: inherit; }\n"
-                ".page-shell { max-width: 1200px; margin: 0 auto; padding: 32px 20px 80px; }\n"
-                ".hero, .workspace-panel, .insight-panel, .status-panel, .feature-panel, .collection-panel, .saved-card, .stats-strip {\n"
-                "  background: var(--card);\n"
-                "  border: 1px solid var(--border);\n"
-                "  border-radius: 24px;\n"
-                "  box-shadow: 0 24px 70px rgba(31, 26, 23, 0.08);\n"
-                "}\n"
-                ".hero { padding: 28px; margin-bottom: 24px; }\n"
-                ".hero h1, .section-heading h2 { margin: 0; font-size: clamp(2rem, 5vw, 4rem); line-height: 0.94; }\n"
-                ".hero p, .section-heading p { color: var(--muted); max-width: 60ch; }\n"
-                ".eyebrow { display: inline-flex; padding: 8px 12px; border-radius: 999px; background: rgba(15,95,82,0.08); color: var(--primary); font-size: 0.78rem; letter-spacing: 0.12em; text-transform: uppercase; }\n"
-                ".hero-proof-list, .feature-list, .insight-list, .saved-card ul { padding-left: 18px; color: var(--muted); }\n"
-                ".stats-strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; padding: 16px; margin-bottom: 20px; }\n"
-                ".stat-chip { padding: 14px 16px; border-radius: 18px; background: rgba(255,255,255,0.68); border: 1px solid var(--border); }\n"
-                ".stat-chip strong { display: block; margin-top: 6px; font-size: 1.4rem; }\n"
-                ".content-grid { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 20px; }\n"
-                ".stack { display: grid; gap: 20px; }\n"
-                ".workspace-panel, .insight-panel, .status-panel, .feature-panel, .collection-panel { padding: 24px; }\n"
-                ".workspace-panel textarea { width: 100%; min-height: 140px; margin-top: 12px; border-radius: 18px; border: 1px solid var(--border); padding: 16px; background: rgba(255,255,255,0.7); }\n"
-                ".controls { display: grid; gap: 12px; }\n"
-                ".button-row { display: flex; gap: 12px; align-items: center; }\n"
-                ".primary-button { border: none; border-radius: 999px; background: var(--primary); color: white; padding: 14px 22px; cursor: pointer; }\n"
-                ".feature-chips { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }\n"
-                ".feature-chip, .saved-score { display: inline-flex; padding: 8px 12px; border-radius: 999px; background: rgba(217,140,63,0.12); color: var(--accent); }\n"
-                ".score-pill { display: inline-flex; padding: 10px 14px; border-radius: 999px; background: rgba(15,95,82,0.1); color: var(--primary); font-weight: 600; }\n"
-                ".item-card { margin-top: 12px; padding: 16px; border-radius: 18px; background: rgba(255,255,255,0.72); border: 1px solid var(--border); }\n"
-                ".collection-panel { margin-top: 28px; }\n"
-                ".saved-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-top: 16px; }\n"
-                ".saved-card { padding: 18px; }\n"
-                "@media (max-width: 900px) {\n"
-                "  .stats-strip { grid-template-columns: 1fr; }\n"
-                "  .content-grid { grid-template-columns: 1fr; }\n"
-                "}\n"
-            ),
+            "src/app/page.tsx": _build_fallback_page_source(seed),
+            "src/app/globals.css": _build_fallback_globals_css(seed, palette),
             "src/lib/api.ts": """const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
 async function throwApiError(response: Response): Promise<never> {
@@ -1207,6 +1038,39 @@ export default function FeaturePanel({ eyebrow, title, features, proofPoints }: 
   );
 }
 """,
+            "src/components/ReferenceShelf.tsx": """type ReferenceShelfProps = {
+  eyebrow: string;
+  title: string;
+  items: string[];
+  objects: string[];
+  tone: string;
+};
+
+export default function ReferenceShelf({ eyebrow, title, items, objects, tone }: ReferenceShelfProps) {
+  return (
+    <section className="reference-shelf">
+      <div className="section-heading">
+        <span className="eyebrow">{eyebrow}</span>
+        <h2>{title}</h2>
+        <p>{tone}</p>
+      </div>
+      <div className="reference-grid">
+        {items.map((item, index) => (
+          <article className="reference-card" key={`${item}-${index}`}>
+            <strong>{item}</strong>
+            <span>{objects[index % Math.max(objects.length, 1)] || title}</span>
+          </article>
+        ))}
+      </div>
+      <div className="object-strip">
+        {objects.map((objectName) => (
+          <span className="object-pill" key={objectName}>{objectName}</span>
+        ))}
+      </div>
+    </section>
+  );
+}
+""",
             "src/components/CollectionPanel.tsx": """type SavedPlan = {
   summary: string;
   score: number;
@@ -1292,6 +1156,401 @@ export default function StatsStrip({ stats }: StatsStripProps) {
 """,
         }
     )
+
+
+def _build_fallback_page_source(seed: dict[str, object]) -> str:
+    title_json = json.dumps(str(seed["title"]))
+    tagline_json = json.dumps(str(seed["tagline"]))
+    features_json = json.dumps(list(seed["features"]))
+    proof_points_json = json.dumps(list(seed["proof_points"]))
+    surface_labels_json = json.dumps(seed["surface_labels"])
+    placeholders_json = json.dumps(seed["placeholders"])
+    stats_json = json.dumps(seed["stats"])
+    ready_title_json = json.dumps(str(seed["ready_title"]))
+    ready_detail_json = json.dumps(str(seed["ready_detail"]))
+    collection_title_json = json.dumps(str(seed["collection_title"]))
+    support_title_json = json.dumps(str(seed["support_title"]))
+    reference_title_json = json.dumps(str(seed["reference_title"]))
+    button_label_json = json.dumps(str(seed["button_label"]))
+    layout_json = json.dumps(str(seed["layout_archetype"] or "lab"))
+    ui_copy_tone_json = json.dumps(str(seed["ui_copy_tone"] or "intentional and domain-specific"))
+    sample_seed_data_json = json.dumps(list(seed["sample_seed_data"]))
+    reference_objects_json = json.dumps(list(seed["reference_objects"]))
+
+    return f'''"use client";
+
+import {{ useState }} from "react";
+import CollectionPanel from "@/components/CollectionPanel";
+import FeaturePanel from "@/components/FeaturePanel";
+import Hero from "@/components/Hero";
+import InsightPanel from "@/components/InsightPanel";
+import ReferenceShelf from "@/components/ReferenceShelf";
+import StatePanel from "@/components/StatePanel";
+import StatsStrip from "@/components/StatsStrip";
+import WorkspacePanel from "@/components/WorkspacePanel";
+import {{ createInsights, createPlan }} from "@/lib/api";
+
+const APP_NAME = {title_json};
+const TAGLINE = {tagline_json};
+const FEATURE_CHIPS = {features_json};
+const PROOF_POINTS = {proof_points_json};
+const SURFACE_LABELS = {surface_labels_json};
+const PLACEHOLDERS = {placeholders_json};
+const DEFAULT_STATS = {stats_json};
+const READY_TITLE = {ready_title_json};
+const READY_DETAIL = {ready_detail_json};
+const COLLECTION_TITLE = {collection_title_json};
+const SUPPORT_TITLE = {support_title_json};
+const REFERENCE_TITLE = {reference_title_json};
+const BUTTON_LABEL = {button_label_json};
+const LAYOUT = {layout_json};
+const UI_COPY_TONE = {ui_copy_tone_json};
+const SAMPLE_ITEMS = {sample_seed_data_json};
+const REFERENCE_OBJECTS = {reference_objects_json};
+
+type PlanItem = {{ title: string; detail: string; score: number }};
+type InsightPayload = {{ insights: string[]; next_actions: string[]; highlights: string[] }};
+type PlanPayload = {{ summary: string; score: number; items: PlanItem[]; insights?: InsightPayload }};
+
+export default function Page() {{
+  const [query, setQuery] = useState("");
+  const [preferences, setPreferences] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [plan, setPlan] = useState<PlanPayload | null>(null);
+  const [saved, setSaved] = useState<PlanPayload[]>([]);
+  const layoutClass = LAYOUT.replace(/_/g, "-");
+
+  async function handleGenerate() {{
+    setLoading(true);
+    setError("");
+    try {{
+      const nextPlan = await createPlan({{ query, preferences }});
+      const insightPayload = await createInsights({{
+        selection: nextPlan.items?.[0]?.title ?? query,
+        context: preferences || query,
+      }});
+      const composed = {{ ...nextPlan, insights: insightPayload }};
+      setPlan(composed);
+      setSaved((previous) => [composed, ...previous].slice(0, 4));
+    }} catch (err) {{
+      setError(err instanceof Error ? err.message : "Request failed");
+    }} finally {{
+      setLoading(false);
+    }}
+  }}
+
+  const stats = DEFAULT_STATS.map((stat, index) => {{
+    if (index === 0) return {{ ...stat, value: String(FEATURE_CHIPS.length) }};
+    if (index === 1) return {{ ...stat, value: String(saved.length) }};
+    if (index === 2) return {{ ...stat, value: plan ? String(plan.score) : stat.value }};
+    return stat;
+  }});
+
+  const heroNode = (
+    <Hero
+      appName={{APP_NAME}}
+      tagline={{TAGLINE}}
+      proofPoints={{PROOF_POINTS}}
+      eyebrow={{SURFACE_LABELS.hero}}
+    />
+  );
+  const statsNode = <StatsStrip stats={{stats}} />;
+  const workspaceNode = (
+    <WorkspacePanel
+      query={{query}}
+      preferences={{preferences}}
+      onQueryChange={{setQuery}}
+      onPreferencesChange={{setPreferences}}
+      onGenerate={{handleGenerate}}
+      loading={{loading}}
+      features={{FEATURE_CHIPS}}
+      eyebrow={{SURFACE_LABELS.workspace}}
+      queryPlaceholder={{PLACEHOLDERS.query}}
+      preferencesPlaceholder={{PLACEHOLDERS.preferences}}
+      actionLabel={{BUTTON_LABEL}}
+    />
+  );
+  const primaryNode = error ? (
+    <StatePanel eyebrow="Request blocked" title="Request blocked" tone="error" detail={{error}} />
+  ) : plan ? (
+    <InsightPanel plan={{plan}} eyebrow={{SURFACE_LABELS.result}} />
+  ) : (
+    <StatePanel eyebrow={{SURFACE_LABELS.result}} title={{READY_TITLE}} tone="neutral" detail={{READY_DETAIL}} />
+  );
+  const featureNode = (
+    <FeaturePanel eyebrow={{SURFACE_LABELS.support}} title={{SUPPORT_TITLE}} features={{FEATURE_CHIPS}} proofPoints={{PROOF_POINTS}} />
+  );
+  const collectionNode = <CollectionPanel eyebrow={{SURFACE_LABELS.collection}} title={{COLLECTION_TITLE}} saved={{saved}} />;
+  const referenceNode = (
+    <ReferenceShelf
+      eyebrow={{SURFACE_LABELS.support}}
+      title={{REFERENCE_TITLE}}
+      items={{SAMPLE_ITEMS}}
+      objects={{REFERENCE_OBJECTS}}
+      tone={{UI_COPY_TONE}}
+    />
+  );
+
+  function renderLayout() {{
+    if (LAYOUT === "storyboard") {{
+      return (
+        <>
+          {{heroNode}}
+          {{statsNode}}
+          <section className="storyboard-stage">
+            <div className="storyboard-main">
+              {{workspaceNode}}
+              {{primaryNode}}
+            </div>
+            <div className="storyboard-side">
+              {{referenceNode}}
+              {{featureNode}}
+            </div>
+          </section>
+          {{collectionNode}}
+        </>
+      );
+    }}
+
+    if (LAYOUT === "operations_console") {{
+      return (
+        <section className="console-shell">
+          <div className="console-top">
+            {{heroNode}}
+            {{statsNode}}
+          </div>
+          <div className="console-grid">
+            <div className="console-operator-lane">
+              {{workspaceNode}}
+              {{referenceNode}}
+            </div>
+            <div className="console-timeline-lane">{{primaryNode}}</div>
+            <div className="console-support-lane">
+              {{featureNode}}
+              {{collectionNode}}
+            </div>
+          </div>
+        </section>
+      );
+    }}
+
+    if (LAYOUT === "studio") {{
+      return (
+        <section className="studio-shell">
+          <div className="studio-top">
+            {{heroNode}}
+            {{primaryNode}}
+          </div>
+          {{statsNode}}
+          <div className="studio-bottom">
+            <div className="studio-left">
+              {{workspaceNode}}
+              {{collectionNode}}
+            </div>
+            <div className="studio-right">
+              {{referenceNode}}
+              {{featureNode}}
+            </div>
+          </div>
+        </section>
+      );
+    }}
+
+    if (LAYOUT === "atlas") {{
+      return (
+        <section className="atlas-shell">
+          <div className="atlas-hero-row">
+            {{heroNode}}
+            <div className="atlas-side-stack">
+              {{statsNode}}
+              {{referenceNode}}
+            </div>
+          </div>
+          <div className="atlas-main-row">
+            <div className="atlas-primary-stack">
+              {{primaryNode}}
+              {{collectionNode}}
+            </div>
+            <div className="atlas-secondary-stack">
+              {{workspaceNode}}
+              {{featureNode}}
+            </div>
+          </div>
+        </section>
+      );
+    }}
+
+    if (LAYOUT === "notebook") {{
+      return (
+        <section className="notebook-shell">
+          {{heroNode}}
+          <div className="notebook-top">
+            <div className="notebook-left">
+              {{primaryNode}}
+              {{referenceNode}}
+            </div>
+            <div className="notebook-right">
+              {{workspaceNode}}
+              {{featureNode}}
+            </div>
+          </div>
+          <div className="notebook-bottom">
+            {{collectionNode}}
+            {{statsNode}}
+          </div>
+        </section>
+      );
+    }}
+
+    return (
+      <>
+        {{heroNode}}
+        {{statsNode}}
+        <section className="content-grid">
+          {{workspaceNode}}
+          <div className="stack">
+            {{primaryNode}}
+            {{referenceNode}}
+            {{featureNode}}
+          </div>
+        </section>
+        {{collectionNode}}
+      </>
+    );
+  }}
+
+  return (
+    <main className={{`page-shell layout-${{layoutClass}}`}}>
+      {{renderLayout()}}
+    </main>
+  );
+}}
+'''
+    
+    
+def _build_fallback_globals_css(seed: dict[str, object], palette: dict[str, str]) -> str:
+    background_css = str(palette["background"])
+    foreground_css = str(palette["foreground"])
+    primary_css = str(palette["primary"])
+    accent_css = str(palette["accent"])
+    card_css = str(palette["card"])
+    muted_css = str(palette["muted"])
+    border_css = str(palette["border"])
+    font_css = str(palette["font"])
+
+    return (
+        ":root {\n"
+        f"  --background: {background_css};\n"
+        f"  --foreground: {foreground_css};\n"
+        f"  --primary: {primary_css};\n"
+        f"  --accent: {accent_css};\n"
+        f"  --card: {card_css};\n"
+        f"  --muted: {muted_css};\n"
+        f"  --border: {border_css};\n"
+        "}\n\n"
+        "* { box-sizing: border-box; }\n"
+        "html, body { margin: 0; padding: 0; min-height: 100%; }\n"
+        "body {\n"
+        "  background:\n"
+        "    radial-gradient(circle at top left, rgba(217, 140, 63, 0.24), transparent 28%),\n"
+        "    radial-gradient(circle at top right, rgba(15, 95, 82, 0.16), transparent 24%),\n"
+        "    linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0)),\n"
+        "    var(--background);\n"
+        "  color: var(--foreground);\n"
+        f"  font-family: {font_css};\n"
+        "}\n"
+        "a { color: inherit; text-decoration: none; }\n"
+        "button, textarea { font: inherit; }\n"
+        ".page-shell { max-width: 1280px; margin: 0 auto; padding: 28px 18px 88px; display: grid; gap: 22px; }\n"
+        ".hero, .workspace-panel, .insight-panel, .status-panel, .feature-panel, .collection-panel, .saved-card, .stats-strip, .reference-shelf {\n"
+        "  background: var(--card);\n"
+        "  border: 1px solid var(--border);\n"
+        "  border-radius: 26px;\n"
+        "  box-shadow: 0 26px 80px rgba(20, 16, 12, 0.08);\n"
+        "}\n"
+        ".hero, .workspace-panel, .insight-panel, .status-panel, .feature-panel, .collection-panel, .reference-shelf { padding: 24px; }\n"
+        ".hero { overflow: hidden; position: relative; }\n"
+        ".hero::after { content: ''; position: absolute; inset: auto -10% -35% auto; width: 260px; height: 260px; border-radius: 50%; background: rgba(255,255,255,0.18); filter: blur(8px); }\n"
+        ".hero h1, .section-heading h2 { margin: 0; font-size: clamp(2.3rem, 5vw, 4.8rem); line-height: 0.92; letter-spacing: -0.04em; }\n"
+        ".hero p, .section-heading p, .status-panel p, .item-card p { color: var(--muted); }\n"
+        ".eyebrow { display: inline-flex; padding: 8px 12px; border-radius: 999px; background: rgba(255,255,255,0.52); color: var(--primary); font-size: 0.78rem; letter-spacing: 0.14em; text-transform: uppercase; }\n"
+        ".hero-proof-list, .feature-list, .insight-list, .saved-card ul { padding-left: 18px; color: var(--muted); }\n"
+        ".stats-strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; padding: 14px; }\n"
+        ".stat-chip { padding: 14px 16px; border-radius: 18px; background: rgba(255,255,255,0.58); border: 1px solid var(--border); }\n"
+        ".stat-chip strong { display: block; margin-top: 6px; font-size: 1.45rem; }\n"
+        ".content-grid, .stack, .storyboard-main, .storyboard-side, .console-operator-lane, .console-support-lane, .studio-left, .studio-right, .atlas-side-stack, .atlas-primary-stack, .atlas-secondary-stack, .notebook-left, .notebook-right { display: grid; gap: 20px; }\n"
+        ".content-grid { grid-template-columns: 1.05fr 0.95fr; }\n"
+        ".workspace-panel textarea { width: 100%; min-height: 140px; margin-top: 12px; border-radius: 18px; border: 1px solid var(--border); padding: 16px; background: rgba(255,255,255,0.74); color: var(--foreground); }\n"
+        ".controls { display: grid; gap: 12px; }\n"
+        ".button-row { display: flex; gap: 12px; align-items: center; }\n"
+        ".primary-button { border: none; border-radius: 999px; background: var(--primary); color: white; padding: 14px 22px; cursor: pointer; }\n"
+        ".primary-button:disabled { opacity: 0.72; cursor: progress; }\n"
+        ".feature-chips, .object-strip { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }\n"
+        ".feature-chip, .saved-score, .object-pill { display: inline-flex; padding: 8px 12px; border-radius: 999px; background: rgba(217,140,63,0.14); color: var(--accent); }\n"
+        ".score-pill { display: inline-flex; padding: 10px 14px; border-radius: 999px; background: rgba(15,95,82,0.1); color: var(--primary); font-weight: 600; }\n"
+        ".item-card, .reference-card { margin-top: 12px; padding: 16px; border-radius: 18px; background: rgba(255,255,255,0.72); border: 1px solid var(--border); }\n"
+        ".saved-grid, .reference-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px; margin-top: 16px; }\n"
+        ".saved-card { padding: 18px; }\n"
+        ".reference-card strong { display: block; font-size: 1.06rem; }\n"
+        ".reference-card span { display: inline-flex; margin-top: 8px; color: var(--muted); }\n"
+        ".storyboard-stage { display: grid; grid-template-columns: 1.14fr 0.86fr; gap: 20px; align-items: start; }\n"
+        ".console-shell, .studio-shell, .atlas-shell, .notebook-shell { display: grid; gap: 20px; }\n"
+        ".console-top { display: grid; grid-template-columns: 0.96fr 1.04fr; gap: 20px; align-items: stretch; }\n"
+        ".console-grid { display: grid; grid-template-columns: 0.88fr 1.16fr 0.88fr; gap: 20px; align-items: start; }\n"
+        ".console-timeline-lane { min-height: 100%; }\n"
+        ".studio-top { display: grid; grid-template-columns: 1.02fr 0.98fr; gap: 20px; align-items: start; }\n"
+        ".studio-bottom { display: grid; grid-template-columns: 0.98fr 1.02fr; gap: 20px; align-items: start; }\n"
+        ".atlas-hero-row { display: grid; grid-template-columns: 1.12fr 0.88fr; gap: 20px; align-items: start; }\n"
+        ".atlas-main-row { display: grid; grid-template-columns: 1.02fr 0.98fr; gap: 20px; align-items: start; }\n"
+        ".notebook-top { display: grid; grid-template-columns: 0.98fr 1.02fr; gap: 20px; align-items: start; }\n"
+        ".notebook-bottom { display: grid; grid-template-columns: 1.08fr 0.92fr; gap: 20px; align-items: start; }\n"
+        ".layout-storyboard .hero { background: linear-gradient(135deg, rgba(255,255,255,0.9), rgba(243, 217, 179, 0.68)); }\n"
+        ".layout-storyboard .reference-card:nth-child(odd) { transform: rotate(-1.2deg); }\n"
+        ".layout-storyboard .reference-card:nth-child(even) { transform: rotate(1deg); }\n"
+        ".layout-operations-console .hero,\n"
+        ".layout-operations-console .workspace-panel,\n"
+        ".layout-operations-console .insight-panel,\n"
+        ".layout-operations-console .status-panel,\n"
+        ".layout-operations-console .feature-panel,\n"
+        ".layout-operations-console .collection-panel,\n"
+        ".layout-operations-console .reference-shelf,\n"
+        ".layout-operations-console .stats-strip { background: rgba(11, 16, 32, 0.78); backdrop-filter: blur(20px); }\n"
+        ".layout-operations-console .hero { background-image: linear-gradient(135deg, rgba(96,245,192,0.12), rgba(255,123,84,0.12)); }\n"
+        ".layout-operations-console .reference-card { border-left: 4px solid var(--accent); }\n"
+        ".layout-operations-console .eyebrow { background: rgba(96,245,192,0.1); }\n"
+        ".layout-studio .hero { background: linear-gradient(135deg, rgba(255,255,255,0.92), rgba(205,221,255,0.76)); }\n"
+        ".layout-studio .workspace-panel,\n"
+        ".layout-studio .reference-shelf { background-image: linear-gradient(180deg, rgba(255,255,255,0.45), rgba(255,255,255,0.2)); }\n"
+        ".layout-studio .reference-card { box-shadow: 0 10px 24px rgba(54, 87, 255, 0.1); }\n"
+        ".layout-atlas .hero { background: radial-gradient(circle at top right, rgba(242,160,61,0.24), transparent 32%), rgba(255,255,255,0.62); }\n"
+        ".layout-atlas .stats-strip { grid-template-columns: 1fr; }\n"
+        ".layout-atlas .reference-card strong { font-size: 1.2rem; }\n"
+        ".layout-notebook .hero { background: linear-gradient(180deg, rgba(255,255,255,0.9), rgba(234,222,209,0.78)); }\n"
+        ".layout-notebook .reference-shelf, .layout-notebook .workspace-panel { border-style: dashed; }\n"
+        ".layout-notebook .saved-card { background: rgba(255, 248, 241, 0.82); }\n"
+        "@media (max-width: 1080px) {\n"
+        "  .storyboard-stage,\n"
+        "  .console-top,\n"
+        "  .console-grid,\n"
+        "  .studio-top,\n"
+        "  .studio-bottom,\n"
+        "  .atlas-hero-row,\n"
+        "  .atlas-main-row,\n"
+        "  .notebook-top,\n"
+        "  .notebook-bottom,\n"
+        "  .content-grid {\n"
+        "    grid-template-columns: 1fr;\n"
+        "  }\n"
+        "}\n"
+        "@media (max-width: 720px) {\n"
+        "  .page-shell { padding: 18px 14px 72px; }\n"
+        "  .stats-strip { grid-template-columns: 1fr; }\n"
+        "  .hero, .workspace-panel, .insight-panel, .status-panel, .feature-panel, .collection-panel, .reference-shelf { padding: 18px; }\n"
+        "  .hero h1, .section-heading h2 { font-size: clamp(2rem, 14vw, 3.2rem); }\n"
+        "}\n"
+    )
+    
 
 
 def _build_fallback_backend_bundle(context: str) -> dict[str, str]:

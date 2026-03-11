@@ -751,6 +751,47 @@ def test_fallback_frontend_bundle_covers_template_blueprint_components():
     assert expected.issubset(files.keys())
 
 
+def test_fallback_frontend_bundle_varies_layout_markup_and_reference_objects():
+    storyboard = code_generator_module._build_fallback_frontend_bundle(
+        json.dumps(
+            {
+                "idea": {
+                    "name": "TripCanvas AI",
+                    "tagline": "Plan cinematic journeys",
+                    "layout_archetype": "storyboard",
+                    "sample_seed_data": ["Day 1 route", "Night market stop"],
+                    "reference_objects": ["route", "district"],
+                }
+            },
+            ensure_ascii=False,
+        )
+    )
+    console = code_generator_module._build_fallback_frontend_bundle(
+        json.dumps(
+            {
+                "idea": {
+                    "name": "StageSignal",
+                    "tagline": "Run the live show",
+                    "layout_archetype": "operations_console",
+                    "sample_seed_data": ["Opening cue", "Sponsor break"],
+                    "reference_objects": ["cue", "incident"],
+                }
+            },
+            ensure_ascii=False,
+        )
+    )
+
+    assert "src/components/ReferenceShelf.tsx" in storyboard
+    assert 'const LAYOUT = "storyboard"' in storyboard["src/app/page.tsx"]
+    assert "storyboard-stage" in storyboard["src/app/page.tsx"]
+    assert "Day 1 route" in storyboard["src/app/page.tsx"]
+    assert "route" in storyboard["src/app/page.tsx"]
+    assert 'const LAYOUT = "operations_console"' in console["src/app/page.tsx"]
+    assert "console-grid" in console["src/app/page.tsx"]
+    assert "Opening cue" in console["src/app/page.tsx"]
+    assert ".layout-operations-console .hero" in console["src/app/globals.css"]
+
+
 @pytest.mark.asyncio
 async def test_generate_backend_files_uses_deterministic_fallback_on_llm_error(monkeypatch):
     async def _fail(*args, **kwargs):
