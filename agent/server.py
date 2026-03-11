@@ -12,6 +12,7 @@ Run: python -m agent.server
 """
 
 import asyncio
+import hmac
 import json
 import os
 import re
@@ -24,7 +25,7 @@ from pathlib import Path
 
 import uvicorn
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from starlette.responses import StreamingResponse
@@ -162,6 +163,22 @@ def _extract_primary_repo_url(spec: dict) -> str:
             if repo and "/" in repo:
                 return f"https://github.com/{repo}"
     return ""
+
+
+def _showcase_app_from_inventory(name: str, live_url: str, repo_url: str) -> dict:
+    repo_candidates = _extract_app_repo_candidates({"name": name, "services": [{"github": {"repo": repo_url}}]})
+    family_candidates = {
+        family
+        for family in {_project_family(candidate) for candidate in repo_candidates | ({name} if name else set())}
+        if family
+    }
+    return {
+        "name": _repo_basename(name) or name,
+        "live_url": _normalize_live_url(live_url),
+        "repo_url": repo_url,
+        "repo_candidates": repo_candidates,
+        "family_candidates": family_candidates,
+    }
 
 
 async def _list_doctl_apps() -> list[dict]:
@@ -302,10 +319,37 @@ def _reconcile_showcase_meetings(meetings: list[dict], showcase_apps: list[dict]
         deployment["liveUrl"] = showcase_app["live_url"]
         if showcase_app["repo_url"]:
             deployment["repoUrl"] = showcase_app["repo_url"]
+        deployment["status"] = "deployed"
 
         reconciled.append({**meeting, "deployment": deployment})
 
     return reconciled
+
+
+def _meeting_store_payload(meeting: dict) -> dict:
+    return {
+        key: value
+        for key, value in meeting.items()
+        if key not in {"thread_id", "created_at"}
+    }
+
+
+def _ops_token() -> str:
+    for key in ("VIBEDEPLOY_OPS_TOKEN", "DASHBOARD_ADMIN_TOKEN", "DIGITALOCEAN_INFERENCE_KEY"):
+        value = os.getenv(key, "").strip()
+        if value:
+            return value
+    return ""
+
+
+def _require_ops_token(token: str | None) -> None:
+    expected = _ops_token()
+    if not expected or not token or not hmac.compare_digest(token, expected):
+        raise HTTPException(status_code=403, detail="forbidden")
+
+
+def _test_api_enabled() -> bool:
+    return os.getenv("VIBEDEPLOY_ENABLE_TEST_API", "").strip() == "1"
 
 
 async def _get_dashboard_snapshot() -> tuple[list[dict], list[dict], bool]:
@@ -555,6 +599,16 @@ async def _store_result(thread_id: str, state: dict):
 class RunRequest(BaseModel):
     prompt: str = ""
     config: dict | None = None
+
+
+class ShowcaseAppInput(BaseModel):
+    name: str
+    live_url: str
+    repo_url: str
+
+
+class DashboardReconcileRequest(BaseModel):
+    showcase_apps: list[ShowcaseAppInput]
 
 
 async def _stream_pipeline(prompt: str, thread_id: str) -> AsyncGenerator[str, None]:
@@ -1106,8 +1160,41 @@ async def get_result(meeting_id: str):
     return result
 
 
+@app.post("/api/ops/dashboard/reconcile")
+async def reconcile_dashboard_results(
+    request: DashboardReconcileRequest,
+    x_vibedeploy_ops_token: str | None = Header(default=None),
+):
+    _require_ops_token(x_vibedeploy_ops_token)
+
+    showcase_apps = [
+        _showcase_app_from_inventory(item.name, item.live_url, item.repo_url)
+        for item in request.showcase_apps
+        if item.live_url.strip() and item.repo_url.strip()
+    ]
+    if not showcase_apps:
+        raise HTTPException(status_code=400, detail="showcase_apps_required")
+
+    meetings = await _store.list_meetings(limit=_DASHBOARD_SOURCE_LIMIT)
+    reconciled = _reconcile_showcase_meetings(meetings, showcase_apps)
+    if not reconciled:
+        raise HTTPException(status_code=404, detail="no_matching_results")
+
+    await _store.replace_meetings(
+        [(str(meeting["thread_id"]), _meeting_store_payload(meeting)) for meeting in reconciled]
+    )
+    _invalidate_dashboard_snapshot_cache()
+
+    return {
+        "stored": len(reconciled),
+        "thread_ids": [str(meeting["thread_id"]) for meeting in reconciled],
+    }
+
+
 @app.put("/test/result/{meeting_id}")
 async def put_test_result(meeting_id: str, body: dict):
+    if not _test_api_enabled():
+        raise HTTPException(status_code=404, detail="not_found")
     await _store.save_meeting(meeting_id, body)
     _invalidate_dashboard_snapshot_cache()
     return {"stored": meeting_id}
@@ -1115,6 +1202,8 @@ async def put_test_result(meeting_id: str, body: dict):
 
 @app.put("/test/brainstorm/{brainstorm_id}")
 async def put_test_brainstorm(brainstorm_id: str, body: dict):
+    if not _test_api_enabled():
+        raise HTTPException(status_code=404, detail="not_found")
     await _store.save_brainstorm(brainstorm_id, body)
     _invalidate_dashboard_snapshot_cache()
     return {"stored": brainstorm_id}
@@ -1175,7 +1264,8 @@ async def dashboard_deployments():
     deployed = []
     for m in meetings[:100]:
         dep = m.get("deployment")
-        if dep and (dep.get("liveUrl") or dep.get("repoUrl")):
+        live_url = _normalize_live_url(str((dep or {}).get("liveUrl", "")))
+        if dep and live_url and "vibedeploy" not in live_url:
             deployed.append(
                 {
                     "thread_id": m["thread_id"],

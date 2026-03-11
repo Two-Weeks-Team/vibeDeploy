@@ -123,6 +123,48 @@ class ResultStore:
             )
             await self._db.commit()
 
+    async def replace_meetings(self, records: list[tuple[str, dict]]):
+        await self._ensure_ready()
+        thread_ids = [thread_id for thread_id, _result in records]
+        if self._use_pg:
+            async with self._pool.acquire() as conn:
+                async with conn.transaction():
+                    if thread_ids:
+                        await conn.execute(
+                            "DELETE FROM meeting_results WHERE NOT (thread_id = ANY($1::text[]))",
+                            thread_ids,
+                        )
+                    else:
+                        await conn.execute("DELETE FROM meeting_results")
+
+                    for thread_id, result in records:
+                        await conn.execute(
+                            """INSERT INTO meeting_results (thread_id, result)
+                               VALUES ($1, $2::jsonb)
+                               ON CONFLICT (thread_id)
+                               DO UPDATE SET result = $2::jsonb""",
+                            thread_id,
+                            json.dumps(result, ensure_ascii=False),
+                        )
+        else:
+            if thread_ids:
+                placeholders = ",".join("?" for _ in thread_ids)
+                await self._db.execute(
+                    f"DELETE FROM meeting_results WHERE thread_id NOT IN ({placeholders})",
+                    thread_ids,
+                )
+            else:
+                await self._db.execute("DELETE FROM meeting_results")
+
+            for thread_id, result in records:
+                await self._db.execute(
+                    """INSERT INTO meeting_results (thread_id, result)
+                       VALUES (?, ?)
+                       ON CONFLICT(thread_id) DO UPDATE SET result = excluded.result""",
+                    (thread_id, json.dumps(result, ensure_ascii=False)),
+                )
+            await self._db.commit()
+
     async def get_meeting(self, thread_id: str) -> Optional[dict]:
         await self._ensure_ready()
         if self._use_pg:

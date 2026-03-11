@@ -259,3 +259,220 @@ async def test_dashboard_falls_back_to_store_when_no_showcase_inventory(app_clie
         "go_count": 1,
         "nogo_count": 0,
     }
+
+
+@pytest.mark.asyncio
+async def test_dashboard_deployments_only_include_live_apps_without_showcase_inventory(app_client, monkeypatch):
+    import agent.server as srv
+
+    _reset_dashboard_caches(srv)
+
+    async def no_showcase_apps():
+        return []
+
+    monkeypatch.setattr(srv, "_get_showcase_live_apps", no_showcase_apps)
+
+    local_only = await app_client.put(
+        "/test/result/local-only",
+        json={
+            "score": 80,
+            "verdict": "GO",
+            "analyses": [],
+            "debates": [],
+            "documents": [],
+            "idea_summary": "Local-only app",
+            "deployment": {"repoUrl": "https://github.com/Two-Weeks-Team/local-only", "liveUrl": "", "status": "local_running"},
+        },
+    )
+    assert local_only.status_code == 200
+
+    live_app = await app_client.put(
+        "/test/result/live-app",
+        json={
+            "score": 84,
+            "verdict": "GO",
+            "analyses": [],
+            "debates": [],
+            "documents": [],
+            "idea_summary": "Live app",
+            "deployment": {
+                "repoUrl": "https://github.com/Two-Weeks-Team/live-app",
+                "liveUrl": "https://live-app.example.com",
+                "status": "deployed",
+            },
+        },
+    )
+    assert live_app.status_code == 200
+
+    deployments = (await app_client.get("/dashboard/deployments")).json()
+
+    assert len(deployments) == 1
+    assert deployments[0]["thread_id"] == "live-app"
+
+
+@pytest.mark.asyncio
+async def test_dashboard_reconcile_endpoint_prunes_store_to_supplied_showcase_apps(app_client, monkeypatch):
+    import agent.server as srv
+
+    _reset_dashboard_caches(srv)
+    monkeypatch.setenv("VIBEDEPLOY_OPS_TOKEN", "ops-secret")
+
+    records = [
+        (
+            "campaign7-demopilot-1773168264",
+            {
+                "score": 93,
+                "verdict": "GO",
+                "analyses": [],
+                "debates": [],
+                "documents": [],
+                "idea_summary": "Ace your pitch with AI-powered rehearsal and feedback",
+                "deployment": {
+                    "repoUrl": "https://github.com/Two-Weeks-Team/demopilot-168642",
+                    "liveUrl": "",
+                    "status": "local_running",
+                },
+            },
+        ),
+        (
+            "campaign6-trihabit-a66087b7",
+            {
+                "score": 88,
+                "verdict": "GO",
+                "analyses": [],
+                "debates": [],
+                "documents": [],
+                "idea_summary": "Simplify habit tracking for busy professionals with AI-powered coaching.",
+                "deployment": {
+                    "repoUrl": "https://github.com/Two-Weeks-Team/trihabit-166567",
+                    "liveUrl": "",
+                    "status": "local_running",
+                },
+            },
+        ),
+        (
+            "spendsense-final-08e95a5a",
+            {
+                "score": 91,
+                "verdict": "GO",
+                "analyses": [],
+                "debates": [],
+                "documents": [],
+                "idea_summary": "Track. Analyze. Save.",
+                "deployment": {
+                    "repoUrl": "https://github.com/Two-Weeks-Team/smartspend-161898",
+                    "liveUrl": "https://smartspend-161898-m59ar.ondigitalocean.app",
+                    "status": "deployed",
+                },
+            },
+        ),
+        (
+            "run4-e395a21f",
+            {
+                "score": 86,
+                "verdict": "GO",
+                "analyses": [],
+                "debates": [],
+                "documents": [],
+                "idea_summary": "Ditch the wait, not the experience.",
+                "deployment": {
+                    "repoUrl": "https://github.com/Two-Weeks-Team/queueless-158639",
+                    "liveUrl": "https://queueless-158639-44pch.ondigitalocean.app",
+                    "status": "deployed",
+                },
+            },
+        ),
+        (
+            "060111-studymate",
+            {
+                "score": 84,
+                "verdict": "CONDITIONAL",
+                "analyses": [],
+                "debates": [],
+                "documents": [],
+                "idea_summary": "AI-powered flashcard generator from study notes with spaced repetition",
+                "deployment": {
+                    "repoUrl": "https://github.com/Two-Weeks-Team/studymate-lite-060111",
+                    "liveUrl": "https://studymate-lite-060111-5pth7.ondigitalocean.app",
+                    "status": "deployed",
+                },
+            },
+        ),
+        (
+            "784480-queuebite",
+            {
+                "score": 80,
+                "verdict": "GO",
+                "analyses": [],
+                "debates": [],
+                "documents": [],
+                "idea_summary": "Restaurant queue management with QR codes",
+                "deployment": {
+                    "repoUrl": "https://github.com/Two-Weeks-Team/queuebite-784480",
+                    "liveUrl": "https://queuebite-784480-b4ioa.ondigitalocean.app",
+                    "status": "deployed",
+                },
+            },
+        ),
+    ]
+
+    for thread_id, body in records:
+        response = await app_client.put(f"/test/result/{thread_id}", json=body)
+        assert response.status_code == 200
+
+    reconcile = await app_client.post(
+        "/api/ops/dashboard/reconcile",
+        headers={"x-vibedeploy-ops-token": "ops-secret"},
+        json={
+            "showcase_apps": [
+                {
+                    "name": "demopilot-168642",
+                    "live_url": "https://demopilot-168642-xbwvx.ondigitalocean.app",
+                    "repo_url": "https://github.com/Two-Weeks-Team/demopilot-168642",
+                },
+                {
+                    "name": "trihabit-166567",
+                    "live_url": "https://trihabit-166567-2fpe6.ondigitalocean.app",
+                    "repo_url": "https://github.com/Two-Weeks-Team/trihabit-166567",
+                },
+                {
+                    "name": "smartspend-161898",
+                    "live_url": "https://smartspend-161898-m59ar.ondigitalocean.app",
+                    "repo_url": "https://github.com/Two-Weeks-Team/smartspend-161898",
+                },
+                {
+                    "name": "queueless-158639",
+                    "live_url": "https://queueless-158639-44pch.ondigitalocean.app",
+                    "repo_url": "https://github.com/Two-Weeks-Team/queueless-158639",
+                },
+                {
+                    "name": "studymate-165585",
+                    "live_url": "https://studymate-165585-2mqzt.ondigitalocean.app",
+                    "repo_url": "https://github.com/Two-Weeks-Team/studymate-165585",
+                },
+            ]
+        },
+    )
+    assert reconcile.status_code == 200
+    assert reconcile.json()["stored"] == 5
+
+    results = (await app_client.get("/dashboard/results")).json()
+    deployments = (await app_client.get("/dashboard/deployments")).json()
+
+    assert len(results) == 5
+    assert len(deployments) == 5
+    assert {item["thread_id"] for item in results} == {
+        "campaign7-demopilot-1773168264",
+        "campaign6-trihabit-a66087b7",
+        "spendsense-final-08e95a5a",
+        "run4-e395a21f",
+        "060111-studymate",
+    }
+    assert {item["deployment"]["status"] for item in results} == {"deployed"}
+    assert {item["deployment"]["liveUrl"] for item in deployments} == {
+        "https://demopilot-168642-xbwvx.ondigitalocean.app",
+        "https://trihabit-166567-2fpe6.ondigitalocean.app",
+        "https://smartspend-161898-m59ar.ondigitalocean.app",
+        "https://queueless-158639-44pch.ondigitalocean.app",
+        "https://studymate-165585-2mqzt.ondigitalocean.app",
+    }

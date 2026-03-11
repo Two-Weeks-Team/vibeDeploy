@@ -24,6 +24,7 @@ async def app_client(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[AsyncClie
 
     s = ResultStore(":memory:")
     await s.init()
+    monkeypatch.setenv("VIBEDEPLOY_ENABLE_TEST_API", "1")
     monkeypatch.setattr(srv, "_store", s)
 
     transport = ASGITransport(app=srv.app)

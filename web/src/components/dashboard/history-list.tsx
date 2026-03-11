@@ -175,8 +175,8 @@ export function HistoryList({ results, brainstorms }: HistoryListProps) {
                               <Brain className="w-3 h-3 mr-1" /> Brainstorm
                             </Badge>
                           )}
-                          <span className="font-mono text-sm text-muted-foreground">
-                            {item.data.thread_id.substring(0, 8)}
+                          <span className="font-mono text-xs text-muted-foreground/70">
+                            {item.data.thread_id}
                           </span>
                         </div>
                         <div className="line-clamp-2 text-sm font-medium leading-6 text-foreground">
@@ -250,9 +250,10 @@ export function HistoryList({ results, brainstorms }: HistoryListProps) {
         <DialogContent className="max-w-3xl max-h-[80vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="truncate">{selectedItem ? getItemTitle(selectedItem) : ""}</DialogTitle>
-            <DialogDescription>
-              {selectedItem?.type === "evaluation" ? "Evaluation" : "Brainstorm"} · {selectedItem?.data.thread_id} ·{" "}
-              {selectedItem?.date.toLocaleString()}
+            <DialogDescription className="space-y-1">
+              <div>{selectedItem?.type === "evaluation" ? "Evaluation" : "Brainstorm"}</div>
+              <div className="font-mono text-xs">{selectedItem?.data.thread_id}</div>
+              <div>{selectedItem?.date.toLocaleString()}</div>
             </DialogDescription>
           </DialogHeader>
 
