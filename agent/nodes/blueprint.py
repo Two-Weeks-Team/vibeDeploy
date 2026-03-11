@@ -69,6 +69,7 @@ Rules:
 - Frontend: Next.js 15 App Router. Required: package.json, src/app/layout.tsx, src/app/page.tsx, src/app/globals.css, src/lib/api.ts, 2-3 domain components.
 - The frontend manifest must include a primary workflow shell, a result/list/detail component, and at least one explicit state or feedback component when relevant.
 - Include an experience_contract that states which surfaces, states, and proof points must be visible in the generated UI.
+- If the idea includes layout_archetype, interface_metaphor, trust_surfaces, or reference_objects, carry them into the manifest instead of falling back to generic dashboard sections.
 - Backend: FastAPI. Required: requirements.txt, main.py, models.py, routes.py, ai_service.py.
 - All backend files are FLAT in project root (no packages, no relative imports).
 - Every file must have a clear purpose and list its dependencies.
@@ -144,14 +145,27 @@ def _build_template_blueprint(idea: dict) -> dict:
     required_surfaces = _coerce_string_list(idea.get("must_have_surfaces"))[:5]
     proof_points = _coerce_string_list(idea.get("proof_points"))[:5]
     non_negotiables = _coerce_string_list(idea.get("experience_non_negotiables"))[:5]
+    trust_surfaces = _coerce_string_list(idea.get("trust_surfaces"))[:4]
+    layout_archetype = str(idea.get("layout_archetype") or "").strip()
+    interface_metaphor = str(idea.get("interface_metaphor") or "").strip()
+    design_direction = idea.get("design_direction") if isinstance(idea.get("design_direction"), dict) else {}
+    visual_direction_phrase = ", ".join(
+        part
+        for part in [
+            str(design_direction.get("visual_tone") or "").strip(),
+            layout_archetype.replace("_", " ").strip(),
+            interface_metaphor,
+        ]
+        if part
+    )
 
     blueprint = {
         "app_name": app_name,
         "design_system": {
-            "visual_direction": ", ".join(visual_direction) if visual_direction else "editorial showcase workspace",
+            "visual_direction": visual_direction_phrase or ", ".join(visual_direction) or "editorial showcase workspace",
             "color_tokens": ["background", "primary", "accent", "card", "muted"],
-            "typography": "display serif with clean sans body",
-            "motion_principles": ["staggered reveal", "soft hover lift", "panel transitions"],
+            "typography": str(design_direction.get("typography_strategy") or "display serif with clean sans body"),
+            "motion_principles": _coerce_string_list(design_direction.get("motion_strategy")) or ["staggered reveal", "soft hover lift", "panel transitions"],
             "ui_constraints": ["avoid generic admin templates", "keep the first screen demo-ready"],
         },
         "frontend_files": {},
@@ -162,10 +176,10 @@ def _build_template_blueprint(idea: dict) -> dict:
             "theme_tokens": ["background", "foreground", "primary", "accent", "card"],
         },
         "experience_contract": {
-            "required_surfaces": required_surfaces or ["hero", "primary workspace", "results panel", "saved library"],
+            "required_surfaces": required_surfaces or _surfaces_for_layout(layout_archetype, trust_surfaces),
             "required_states": ["loading", "empty", "error", "success"],
             "proof_points": proof_points or ["visible recent activity", "credible result framing", "shareable outputs"],
-            "interaction_style": "guided, tactile, and demo-friendly",
+            "interaction_style": str(design_direction.get("layout_strategy") or interface_metaphor or "guided, tactile, and demo-friendly"),
         },
         "frontend_backend_contract": [
             {
@@ -187,6 +201,9 @@ def _build_template_blueprint(idea: dict) -> dict:
 
     if non_negotiables:
         blueprint["design_system"]["ui_constraints"].extend(non_negotiables)
+    for anti_pattern in _coerce_string_list(design_direction.get("anti_patterns")):
+        if anti_pattern not in blueprint["design_system"]["ui_constraints"]:
+            blueprint["design_system"]["ui_constraints"].append(anti_pattern)
 
     return _normalize_blueprint(blueprint, idea)
 
@@ -237,6 +254,10 @@ def _normalize_blueprint(blueprint: dict, idea: dict) -> dict:
     must_have_surfaces = _coerce_string_list(idea.get("must_have_surfaces"))
     proof_points = _coerce_string_list(idea.get("proof_points"))
     experience_non_negotiables = _coerce_string_list(idea.get("experience_non_negotiables"))
+    trust_surfaces = _coerce_string_list(idea.get("trust_surfaces"))
+    layout_archetype = str(idea.get("layout_archetype") or "").strip()
+    interface_metaphor = str(idea.get("interface_metaphor") or "").strip()
+    design_direction_from_idea = idea.get("design_direction") if isinstance(idea.get("design_direction"), dict) else {}
 
     component_specs = {
         "src/components/Hero.tsx": {
@@ -301,11 +322,17 @@ def _normalize_blueprint(blueprint: dict, idea: dict) -> dict:
     design_system = dict(normalized.get("design_system") or {})
     design_system.setdefault(
         "visual_direction",
-        "editorial product surface with a clear hero, workbench, and supporting panels",
+        interface_metaphor or "editorial product surface with a clear hero, workbench, and supporting panels",
     )
     design_system.setdefault("color_tokens", ["background", "primary", "accent", "card", "muted"])
-    design_system.setdefault("typography", "expressive headline paired with readable body copy")
-    design_system.setdefault("motion_principles", ["staggered reveal", "soft state transitions"])
+    design_system.setdefault(
+        "typography",
+        str(design_direction_from_idea.get("typography_strategy") or "expressive headline paired with readable body copy"),
+    )
+    design_system.setdefault(
+        "motion_principles",
+        _coerce_string_list(design_direction_from_idea.get("motion_strategy")) or ["staggered reveal", "soft state transitions"],
+    )
     constraints = design_system.get("ui_constraints", [])
     if not isinstance(constraints, list):
         constraints = []
@@ -316,17 +343,15 @@ def _normalize_blueprint(blueprint: dict, idea: dict) -> dict:
     for rule in experience_non_negotiables:
         if rule not in constraints:
             constraints.append(rule)
+    for rule in _coerce_string_list(design_direction_from_idea.get("anti_patterns")):
+        if rule not in constraints:
+            constraints.append(rule)
     design_system["ui_constraints"] = constraints
 
     experience_contract = dict(normalized.get("experience_contract") or {})
     required_surfaces = _merge_unique_strings(
         _coerce_string_list(experience_contract.get("required_surfaces")),
-        [
-            "hero header",
-            "primary workspace",
-            "insight or result panel",
-            "saved library and recent activity" if wants_collection_ui else "secondary supporting panel",
-        ],
+        _surfaces_for_layout(layout_archetype, trust_surfaces, wants_collection_ui),
         must_have_surfaces,
     )
     required_states = _merge_unique_strings(
@@ -357,6 +382,28 @@ def _normalize_blueprint(blueprint: dict, idea: dict) -> dict:
     normalized["experience_contract"] = experience_contract
     normalized.setdefault("frontend_backend_contract", [])
     return normalized
+
+
+def _surfaces_for_layout(layout_archetype: str, trust_surfaces: list[str], wants_collection_ui: bool = True) -> list[str]:
+    normalized = layout_archetype.strip().lower()
+    if normalized == "storyboard":
+        base = ["destination brief", "route board", "moodboard highlights", "saved itineraries"]
+    elif normalized == "operations_console":
+        base = ["live cue timeline", "stage readiness board", "incident lane", "saved show plans"]
+    elif normalized == "studio":
+        base = ["study sprint builder", "syllabus board", "review cadence rail", "saved plans"]
+    elif normalized == "atlas":
+        base = ["money runway summary", "bucket planner", "scenario cards", "saved plans"]
+    elif normalized == "notebook":
+        base = ["growth roadmap", "mentor notes", "proof artifact shelf", "saved coaching paths"]
+    else:
+        base = [
+            "hero header",
+            "primary workspace",
+            "insight or result panel",
+            "saved library and recent activity" if wants_collection_ui else "secondary supporting panel",
+        ]
+    return _merge_unique_strings(base, trust_surfaces)
 
 
 def _slugify(value: str) -> str:

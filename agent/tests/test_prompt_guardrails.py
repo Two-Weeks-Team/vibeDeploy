@@ -1,7 +1,9 @@
 from agent.nodes.blueprint import BLUEPRINT_SYSTEM_PROMPT
 from agent.nodes.enrich import ENRICH_PROMPT
+from agent.nodes.experience_agent import EXPERIENCE_AGENT_PROMPT
 from agent.nodes.fix_storm import SCOPE_DOWN_PROMPT
 from agent.nodes.input_processor import IDEA_EXTRACTION_PROMPT
+from agent.nodes.inspiration_agent import INSPIRATION_AGENT_PROMPT
 from agent.prompts.code_templates import BACKEND_SYSTEM_PROMPT, FRONTEND_SYSTEM_PROMPT
 from agent.prompts.doc_templates import API_SPEC_SYSTEM_PROMPT, PRD_SYSTEM_PROMPT, TECH_SPEC_SYSTEM_PROMPT
 
@@ -23,6 +25,10 @@ def test_upstream_prompts_capture_design_direction_and_contracts():
     assert "must_have_surfaces" in IDEA_EXTRACTION_PROMPT
     assert "proof_points" in IDEA_EXTRACTION_PROMPT
     assert "experience_non_negotiables" in ENRICH_PROMPT
+    assert "layout_archetype" in INSPIRATION_AGENT_PROMPT
+    assert "interface_metaphor" in INSPIRATION_AGENT_PROMPT
+    assert "primary_action_label" in EXPERIENCE_AGENT_PROMPT
+    assert "input_labels" in EXPERIENCE_AGENT_PROMPT
     assert "First-screen surface inventory" in PRD_SYSTEM_PROMPT
     assert "Experience contract" in TECH_SPEC_SYSTEM_PROMPT
     assert "response fields" in API_SPEC_SYSTEM_PROMPT

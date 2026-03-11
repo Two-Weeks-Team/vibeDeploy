@@ -10,8 +10,10 @@ from .nodes.decision_gate import decision_gate, route_decision
 from .nodes.deployer import deployer
 from .nodes.doc_generator import doc_generator
 from .nodes.enrich import enrich_idea
+from .nodes.experience_agent import experience_agent
 from .nodes.fix_storm import fix_storm, scope_down
 from .nodes.input_processor import input_processor
+from .nodes.inspiration_agent import inspiration_agent
 from .nodes.prompt_strategist import prompt_strategist
 from .nodes.vibe_council import (
     cross_examination,
@@ -39,6 +41,8 @@ def create_graph():
     workflow = StateGraph(PipelineState)
 
     workflow.add_node("input_processor", input_processor)
+    workflow.add_node("inspiration_agent", inspiration_agent)
+    workflow.add_node("experience_agent", experience_agent)
     workflow.add_node("enrich_idea", enrich_idea)
     workflow.add_node("run_council_agent", run_council_agent)
     workflow.add_node("cross_examination", cross_examination)
@@ -56,7 +60,9 @@ def create_graph():
 
     workflow.set_entry_point("input_processor")
 
-    workflow.add_edge("input_processor", "enrich_idea")
+    workflow.add_edge("input_processor", "inspiration_agent")
+    workflow.add_edge("inspiration_agent", "experience_agent")
+    workflow.add_edge("experience_agent", "enrich_idea")
     workflow.add_conditional_edges("enrich_idea", fan_out_analysis, ["run_council_agent"])
 
     workflow.add_edge("run_council_agent", "cross_examination")

@@ -68,6 +68,8 @@ class VibeDeployState(TypedDict):
     idea: Dict
     idea_summary: str
     original_idea: Optional[Dict]
+    inspiration_pack: Optional[Dict]
+    experience_spec: Optional[Dict]
 
     eval_iteration: int
     enrich_result: Optional[Dict]

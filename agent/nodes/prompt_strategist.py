@@ -221,6 +221,11 @@ def _build_prompt_strategy(
     required_surfaces = _coerce_strings(experience_contract.get("required_surfaces"))
     required_states = _coerce_strings(experience_contract.get("required_states"))
     proof_points = _coerce_strings(experience_contract.get("proof_points"))
+    layout_archetype = str(idea.get("layout_archetype") or "").strip()
+    interface_metaphor = str(idea.get("interface_metaphor") or "").strip()
+    signature_demo_moments = _coerce_strings(idea.get("signature_demo_moments"))
+    output_entities = _coerce_strings(idea.get("output_entities"))
+    trust_surfaces = _coerce_strings(idea.get("trust_surfaces"))
     tech_spec = generated_docs.get("tech_spec", "")
     api_spec = generated_docs.get("api_spec", "")
     context_priority = [
@@ -235,6 +240,7 @@ def _build_prompt_strategy(
         "Layered context delivery: shared delivery brief, target expert brief, model-family guidance, then final output contract.",
         "Language-server discipline: valid imports, defined symbols, compile-safe file bodies, and exact type alignment.",
         "No guessing: derive fields from the existing contract instead of inventing extra endpoints, props, or schema columns.",
+        "Do not collapse concept-specific nouns into the same hero/workspace/feature/collection taxonomy when the idea defines a sharper interface metaphor.",
     ]
 
     frontend_guidance = _flatten_guidance(model_plan["frontend"], guidance_by_family)
@@ -254,8 +260,12 @@ def _build_prompt_strategy(
             "Frontend Architect",
             [
                 f"Visual direction: {design_system.get('visual_direction', 'intentional domain-specific product surface')}.",
+                f"Layout archetype: {layout_archetype or 'domain-led custom surface'}.",
+                f"Interface metaphor: {interface_metaphor or 'product-specific workflow metaphor'}.",
                 f"Required surfaces: {_human_join(required_surfaces) or 'hero, workspace, and supporting insight surfaces'}.",
                 f"Required states: {_human_join(required_states) or 'loading, empty, error, success'}.",
+                f"Trust surfaces: {_human_join(trust_surfaces) or 'credible saved work and visible proof points'}.",
+                f"Output entities that should appear in the UI: {_human_join(output_entities) or 'domain objects, not generic cards'}.",
                 f"Manifest-critical frontend files: {_human_join(frontend_files[:6])}.",
             ],
         ),
@@ -275,6 +285,7 @@ def _build_prompt_strategy(
                 f"Backend model: {model_plan['backend']['model']} ({model_plan['backend']['family']}).",
                 f"Frontend guidance: {_human_join(frontend_guidance[:3])}.",
                 f"Backend guidance: {_human_join(backend_guidance[:3])}.",
+                f"Signature demo moments: {_human_join(signature_demo_moments) or 'one vivid first-run transformation'}.",
             ],
         ),
         "qa_strategist": _render_brief(

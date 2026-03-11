@@ -2,6 +2,8 @@ import json
 
 NODE_EVENTS = {
     "input_processor": {"phase": "input_processing", "message": "Analyzing your idea..."},
+    "inspiration_agent": {"phase": "reference_mapping", "message": "Extracting reference and YouTube inspiration..."},
+    "experience_agent": {"phase": "experience_specialization", "message": "Specializing the product experience..."},
     "run_council_agent": {"phase": "individual_analysis", "message": "Running named council analysis..."},
     "cross_examination": {"phase": "cross_examination", "message": "Council members debating..."},
     "score_axis": {"phase": "scoring", "message": "Scoring named evaluation axes..."},
