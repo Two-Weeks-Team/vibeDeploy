@@ -810,6 +810,73 @@ async def test_generate_backend_files_uses_deterministic_fallback_on_llm_error(m
 
 
 @pytest.mark.asyncio
+async def test_code_generator_forces_frontend_fallback_after_eval_failure(monkeypatch):
+    async def _unexpected_frontend(*args, **kwargs):
+        raise AssertionError("frontend LLM should not run when fallback is forced")
+
+    async def _backend_files(*args, **kwargs):
+        return {
+            "main.py": "from fastapi import FastAPI\napp = FastAPI()\n",
+            "routes.py": "from fastapi import APIRouter\nrouter = APIRouter()\n",
+            "requirements.txt": "fastapi\nuvicorn\n",
+            "ai_service.py": "def build_plan(query, preferences): return {'summary': 'ok', 'score': 88, 'items': []}\n\ndef build_insights(selection, context): return {'insights': [], 'next_actions': [], 'highlights': []}\n",
+        }
+
+    monkeypatch.setattr(code_generator_module, "get_llm", lambda **kwargs: object())
+    monkeypatch.setattr(code_generator_module, "get_rate_limit_fallback_models", lambda model: [])
+    monkeypatch.setattr(code_generator_module, "_generate_frontend_files", _unexpected_frontend)
+    monkeypatch.setattr(code_generator_module, "_generate_backend_files", _backend_files)
+    monkeypatch.setattr(code_generator_module, "_normalize_cross_stack", lambda fe, be: (fe, be))
+
+    result = await code_generator_module.code_generator(
+        {
+            "generated_docs": {},
+            "idea": {
+                "name": "RoutePostcard",
+                "tagline": "Turn travel footage into route boards",
+                "layout_archetype": "storyboard",
+                "sample_seed_data": ["Day 1 route"],
+                "reference_objects": ["route"],
+            },
+            "blueprint": {
+                "frontend_files": {
+                    "src/app/layout.tsx": {},
+                    "src/app/page.tsx": {},
+                    "src/app/globals.css": {},
+                    "src/lib/api.ts": {},
+                    "src/components/Hero.tsx": {},
+                    "src/components/InsightPanel.tsx": {},
+                    "src/components/StatePanel.tsx": {},
+                    "src/components/WorkspacePanel.tsx": {},
+                    "src/components/FeaturePanel.tsx": {},
+                },
+                "backend_files": {
+                    "main.py": {},
+                    "routes.py": {},
+                    "requirements.txt": {},
+                    "ai_service.py": {},
+                },
+            },
+            "prompt_strategy": {},
+            "code_eval_result": {
+                "passed": False,
+                "missing_frontend": ["src/components/WorkspacePanel.tsx"],
+                "missing_backend": [],
+                "experience": 62.0,
+                "iteration": 1,
+            },
+            "frontend_code": {
+                "src/app/page.tsx": "export default function Page(){ return <main><Hero /></main>; }",
+            },
+            "backend_code": {},
+        }
+    )
+
+    assert "src/components/ReferenceShelf.tsx" in result["frontend_code"]
+    assert "storyboard-stage" in result["frontend_code"]["src/app/page.tsx"]
+
+
+@pytest.mark.asyncio
 async def test_code_generator_merges_new_backend_files_into_existing_bundle(monkeypatch):
     state = {
         "generated_docs": {},

@@ -275,6 +275,16 @@ def _normalize_blueprint(blueprint: dict, idea: dict) -> dict:
             "imports_from": [],
             "exports": ["default"],
         },
+        "src/components/WorkspacePanel.tsx": {
+            "purpose": "primary workbench or input workspace",
+            "imports_from": ["src/lib/api.ts"],
+            "exports": ["default"],
+        },
+        "src/components/FeaturePanel.tsx": {
+            "purpose": "secondary feature or proof surface",
+            "imports_from": [],
+            "exports": ["default"],
+        },
     }
     if wants_collection_ui:
         component_specs["src/components/CollectionPanel.tsx"] = {
@@ -287,14 +297,10 @@ def _normalize_blueprint(blueprint: dict, idea: dict) -> dict:
             "imports_from": [],
             "exports": ["default"],
         }
-    else:
-        component_specs["src/components/WorkspacePanel.tsx"] = {
-            "purpose": "primary workbench or input workspace",
-            "imports_from": ["src/lib/api.ts"],
-            "exports": ["default"],
-        }
-        component_specs["src/components/FeaturePanel.tsx"] = {
-            "purpose": "secondary feature or proof surface",
+
+    if _coerce_string_list(idea.get("reference_objects")) or _coerce_string_list(idea.get("sample_seed_data")) or trust_surfaces:
+        component_specs["src/components/ReferenceShelf.tsx"] = {
+            "purpose": "domain reference objects, sample data, or signature demo shelf",
             "imports_from": [],
             "exports": ["default"],
         }

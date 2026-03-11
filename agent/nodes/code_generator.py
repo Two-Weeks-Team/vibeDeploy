@@ -275,16 +275,21 @@ async def code_generator(state: VibeDeployState) -> dict:
 
     frontend_code = dict(existing_frontend_code)
     backend_code = dict(existing_backend_code)
+    force_frontend_fallback = _should_force_frontend_fallback(code_eval_result)
 
     if regenerate_frontend:
-        generated_frontend = await _generate_frontend_files(
-            frontend_llm,
-            context,
-            prompt_strategy=prompt_strategy,
-            eval_feedback=eval_feedback,
-            fallback_models=frontend_fallback_models,
-            max_attempts=frontend_max_attempts,
-        )
+        if force_frontend_fallback:
+            logger.warning("[CODE_GEN] Forcing deterministic frontend fallback after eval failure")
+            generated_frontend = _build_fallback_frontend_bundle(context)
+        else:
+            generated_frontend = await _generate_frontend_files(
+                frontend_llm,
+                context,
+                prompt_strategy=prompt_strategy,
+                eval_feedback=eval_feedback,
+                fallback_models=frontend_fallback_models,
+                max_attempts=frontend_max_attempts,
+            )
         frontend_code = _merge_generated_files(existing_frontend_code, generated_frontend, label="frontend")
     else:
         logger.info("[CODE_GEN] Reusing previous frontend bundle (%d files)", len(frontend_code))
@@ -395,6 +400,23 @@ def _build_eval_feedback(code_eval_result: dict | None) -> str | None:
     if code_eval_result.get("missing_backend"):
         parts.append(f"Missing backend files: {', '.join(code_eval_result['missing_backend'])}")
     return "\n".join(parts) if parts else None
+
+
+def _should_force_frontend_fallback(code_eval_result: dict | None) -> bool:
+    if not isinstance(code_eval_result, dict) or code_eval_result.get("passed", False):
+        return False
+
+    missing_frontend = code_eval_result.get("missing_frontend") or []
+    try:
+        iteration = int(code_eval_result.get("iteration", 0) or 0)
+    except (TypeError, ValueError):
+        iteration = 0
+    try:
+        experience = float(code_eval_result.get("experience", 100) or 100)
+    except (TypeError, ValueError):
+        experience = 100.0
+
+    return iteration >= 1 and (bool(missing_frontend) or experience < 75.0)
 
 
 def _should_regenerate_target(

@@ -74,6 +74,8 @@ async def code_evaluator(state: VibeDeployState) -> dict:
             and consistency >= MIN_CONSISTENCY_TO_PASS
             and runnability >= MIN_RUNNABILITY_TO_PASS
             and experience >= MIN_EXPERIENCE_TO_PASS
+            and not missing_fe
+            and not missing_be
         ),
         "missing_frontend": missing_fe,
         "missing_backend": missing_be,

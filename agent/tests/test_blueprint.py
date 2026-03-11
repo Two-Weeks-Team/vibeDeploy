@@ -33,5 +33,7 @@ async def test_blueprint_generator_short_circuits_without_fallback_models(monkey
     assert result["phase"] == "blueprint"
     assert blueprint["app_name"] == "tripcanvas-ai"
     assert "src/app/page.tsx" in blueprint["frontend_files"]
+    assert "src/components/WorkspacePanel.tsx" in blueprint["frontend_files"]
+    assert "src/components/FeaturePanel.tsx" in blueprint["frontend_files"]
     assert "main.py" in blueprint["backend_files"]
     assert len(blueprint["frontend_backend_contract"]) >= 2

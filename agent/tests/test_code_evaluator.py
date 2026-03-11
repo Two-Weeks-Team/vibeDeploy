@@ -1,4 +1,12 @@
-from agent.nodes.code_evaluator import _check_consistency, _check_experience, _check_runnability, route_code_eval
+import pytest
+
+from agent.nodes.code_evaluator import (
+    _check_consistency,
+    _check_experience,
+    _check_runnability,
+    code_evaluator,
+    route_code_eval,
+)
 
 
 def test_check_consistency_matches_contract_calls_across_generated_files():
@@ -170,6 +178,42 @@ def test_check_experience_rewards_multi_panel_ui_and_resilient_api_patterns():
     }
 
     assert _check_experience(frontend_code, blueprint) >= 80.0
+
+
+@pytest.mark.asyncio
+async def test_code_evaluator_fails_when_blueprint_frontend_files_are_missing():
+    state = {
+        "blueprint": {
+            "frontend_files": {
+                "src/components/Hero.tsx": {},
+                "src/components/InsightPanel.tsx": {},
+                "src/components/StatePanel.tsx": {},
+                "src/components/WorkspacePanel.tsx": {},
+                "src/components/FeaturePanel.tsx": {},
+            },
+            "backend_files": {
+                "main.py": {},
+                "routes.py": {},
+                "requirements.txt": {},
+            },
+        },
+        "frontend_code": {
+            "src/app/page.tsx": "export default function Page(){ return <main><Hero /><InsightPanel /><StatePanel /></main>; }",
+            "src/components/Hero.tsx": "export default function Hero(){ return <section>Hero</section>; }",
+            "src/components/InsightPanel.tsx": "export default function InsightPanel(){ return <section>Result</section>; }",
+            "src/components/StatePanel.tsx": "export default function StatePanel(){ return <section>Loading empty error</section>; }",
+        },
+        "backend_code": {
+            "main.py": "from fastapi import FastAPI\napp = FastAPI()\n",
+            "routes.py": "from fastapi import APIRouter\nrouter = APIRouter()\n",
+            "requirements.txt": "fastapi\nuvicorn\n",
+        },
+    }
+
+    result = await code_evaluator(state)
+
+    assert result["code_eval_result"]["passed"] is False
+    assert "src/components/WorkspacePanel.tsx" in result["code_eval_result"]["missing_frontend"]
 
 
 def test_route_code_eval_retries_missing_backend_beyond_generic_iteration_limit():
