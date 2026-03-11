@@ -60,6 +60,19 @@ _OPTIONAL_FRONTEND_DEPENDENCIES = {
     "zod": "4.3.6",
 }
 _BUILTIN_FRONTEND_PACKAGES = {"next", "react", "react-dom"}
+_STRUCTURED_CODE_FILE_SUFFIXES = (
+    ".tsx",
+    ".ts",
+    ".jsx",
+    ".js",
+    ".mjs",
+    ".cjs",
+    ".py",
+    ".css",
+    ".scss",
+    ".md",
+    ".html",
+)
 _LEGACY_HEROICON_RENAMES = {
     "CloudUploadIcon": "ArrowUpTrayIcon",
     "CloudDownloadIcon": "ArrowDownTrayIcon",
@@ -650,9 +663,55 @@ def _normalize_files_dict(files: object) -> dict[str, str]:
             continue
         if isinstance(value, str):
             normalized[key] = value
-        elif isinstance(value, (dict, list)):
-            normalized[key] = json.dumps(value, indent=2, ensure_ascii=False)
+        elif isinstance(value, dict):
+            flattened = _flatten_structured_file_body(key, value)
+            normalized[key] = flattened if flattened is not None else json.dumps(value, indent=2, ensure_ascii=False)
+        elif isinstance(value, list):
+            flattened = _flatten_structured_file_list(key, value)
+            normalized[key] = flattened if flattened is not None else json.dumps(value, indent=2, ensure_ascii=False)
+        elif isinstance(value, (int, float, bool)):
+            normalized[key] = str(value)
     return normalized
+
+
+def _flatten_structured_file_body(path: str, value: dict[object, object]) -> str | None:
+    if not path.endswith(_STRUCTURED_CODE_FILE_SUFFIXES):
+        return None
+    if not value:
+        return None
+
+    parts: list[str] = []
+    for segment in value.values():
+        if not isinstance(segment, str):
+            return None
+        stripped = segment.strip()
+        if stripped:
+            parts.append(stripped)
+
+    if not parts:
+        return None
+
+    return "\n\n".join(parts) + "\n"
+
+
+def _flatten_structured_file_list(path: str, value: list[object]) -> str | None:
+    if not path.endswith(_STRUCTURED_CODE_FILE_SUFFIXES):
+        return None
+    if not value:
+        return None
+
+    parts: list[str] = []
+    for segment in value:
+        if not isinstance(segment, str):
+            return None
+        stripped = segment.strip()
+        if stripped:
+            parts.append(stripped)
+
+    if not parts:
+        return None
+
+    return "\n\n".join(parts) + "\n"
 
 
 def _normalize_frontend_files(files: dict[str, str]) -> dict[str, str]:

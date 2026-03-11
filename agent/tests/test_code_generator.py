@@ -75,6 +75,35 @@ def test_normalize_files_dict_stringifies_structured_file_bodies():
     assert normalized["src/app/page.tsx"].startswith("export default")
 
 
+def test_normalize_files_dict_flattens_objectified_code_file_bodies():
+    normalized = _normalize_files_dict(
+        {
+            "src/app/layout.tsx": {
+                "import": "import './globals.css';",
+                "export": (
+                    "export default function RootLayout({ children }: { children: React.ReactNode }) {\n"
+                    "  return <html><body>{children}</body></html>;\n"
+                    "}"
+                ),
+            },
+            "src/app/page.tsx": {
+                "import": '"use client";\nimport { useState } from "react";',
+                "export": (
+                    "export default function Page() {\n"
+                    "  const [count, setCount] = useState(0);\n"
+                    "  return <button onClick={() => setCount(count + 1)}>{count}</button>;\n"
+                    "}"
+                ),
+            },
+        }
+    )
+
+    assert normalized["src/app/layout.tsx"].startswith("import './globals.css';")
+    assert "export default function RootLayout" in normalized["src/app/layout.tsx"]
+    assert normalized["src/app/page.tsx"].startswith('"use client";')
+    assert "const [count, setCount] = useState(0);" in normalized["src/app/page.tsx"]
+
+
 def test_normalize_cross_stack_fixes_api_prefix_and_payload_field_names():
     frontend = {
         "src/lib/api.ts": (
