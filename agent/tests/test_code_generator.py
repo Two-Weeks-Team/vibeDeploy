@@ -104,6 +104,24 @@ def test_normalize_files_dict_flattens_objectified_code_file_bodies():
     assert "const [count, setCount] = useState(0);" in normalized["src/app/page.tsx"]
 
 
+def test_normalize_files_dict_flattens_objectified_code_strings():
+    normalized = _normalize_files_dict(
+        {
+            "src/app/page.tsx": (
+                '"use client";\n\n'
+                "{\n"
+                '  "import": "use client;\\nimport { useState } from \\"react\\";",\n'
+                '  "export": "export default function Page() {\\n  const [count, setCount] = useState(0);\\n  return <button>{count}</button>;\\n}"\n'
+                "}"
+            )
+        }
+    )
+
+    assert normalized["src/app/page.tsx"].startswith("use client;")
+    assert 'import { useState } from "react";' in normalized["src/app/page.tsx"]
+    assert "const [count, setCount] = useState(0);" in normalized["src/app/page.tsx"]
+
+
 def test_normalize_cross_stack_fixes_api_prefix_and_payload_field_names():
     frontend = {
         "src/lib/api.ts": (

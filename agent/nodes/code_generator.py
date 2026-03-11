@@ -662,7 +662,8 @@ def _normalize_files_dict(files: object) -> dict[str, str]:
         if not isinstance(key, str):
             continue
         if isinstance(value, str):
-            normalized[key] = value
+            flattened = _flatten_objectified_code_string(key, value)
+            normalized[key] = flattened if flattened is not None else value
         elif isinstance(value, dict):
             flattened = _flatten_structured_file_body(key, value)
             normalized[key] = flattened if flattened is not None else json.dumps(value, indent=2, ensure_ascii=False)
@@ -712,6 +713,36 @@ def _flatten_structured_file_list(path: str, value: list[object]) -> str | None:
         return None
 
     return "\n\n".join(parts) + "\n"
+
+
+def _flatten_objectified_code_string(path: str, raw: str) -> str | None:
+    if not path.endswith(_STRUCTURED_CODE_FILE_SUFFIXES):
+        return None
+
+    candidate = raw.strip()
+    if not candidate:
+        return None
+
+    if candidate.startswith('"use client";'):
+        candidate = candidate[len('"use client";') :].lstrip()
+
+    if not candidate.startswith("{"):
+        return None
+
+    parts = re.findall(r'"[^"]+"\s*:\s*"([\s\S]*?)"(?=,\s*"[^"]+"\s*:|\s*}\s*$)', candidate, re.S)
+    if not parts:
+        return None
+
+    flattened_parts: list[str] = []
+    for part in parts:
+        decoded = bytes(part, "utf-8").decode("unicode_escape").strip()
+        if decoded:
+            flattened_parts.append(decoded)
+
+    if not flattened_parts:
+        return None
+
+    return "\n\n".join(flattened_parts) + "\n"
 
 
 def _normalize_frontend_files(files: dict[str, str]) -> dict[str, str]:
