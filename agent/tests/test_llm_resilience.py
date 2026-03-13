@@ -80,14 +80,24 @@ async def test_scope_down_uses_fallback_mvp_on_timeout(monkeypatch):
 
     assert result["phase"] == "scope_down_forced_go"
     assert result["scoring"]["decision"] == "GO"
+    assert result["scoring"]["scope_down_applied"] is True
+    assert result["scoring"]["final_score"] == 55.0
     assert result["idea"]["name"] == "Bookmark MVP"
     assert result["idea"]["key_features"] == ["Save links", "Tag links", "Search links"]
 
 
-def test_route_decision_scopes_down_after_second_conditional_failure():
+def test_route_decision_uses_second_fix_storm_round_before_scope_down():
     from agent.nodes.decision_gate import route_decision
 
     route = route_decision({"scoring": {"decision": "CONDITIONAL"}, "eval_iteration": 1})
+
+    assert route == "fix_storm"
+
+
+def test_route_decision_scopes_down_after_fix_budget_exhausted():
+    from agent.nodes.decision_gate import route_decision
+
+    route = route_decision({"scoring": {"decision": "CONDITIONAL"}, "eval_iteration": 3})
 
     assert route == "scope_down"
 
@@ -97,4 +107,28 @@ def test_route_decision_fast_tracks_borderline_conditional_scores():
 
     route = route_decision({"scoring": {"decision": "CONDITIONAL", "final_score": 63.45}, "eval_iteration": 0})
 
+    assert route == "fix_storm"
+
+
+def test_route_decision_conditional_70_goes_to_docs():
+    from agent.nodes.decision_gate import route_decision
+
+    route = route_decision({"scoring": {"decision": "CONDITIONAL", "final_score": 70.0}, "eval_iteration": 0})
+
     assert route == "doc_generator"
+
+
+def test_route_decision_conditional_69_goes_to_fix_storm():
+    from agent.nodes.decision_gate import route_decision
+
+    route = route_decision({"scoring": {"decision": "CONDITIONAL", "final_score": 69.9}, "eval_iteration": 0})
+
+    assert route == "fix_storm"
+
+
+def test_route_decision_third_fix_storm_round():
+    from agent.nodes.decision_gate import route_decision
+
+    route = route_decision({"scoring": {"decision": "CONDITIONAL", "final_score": 65.0}, "eval_iteration": 2})
+
+    assert route == "fix_storm"

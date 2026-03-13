@@ -4,6 +4,7 @@ import logging
 import re
 
 from ..state import VibeDeployState
+from .task_contracts import build_repair_tasks_from_fixes, build_task_distribution, derive_execution_tasks
 
 logger = logging.getLogger(__name__)
 
@@ -98,11 +99,16 @@ async def fix_storm(state: VibeDeployState) -> dict:
 
     improved = result.get("improved_idea", {})
     merged_idea = {**idea, **improved} if improved else idea
+    execution_tasks = derive_execution_tasks(merged_idea, state.get("flagship_contract") or {})
+    repair_tasks = build_repair_tasks_from_fixes(result.get("fixes"))
 
     return {
         "idea": merged_idea,
         "idea_summary": result.get("improved_summary", state.get("idea_summary", "")),
         "fix_storm_result": result,
+        "execution_tasks": execution_tasks,
+        "repair_tasks": repair_tasks,
+        "task_distribution": build_task_distribution(execution_tasks + repair_tasks),
         "eval_iteration": iteration + 1,
         "phase": f"fix_storm_round_{iteration + 1}",
     }
@@ -146,15 +152,20 @@ async def scope_down(state: VibeDeployState) -> dict:
 
     mvp = result.get("mvp_idea", {})
     merged_idea = {**idea, **mvp} if mvp else idea
+    execution_tasks = derive_execution_tasks(merged_idea, state.get("flagship_contract") or {})
 
     forced_scoring = dict(scoring) if isinstance(scoring, dict) else {}
-    forced_scoring["final_score"] = 75.0
+    forced_scoring["final_score"] = max(55.0, float(scoring.get("final_score", 0) or 0))
+    forced_scoring["scope_down_applied"] = True
     forced_scoring["decision"] = "GO"
 
     return {
         "idea": merged_idea,
         "idea_summary": mvp.get("tagline", state.get("idea_summary", "")),
         "scoring": forced_scoring,
+        "execution_tasks": execution_tasks,
+        "repair_tasks": [],
+        "task_distribution": build_task_distribution(execution_tasks),
         "phase": "scope_down_forced_go",
     }
 
