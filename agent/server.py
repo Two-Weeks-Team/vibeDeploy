@@ -1,4 +1,4 @@
-"""Local FastAPI server — replaces gradient_adk @entrypoint for local testing.
+"""FastAPI gateway for the vibeDeploy web app.
 
 Exposes the same HTTP interface the frontend expects:
   POST /run          → SSE stream of council events
@@ -18,11 +18,11 @@ import os
 import re
 import shutil
 import time
-import traceback
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import httpx
 import uvicorn
 from dotenv import load_dotenv
 from fastapi import FastAPI, Header, HTTPException
@@ -33,6 +33,8 @@ from starlette.responses import StreamingResponse
 from .cost import estimate_pipeline_cost
 from .db.store import ResultStore
 from .llm import get_runtime_model_config
+from .model_capabilities import load_model_capability_report, selected_runtime_model
+from .pipeline_runtime import build_brainstorm_result, build_meeting_result, stream_action_session
 from .sse import NODE_EVENTS, format_sse
 from .tools.digitalocean import list_apps as list_digitalocean_apps
 
@@ -227,7 +229,9 @@ async def _get_showcase_live_apps() -> list[dict]:
             repo_candidates = _extract_app_repo_candidates(spec)
             family_candidates = {
                 family
-                for family in {_project_family(candidate) for candidate in repo_candidates | ({name} if name else set())}
+                for family in {
+                    _project_family(candidate) for candidate in repo_candidates | ({name} if name else set())
+                }
                 if family
             }
 
@@ -327,11 +331,7 @@ def _reconcile_showcase_meetings(meetings: list[dict], showcase_apps: list[dict]
 
 
 def _meeting_store_payload(meeting: dict) -> dict:
-    return {
-        key: value
-        for key, value in meeting.items()
-        if key not in {"thread_id", "created_at"}
-    }
+    return {key: value for key, value in meeting.items() if key not in {"thread_id", "created_at"}}
 
 
 def _ops_token() -> str:
@@ -435,6 +435,143 @@ async def _with_tracking(
         _deregister_pipeline(thread_id)
 
 
+def _configured_adk_url() -> str:
+    return os.getenv("VIBEDEPLOY_ADK_URL", "").strip().rstrip("/")
+
+
+def _configured_adk_auth_token() -> str:
+    return (
+        os.getenv("VIBEDEPLOY_ADK_AUTH_TOKEN", "").strip()
+        or os.getenv("GRADIENT_AGENT_ACCESS_KEY", "").strip()
+        or os.getenv("DIGITALOCEAN_API_TOKEN", "").strip()
+    )
+
+
+def _configured_adk_auth_mode() -> str:
+    if os.getenv("VIBEDEPLOY_ADK_AUTH_TOKEN", "").strip():
+        return "endpoint_access_key"
+    if os.getenv("GRADIENT_AGENT_ACCESS_KEY", "").strip():
+        return "agent_access_key_alias"
+    if os.getenv("DIGITALOCEAN_API_TOKEN", "").strip():
+        return "personal_access_token"
+    return "none"
+
+
+def _legacy_error_event_name(action: str) -> str:
+    return "brainstorm.error" if action == "brainstorm" else "council.error"
+
+
+def _iter_sse_payloads(chunk: str) -> list[tuple[str, dict]]:
+    events: list[tuple[str, dict]] = []
+    event_name = ""
+    data_payload = ""
+    for line in chunk.splitlines():
+        if line.startswith("event: "):
+            event_name = line[7:]
+        elif line.startswith("data: "):
+            data_payload = line[6:]
+        elif line == "" and event_name:
+            try:
+                events.append((event_name, json.loads(data_payload)))
+            except (TypeError, ValueError):
+                pass
+            event_name = ""
+            data_payload = ""
+    if event_name and data_payload:
+        try:
+            events.append((event_name, json.loads(data_payload)))
+        except (TypeError, ValueError):
+            pass
+    return events
+
+
+async def _stream_remote_action(payload: dict) -> AsyncGenerator[str, None]:
+    adk_url = _configured_adk_url()
+    if not adk_url:
+        raise RuntimeError("VIBEDEPLOY_ADK_URL is not configured")
+
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(connect=10.0, read=300.0, write=30.0, pool=30.0)) as client:
+            async with client.stream(
+                "POST",
+                f"{adk_url}/run",
+                headers={
+                    "Accept": "text/event-stream",
+                    "Content-Type": "application/json",
+                    **(
+                        {"Authorization": f"Bearer {_configured_adk_auth_token()}"}
+                        if _configured_adk_auth_token()
+                        else {}
+                    ),
+                },
+                json=payload,
+            ) as response:
+                if response.status_code >= 400:
+                    body = await response.aread()
+                    raise RuntimeError(
+                        f"ADK returned {response.status_code}: {body.decode('utf-8', errors='replace')[:300]}"
+                    )
+
+                buffered_lines: list[str] = []
+                async for line in response.aiter_lines():
+                    if line == "":
+                        if buffered_lines:
+                            yield "".join(f"{item}\n" for item in buffered_lines) + "\n"
+                            buffered_lines = []
+                        continue
+                    buffered_lines.append(line)
+
+                if buffered_lines:
+                    yield "".join(f"{item}\n" for item in buffered_lines) + "\n"
+    except Exception as exc:
+        action = str(payload.get("action") or "evaluate")
+        error_payload = {
+            "type": "session.error",
+            "action": action,
+            "thread_id": str(payload.get("thread_id") or "default"),
+            "error": str(exc)[:500],
+        }
+        yield format_sse("session.error", error_payload)
+        yield format_sse(
+            _legacy_error_event_name(action),
+            {
+                "type": _legacy_error_event_name(action),
+                "error": error_payload["error"],
+            },
+        )
+
+
+async def _stream_action_gateway(payload: dict) -> AsyncGenerator[str, None]:
+    upstream = _stream_remote_action(payload) if _configured_adk_url() else stream_action_session(payload)
+
+    async for chunk in upstream:
+        for event_name, data in _iter_sse_payloads(chunk):
+            if event_name != "session.completed":
+                continue
+            thread_id = str(data.get("thread_id") or payload.get("thread_id") or "default")
+            result = data.get("result")
+            if data.get("result_type") == "brainstorm":
+                await _store_brainstorm_result(thread_id, {"__prebuilt_result__": result})
+            elif data.get("result_type") == "meeting":
+                await _store_result(thread_id, {"__prebuilt_result__": result})
+        yield chunk
+
+
+def _request_to_action_payload(request: "RunRequest", *, action: str) -> dict:
+    config = request.config or {}
+    configurable = config.get("configurable", {}) if isinstance(config, dict) else {}
+    return {
+        "action": action,
+        "thread_id": str(configurable.get("thread_id") or request.thread_id or "default"),
+        "prompt": request.prompt,
+        "youtube_url": request.youtube_url,
+        "reference_urls": request.reference_urls or [],
+        "constraints": request.constraints,
+        "selected_flagship": request.selected_flagship,
+        "flagship_contract": request.flagship_contract or {},
+    }
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _store
@@ -490,108 +627,8 @@ _SCORE_AXIS_LABELS = {
 
 
 async def _store_result(thread_id: str, state: dict):
-    scoring = state.get("scoring", {})
-    decision_raw = scoring.get("decision", "NO_GO")
-    verdict_map = {"GO": "GO", "CONDITIONAL": "CONDITIONAL", "NO_GO": "NO-GO"}
-
-    analyses = state.get("council_analysis", {})
-    analyses_list = [{"agent": k, **v} for k, v in analyses.items()] if isinstance(analyses, dict) else []
-
-    cross_exam = state.get("cross_examination", {})
-    debates_list = [{"topic": k, **v} for k, v in cross_exam.items()] if isinstance(cross_exam, dict) else []
-
-    _DOC_TYPE_MAP = {
-        "prd": "prd",
-        "tech_spec": "tech-spec",
-        "api_spec": "api-spec",
-        "db_schema": "db-schema",
-        "app_spec_yaml": "app-spec",
-    }
-    _DOC_TITLE_MAP = {
-        "prd": "Product Requirements",
-        "tech-spec": "Technical Specification",
-        "api-spec": "API Specification",
-        "db-schema": "Database Schema",
-        "app-spec": "App Platform Spec",
-    }
-    docs = state.get("generated_docs", {})
-    documents_list = []
-    if isinstance(docs, dict):
-        for k, v in docs.items():
-            doc_type = _DOC_TYPE_MAP.get(k, k)
-            documents_list.append(
-                {
-                    "type": doc_type,
-                    "title": _DOC_TITLE_MAP.get(doc_type, doc_type),
-                    "content": v,
-                }
-            )
-
-    _EXT_LANG = {
-        ".ts": "typescript",
-        ".tsx": "tsx",
-        ".js": "javascript",
-        ".jsx": "jsx",
-        ".py": "python",
-        ".css": "css",
-        ".html": "html",
-        ".json": "json",
-        ".yaml": "yaml",
-        ".yml": "yaml",
-        ".md": "markdown",
-        ".sql": "sql",
-        ".sh": "bash",
-        ".toml": "toml",
-        ".txt": "text",
-    }
-    code_files = []
-    for label, code_dict in [("backend", state.get("backend_code", {})), ("frontend", state.get("frontend_code", {}))]:
-        if isinstance(code_dict, dict):
-            for path, content in code_dict.items():
-                ext = "." + path.rsplit(".", 1)[-1] if "." in path else ""
-                code_files.append(
-                    {
-                        "path": path,
-                        "content": content,
-                        "language": _EXT_LANG.get(ext, "text"),
-                        "source": label,
-                    }
-                )
-
-    deploy = state.get("deploy_result", {})
-    deployment = None
-    if deploy and (deploy.get("github_repo") or deploy.get("live_url") or deploy.get("local_url")):
-        deployment = {
-            "repoUrl": deploy.get("github_repo", ""),
-            "liveUrl": deploy.get("live_url", ""),
-            "status": deploy.get("status", ""),
-        }
-        if deploy.get("ci_status"):
-            deployment["ciStatus"] = deploy["ci_status"]
-        if deploy.get("ci_url"):
-            deployment["ciUrl"] = deploy["ci_url"]
-        if deploy.get("ci_repair_attempts"):
-            deployment["ciRepairAttempts"] = deploy["ci_repair_attempts"]
-        if deploy.get("local_url"):
-            deployment["localUrl"] = deploy["local_url"]
-        if deploy.get("local_backend_url"):
-            deployment["localBackendUrl"] = deploy["local_backend_url"]
-        if deploy.get("local_frontend_url"):
-            deployment["localFrontendUrl"] = deploy["local_frontend_url"]
-
-    result = {
-        "score": scoring.get("final_score", 0),
-        "verdict": verdict_map.get(decision_raw, "NO-GO"),
-        "analyses": analyses_list,
-        "debates": debates_list,
-        "documents": documents_list,
-        "code_files": code_files,
-        "scoring": scoring,
-        "deployment": deployment,
-        "cost_estimate": state.get("cost_estimate"),
-        "input_prompt": state.get("raw_input", ""),
-        "idea_summary": state.get("idea_summary", ""),
-    }
+    prebuilt = state.get("__prebuilt_result__")
+    result = prebuilt if isinstance(prebuilt, dict) else build_meeting_result(state)
     await _store.save_meeting(thread_id, result)
     _invalidate_dashboard_snapshot_cache()
 
@@ -599,6 +636,12 @@ async def _store_result(thread_id: str, state: dict):
 class RunRequest(BaseModel):
     prompt: str = ""
     config: dict | None = None
+    thread_id: str = ""
+    youtube_url: str = ""
+    reference_urls: list[str] | None = None
+    constraints: str = ""
+    selected_flagship: str = ""
+    flagship_contract: dict | None = None
 
 
 class ShowcaseAppInput(BaseModel):
@@ -612,245 +655,13 @@ class DashboardReconcileRequest(BaseModel):
 
 
 async def _stream_pipeline(prompt: str, thread_id: str) -> AsyncGenerator[str, None]:
-    from .graph import app as graph_app
-
-    yield _sse(
-        "council.phase.start",
-        {
-            "type": "council.phase.start",
-            "phase": "input_processing",
-            "message": "Processing your idea...",
-        },
-    )
-
-    final_state = {}
-
-    try:
-        config = {"configurable": {"thread_id": thread_id}, "recursion_limit": 80}
-        async for event in graph_app.astream_events(
-            {"raw_input": prompt},
-            config=config,
-            version="v2",
-        ):
-            kind = event.get("event", "")
-            name = event.get("name", "")
-            data = event.get("data", {})
-
-            if kind == "on_custom_event":
-                payload = dict(data or {})
-                payload.setdefault("type", name)
-                yield _sse(name, payload)
-                continue
-
-            if kind == "on_chain_start" and name in _NODE_EVENTS:
-                node_event = _NODE_EVENTS[name]
-                yield _sse(
-                    "council.node.start",
-                    {
-                        "type": "council.node.start",
-                        "node": name,
-                        "phase": node_event["phase"],
-                        "message": node_event["message"],
-                    },
-                )
-
-                input_data = data.get("input", {}) or {}
-                if name == "run_council_agent":
-                    agent_name = str(input_data.get("agent_name", "")).strip()
-                    agent_node = _AGENT_NODE_IDS.get(agent_name)
-                    if agent_node:
-                        yield _sse(
-                            "council.agent.start",
-                            {
-                                "type": "council.agent.start",
-                                "agent": agent_name,
-                                "node": agent_node,
-                                "phase": "individual_analysis",
-                                "message": f"{agent_name.title()} analysis started",
-                            },
-                        )
-                elif name == "score_axis":
-                    agent_name = str(input_data.get("agent_name", "")).strip()
-                    axis_name = _AGENT_SCORE_AXES.get(agent_name, "")
-                    axis_node = _SCORE_AXIS_NODE_IDS.get(axis_name)
-                    if axis_node:
-                        yield _sse(
-                            "scoring.axis.start",
-                            {
-                                "type": "scoring.axis.start",
-                                "agent": agent_name,
-                                "axis": axis_name,
-                                "node": axis_node,
-                                "phase": "scoring",
-                                "message": f"{_SCORE_AXIS_LABELS.get(axis_name, axis_name)} scoring started",
-                            },
-                        )
-                continue
-
-            if kind != "on_chain_end" or name not in _NODE_EVENTS:
-                continue
-
-            output = data.get("output", {})
-            phase = output.get("phase", _NODE_EVENTS[name]["phase"])
-            yield _sse(
-                "council.node.complete",
-                {
-                    "type": "council.node.complete",
-                    "node": name,
-                    "phase": phase,
-                    "message": f"{name} complete",
-                },
-            )
-
-            if name == "run_council_agent":
-                analyses = output.get("council_analysis", {}) or {}
-                for agent_name, analysis in analyses.items():
-                    agent_node = _AGENT_NODE_IDS.get(agent_name)
-                    yield _sse(
-                        "council.agent.analysis",
-                        {
-                            "type": "council.agent.analysis",
-                            "agent": agent_name,
-                            "node": agent_node,
-                            "score": analysis.get("score", 0),
-                            "findings_count": len(analysis.get("findings", [])),
-                            "message": f"{agent_name.title()} analysis complete",
-                        },
-                    )
-            elif name == "score_axis":
-                scoring = output.get("scoring", {}) or {}
-                for axis_name, axis_data in scoring.items():
-                    if axis_name in {"final_score", "decision"} or not isinstance(axis_data, dict):
-                        continue
-                    axis_node = _SCORE_AXIS_NODE_IDS.get(axis_name)
-                    yield _sse(
-                        "scoring.axis.complete",
-                        {
-                            "type": "scoring.axis.complete",
-                            "axis": axis_name,
-                            "node": axis_node,
-                            "phase": "scoring",
-                            "score": axis_data.get("score", 0),
-                            "message": f"{_SCORE_AXIS_LABELS.get(axis_name, axis_name)} scoring complete",
-                        },
-                    )
-            elif name == "strategist_verdict":
-                scoring = output.get("scoring", {}) or {}
-                final_state["scoring"] = scoring
-                yield _sse(
-                    "council.verdict",
-                    {
-                        "type": "council.verdict",
-                        "final_score": scoring.get("final_score", 0),
-                        "decision": scoring.get("decision", "NO_GO"),
-                    },
-                )
-            elif name == "blueprint_generator":
-                bp = output.get("blueprint", {}) or {}
-                yield _sse(
-                    "blueprint.complete",
-                    {
-                        "type": "blueprint.complete",
-                        "node": "blueprint",
-                        "frontend_files": len(bp.get("frontend_files", {})),
-                        "backend_files": len(bp.get("backend_files", {})),
-                        "app_name": bp.get("app_name", ""),
-                    },
-                )
-            elif name == "prompt_strategist":
-                strategy = output.get("prompt_strategy", {}) or {}
-                source_index = strategy.get("source_index", []) or []
-                yield _sse(
-                    "prompt_strategy.complete",
-                    {
-                        "type": "prompt_strategy.complete",
-                        "node": "prompt_strategy",
-                        "sources": len(source_index),
-                        "frontend_model": strategy.get("model_plan", {}).get("frontend", {}).get("model", ""),
-                        "backend_model": strategy.get("model_plan", {}).get("backend", {}).get("model", ""),
-                    },
-                )
-            elif name == "code_evaluator":
-                eval_res = output.get("code_eval_result", {}) or {}
-                yield _sse(
-                    "code_eval.result",
-                    {
-                        "type": "code_eval.result",
-                        "node": "code_eval",
-                        "match_rate": eval_res.get("match_rate", 0),
-                        "completeness": eval_res.get("completeness", 0),
-                        "consistency": eval_res.get("consistency", 0),
-                        "runnability": eval_res.get("runnability", 0),
-                        "iteration": eval_res.get("iteration", 0),
-                        "passed": eval_res.get("passed", False),
-                    },
-                )
-            elif name == "code_generator":
-                frontend = output.get("frontend_code", {}) or {}
-                backend = output.get("backend_code", {}) or {}
-                warnings = output.get("code_gen_warnings", [])
-                yield _sse(
-                    "code_gen.complete",
-                    {
-                        "type": "code_gen.complete",
-                        "node": "code_gen",
-                        "frontend_files": len(frontend),
-                        "backend_files": len(backend),
-                        "has_frontend": len(frontend) >= 3,
-                        "warnings": warnings,
-                    },
-                )
-                if warnings:
-                    yield _sse(
-                        "code_gen.warning",
-                        {
-                            "type": "code_gen.warning",
-                            "message": "; ".join(warnings),
-                        },
-                    )
-            elif name == "deployer":
-                deploy = output.get("deploy_result", {}) or {}
-                final_state["deploy_result"] = deploy
-                yield _sse(
-                    "deploy.complete",
-                    {
-                        "type": "deploy.complete",
-                        "node": "do_deploy",
-                        "live_url": deploy.get("live_url", ""),
-                        "github_repo": deploy.get("github_repo", ""),
-                        "status": deploy.get("status", ""),
-                        "frontend_files": deploy.get("frontend_files", 0),
-                        "backend_files": deploy.get("backend_files", 0),
-                        "url_verification": deploy.get("url_verification", {}),
-                    },
-                )
-
-            final_state.update(output)
-
-        cost = estimate_pipeline_cost()
-        final_state["cost_estimate"] = cost
-
-        await _store_result(thread_id, final_state)
-
-        yield _sse(
-            "council.phase.complete",
-            {
-                "type": "council.phase.complete",
-                "phase": "complete",
-                "message": "Pipeline complete",
-                "cost_estimate": cost,
-            },
-        )
-
-    except Exception as exc:
-        yield _sse(
-            "council.error",
-            {
-                "type": "council.error",
-                "error": str(exc)[:500],
-                "traceback": traceback.format_exc()[:1000],
-            },
-        )
+    payload = {
+        "action": "evaluate",
+        "thread_id": thread_id,
+        "prompt": prompt,
+    }
+    async for chunk in _stream_action_gateway(payload):
+        yield chunk
 
 
 @app.post("/api/run")
@@ -862,11 +673,12 @@ async def run_pipeline(request: RunRequest):
     if not valid:
         raise HTTPException(status_code=400, detail=error)
 
-    config = request.config or {}
-    thread_id = config.get("configurable", {}).get("thread_id", "default")
+    action_payload = _request_to_action_payload(request, action="evaluate")
+    action_payload["prompt"] = sanitized
+    thread_id = action_payload["thread_id"]
 
     return StreamingResponse(
-        _with_tracking(thread_id, "evaluation", sanitized, _stream_pipeline(sanitized, thread_id)),
+        _with_tracking(thread_id, "evaluation", sanitized, _stream_action_gateway(action_payload)),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -882,101 +694,13 @@ class ResumeRequest(BaseModel):
 
 
 async def _stream_resume(thread_id: str, action: str) -> AsyncGenerator[str, None]:
-    from langgraph.types import Command
-
-    from .graph import app as graph_app
-
-    yield _sse(
-        "council.phase.start",
-        {
-            "type": "council.phase.start",
-            "phase": "resuming",
-            "message": f"Resuming pipeline ({action})...",
-        },
-    )
-
-    final_state = {}
-
-    try:
-        config = {"configurable": {"thread_id": thread_id}, "recursion_limit": 80}
-        async for event in graph_app.astream_events(
-            Command(resume=action),
-            config=config,
-            version="v2",
-        ):
-            kind = event.get("event", "")
-            name = event.get("name", "")
-            data = event.get("data", {})
-
-            if kind == "on_chain_start" and name in _NODE_EVENTS:
-                node_event = _NODE_EVENTS[name]
-                yield _sse(
-                    "council.node.start",
-                    {
-                        "type": "council.node.start",
-                        "node": name,
-                        "phase": node_event["phase"],
-                        "message": node_event["message"],
-                    },
-                )
-                continue
-
-            if kind != "on_chain_end" or name not in _NODE_EVENTS:
-                continue
-
-            output = data.get("output", {})
-            phase = output.get("phase", _NODE_EVENTS[name]["phase"])
-            yield _sse(
-                "council.node.complete",
-                {
-                    "type": "council.node.complete",
-                    "node": name,
-                    "phase": phase,
-                    "message": f"{name} complete",
-                },
-            )
-
-            if name == "deployer":
-                deploy = output.get("deploy_result", {}) or {}
-                final_state["deploy_result"] = deploy
-                yield _sse(
-                    "deploy.complete",
-                    {
-                        "type": "deploy.complete",
-                        "live_url": deploy.get("live_url", ""),
-                        "github_repo": deploy.get("github_repo", ""),
-                        "status": deploy.get("status", ""),
-                    },
-                )
-
-            final_state.update(output)
-
-        full_state = graph_app.get_state(config)
-        if full_state and full_state.values:
-            merged = {**full_state.values, **final_state}
-        else:
-            merged = final_state
-
-        await _store_result(thread_id, merged)
-
-        yield _sse(
-            "council.phase.complete",
-            {
-                "type": "council.phase.complete",
-                "phase": "complete",
-                "message": "Pipeline complete",
-            },
-        )
-
-    except Exception as exc:
-        yield _sse(
-            "council.error",
-            {
-                "type": "council.error",
-                "error": str(exc)[:500],
-                "traceback": traceback.format_exc()[:1000],
-            },
-        )
+    payload = {
+        "action": "resume",
+        "thread_id": thread_id,
+        "constraints": action,
+    }
+    async for chunk in _stream_action_gateway(payload):
+        yield chunk
 
 
 @app.post("/api/resume")
@@ -987,7 +711,13 @@ async def resume_pipeline(request: ResumeRequest):
             request.thread_id,
             "evaluation",
             f"resume:{request.action}",
-            _stream_resume(request.thread_id, request.action),
+            _stream_action_gateway(
+                {
+                    "action": "resume",
+                    "thread_id": request.thread_id,
+                    "constraints": request.action,
+                }
+            ),
         ),
         media_type="text/event-stream",
         headers={
@@ -999,122 +729,18 @@ async def resume_pipeline(request: ResumeRequest):
 
 
 async def _stream_brainstorm(prompt: str, thread_id: str) -> AsyncGenerator[str, None]:
-    from .graph_brainstorm import brainstorm_app
-
-    yield _sse(
-        "brainstorm.phase.start",
-        {
-            "type": "brainstorm.phase.start",
-            "phase": "input_processing",
-            "message": "Processing your idea for brainstorming...",
-        },
-    )
-
-    final_state = {}
-
-    try:
-        config = {"configurable": {"thread_id": thread_id}, "recursion_limit": 80}
-        async for event in brainstorm_app.astream_events(
-            {"raw_input": prompt},
-            config=config,
-            version="v2",
-        ):
-            kind = event.get("event", "")
-            name = event.get("name", "")
-            data = event.get("data", {})
-
-            if kind == "on_chain_start" and name in _NODE_EVENTS:
-                node_event = _NODE_EVENTS[name]
-                yield _sse(
-                    "brainstorm.node.start",
-                    {
-                        "type": "brainstorm.node.start",
-                        "node": name,
-                        "phase": node_event["phase"],
-                        "message": node_event["message"],
-                    },
-                )
-                continue
-
-            if kind != "on_chain_end" or name not in _NODE_EVENTS:
-                continue
-
-            output = data.get("output", {})
-            phase = output.get("phase", _NODE_EVENTS[name]["phase"])
-            yield _sse(
-                "brainstorm.node.complete",
-                {
-                    "type": "brainstorm.node.complete",
-                    "node": name,
-                    "phase": phase,
-                    "message": f"{name} complete",
-                },
-            )
-
-            if name == "run_brainstorm_agent":
-                insights = output.get("brainstorm_insights", {}) or {}
-                for agent_name, insight in insights.items():
-                    yield _sse(
-                        "brainstorm.agent.insight",
-                        {
-                            "type": "brainstorm.agent.insight",
-                            "agent": agent_name,
-                            "ideas": insight.get("ideas", []),
-                            "opportunities": insight.get("opportunities", []),
-                            "wild_card": insight.get("wild_card", ""),
-                            "action_items": insight.get("action_items", []),
-                        },
-                    )
-
-            for key, val in output.items():
-                if key == "brainstorm_insights" and isinstance(val, dict):
-                    existing = final_state.get("brainstorm_insights", {}) or {}
-                    existing.update(val)
-                    final_state["brainstorm_insights"] = existing
-                else:
-                    final_state[key] = val
-
-        cost = estimate_pipeline_cost()
-        final_state["cost_estimate"] = cost
-
-        await _store_brainstorm_result(thread_id, final_state)
-
-        yield _sse(
-            "brainstorm.phase.complete",
-            {
-                "type": "brainstorm.phase.complete",
-                "phase": "complete",
-                "message": "Brainstorming complete",
-                "cost_estimate": cost,
-            },
-        )
-
-    except Exception as exc:
-        yield _sse(
-            "brainstorm.error",
-            {
-                "type": "brainstorm.error",
-                "error": str(exc)[:500],
-                "traceback": traceback.format_exc()[:1000],
-            },
-        )
+    payload = {
+        "action": "brainstorm",
+        "thread_id": thread_id,
+        "prompt": prompt,
+    }
+    async for chunk in _stream_action_gateway(payload):
+        yield chunk
 
 
 async def _store_brainstorm_result(thread_id: str, state: dict):
-    insights = state.get("brainstorm_insights", {})
-    synthesis = state.get("synthesis", {})
-
-    insights_list = []
-    for agent_name, insight in insights.items():
-        insights_list.append({"agent": agent_name, **insight})
-
-    result = {
-        "insights": insights_list,
-        "synthesis": synthesis,
-        "idea": state.get("idea", {}),
-        "idea_summary": state.get("idea_summary", ""),
-        "cost_estimate": state.get("cost_estimate"),
-    }
+    prebuilt = state.get("__prebuilt_result__")
+    result = prebuilt if isinstance(prebuilt, dict) else build_brainstorm_result(state)
     await _store.save_brainstorm(thread_id, result)
     _invalidate_dashboard_snapshot_cache()
 
@@ -1128,11 +754,12 @@ async def brainstorm_pipeline(request: RunRequest):
     if not valid:
         raise HTTPException(status_code=400, detail=error)
 
-    config = request.config or {}
-    thread_id = config.get("configurable", {}).get("thread_id", "default")
+    action_payload = _request_to_action_payload(request, action="brainstorm")
+    action_payload["prompt"] = sanitized
+    thread_id = action_payload["thread_id"]
 
     return StreamingResponse(
-        _with_tracking(thread_id, "brainstorm", sanitized, _stream_brainstorm(sanitized, thread_id)),
+        _with_tracking(thread_id, "brainstorm", sanitized, _stream_action_gateway(action_payload)),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -1212,7 +839,12 @@ async def put_test_brainstorm(brainstorm_id: str, body: dict):
 @app.get("/health")
 @app.get("/")
 async def health():
-    return {"status": "ok", "provider": "do-app-platform"}
+    return {
+        "status": "ok",
+        "provider": "do-app-platform-gateway",
+        "adk_url_configured": bool(_configured_adk_url()),
+        "adk_auth_mode": _configured_adk_auth_mode(),
+    }
 
 
 @app.get("/api/cost-estimate")
@@ -1225,8 +857,11 @@ async def cost_estimate():
 @app.get("/models")
 async def models():
     runtime_models = get_runtime_model_config()
+    capability_report = load_model_capability_report()
     return {
         "models": runtime_models,
+        "selected_runtime_model": selected_runtime_model(),
+        "capabilities": capability_report,
         "vendors": {
             "anthropic": [k for k, v in runtime_models.items() if v.startswith("anthropic-")],
             "openai": [k for k, v in runtime_models.items() if v.startswith("openai-")],

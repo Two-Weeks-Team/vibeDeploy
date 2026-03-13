@@ -63,6 +63,8 @@ class VibeDeployState(TypedDict):
     transcript: Optional[str]
     key_frames: Optional[List[Dict]]
     visual_context: Optional[str]
+    selected_flagship: Optional[str]
+    flagship_contract: Optional[Dict]
 
     # Structured idea
     idea: Dict
@@ -70,6 +72,9 @@ class VibeDeployState(TypedDict):
     original_idea: Optional[Dict]
     inspiration_pack: Optional[Dict]
     experience_spec: Optional[Dict]
+    execution_tasks: Optional[List[Dict]]
+    repair_tasks: Optional[List[Dict]]
+    task_distribution: Optional[Dict]
 
     eval_iteration: int
     enrich_result: Optional[Dict]

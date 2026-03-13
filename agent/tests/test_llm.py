@@ -24,6 +24,14 @@ class _AlwaysRateLimitLLM(_RetryLLM):
         raise RuntimeError("Error code: 429 - rate limit exceeded")
 
 
+class _RetryTransportLLM(_RetryLLM):
+    async def ainvoke(self, messages):
+        self.calls += 1
+        if self.calls < 3:
+            raise RuntimeError("peer closed connection without sending complete message body (incomplete chunked read)")
+        return {"ok": True, "messages": messages}
+
+
 @pytest.mark.asyncio
 async def test_ainvoke_with_retry_retries_rate_limit():
     llm = _RetryLLM()
@@ -58,6 +66,44 @@ async def test_ainvoke_with_retry_uses_fallback_model(monkeypatch):
 
     assert primary.calls == 1
     assert fallback.calls == 3
+    assert response["ok"] is True
+
+
+@pytest.mark.asyncio
+async def test_ainvoke_with_retry_switches_early_to_fallback_on_rate_limit(monkeypatch):
+    primary = _AlwaysRateLimitLLM()
+    fallback = _RetryLLM(model_name="fallback-model")
+
+    def _fake_get_llm(model: str, temperature: float = 0.5, max_tokens: int = 3000, request_timeout=None):
+        assert model == "fallback-model"
+        fallback.temperature = temperature
+        fallback.max_tokens = max_tokens
+        fallback.request_timeout = request_timeout
+        return fallback
+
+    monkeypatch.setattr("agent.llm.get_llm", _fake_get_llm)
+    monkeypatch.setattr("agent.llm.RATE_LIMIT_FALLBACK_SWITCH_ATTEMPTS", 2)
+
+    response = await ainvoke_with_retry(
+        primary,
+        [{"role": "user", "content": "hello"}],
+        max_attempts=6,
+        initial_delay_seconds=0.01,
+        fallback_models=["fallback-model"],
+    )
+
+    assert primary.calls == 2
+    assert fallback.calls == 3
+    assert response["ok"] is True
+
+
+@pytest.mark.asyncio
+async def test_ainvoke_with_retry_retries_transient_transport_errors():
+    llm = _RetryTransportLLM()
+
+    response = await ainvoke_with_retry(llm, [{"role": "user", "content": "hello"}], initial_delay_seconds=0.01)
+
+    assert llm.calls == 3
     assert response["ok"] is True
 
 

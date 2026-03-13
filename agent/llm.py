@@ -5,10 +5,13 @@ import logging
 import os
 from collections.abc import Iterator
 
+from .model_capabilities import model_endpoint_type, selected_runtime_model
+
 DO_INFERENCE_BASE_URL = "https://inference.do-ai.run/v1"
 DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS = float(os.getenv("LLM_REQUEST_TIMEOUT_SECONDS", "90"))
 DEFAULT_LLM_MAX_CONCURRENCY = max(1, int(os.getenv("LLM_MAX_CONCURRENCY", "1")))
-DEFAULT_LLM_MIN_INTERVAL_SECONDS = max(0.0, float(os.getenv("LLM_MIN_INTERVAL_SECONDS", "2.0")))
+DEFAULT_LLM_MIN_INTERVAL_SECONDS = max(0.0, float(os.getenv("LLM_MIN_INTERVAL_SECONDS", "4.0")))
+RATE_LIMIT_FALLBACK_SWITCH_ATTEMPTS = max(1, int(os.getenv("LLM_RATE_LIMIT_FALLBACK_SWITCH_ATTEMPTS", "2")))
 logger = logging.getLogger(__name__)
 _llm_semaphore: asyncio.Semaphore | None = None
 _llm_rate_lock: asyncio.Lock | None = None
@@ -17,20 +20,20 @@ _llm_next_request_at = 0.0
 # Text generation defaults are unified on gpt-oss-120b so every LLM stage follows
 # the same runtime profile unless an explicit env override is provided.
 DEFAULT_MODEL_CONFIG = {
-    "council": "openai-gpt-oss-120b",
-    "strategist": "openai-gpt-oss-120b",
-    "cross_exam": "openai-gpt-oss-120b",
-    "code_gen": "openai-gpt-oss-120b",
-    "code_gen_frontend": "openai-gpt-oss-120b",
-    "code_gen_backend": "openai-gpt-oss-120b",
-    "ci_repair": "openai-gpt-oss-120b",
+    "council": selected_runtime_model(),
+    "strategist": selected_runtime_model(),
+    "cross_exam": selected_runtime_model(),
+    "code_gen": selected_runtime_model(),
+    "code_gen_frontend": selected_runtime_model(),
+    "code_gen_backend": selected_runtime_model(),
+    "ci_repair": selected_runtime_model(),
     "doc_gen": "openai-gpt-oss-120b",
     "image": "fal-ai/flux/schnell",
-    "brainstorm": "openai-gpt-oss-120b",
-    "brainstorm_synthesis": "openai-gpt-oss-120b",
-    "input": "openai-gpt-oss-120b",
-    "decision": "openai-gpt-oss-120b",
-    "web_search": "openai-gpt-oss-120b",
+    "brainstorm": selected_runtime_model(),
+    "brainstorm_synthesis": selected_runtime_model(),
+    "input": selected_runtime_model(),
+    "decision": selected_runtime_model(),
+    "web_search": selected_runtime_model(),
 }
 
 _MODEL_ENV_OVERRIDES = {
@@ -162,6 +165,19 @@ async def _wait_for_llm_turn():
         _llm_next_request_at = now + DEFAULT_LLM_MIN_INTERVAL_SECONDS
 
 
+async def _defer_llm_turn(delay_seconds: float):
+    if delay_seconds <= 0:
+        return
+
+    global _llm_next_request_at
+    loop = asyncio.get_running_loop()
+    async with _get_llm_rate_lock():
+        _llm_next_request_at = max(
+            _llm_next_request_at,
+            loop.time() + max(DEFAULT_LLM_MIN_INTERVAL_SECONDS, delay_seconds),
+        )
+
+
 def _get_llm_model_name(llm) -> str:
     for attr in ("model_name", "model"):
         value = getattr(llm, attr, "")
@@ -230,8 +246,10 @@ async def ainvoke_with_retry(
     max_attempts: int = 6,
     initial_delay_seconds: float = 5.0,
     fallback_models: list[str] | None = None,
+    rate_limit_switch_after_attempts: int | None = None,
 ):
     last_exc = None
+    switch_after_attempts = max(1, rate_limit_switch_after_attempts or RATE_LIMIT_FALLBACK_SWITCH_ATTEMPTS)
 
     llms_to_try = [llm]
     primary_model = _get_llm_model_name(llm)
@@ -246,18 +264,31 @@ async def ainvoke_with_retry(
         model_name = _get_llm_model_name(target_llm) or f"llm-{llm_index + 1}"
         delay = initial_delay_seconds
         attempts_for_model = max_attempts if llm_index == 0 else max(3, max_attempts // 2)
+        has_more_models = llm_index < len(llms_to_try) - 1
 
         for attempt in range(1, attempts_for_model + 1):
             try:
                 return await _ainvoke_with_semaphore(target_llm, messages)
             except Exception as exc:
                 last_exc = exc
-                if not _is_rate_limit_error(exc):
+                if not _is_retryable_llm_error(exc):
                     raise
 
                 if attempt < attempts_for_model:
+                    retry_label = "rate limit" if _is_rate_limit_error(exc) else "transient transport error"
+                    if _is_rate_limit_error(exc) and has_more_models and attempt >= switch_after_attempts:
+                        next_model = _get_llm_model_name(llms_to_try[llm_index + 1]) or f"llm-{llm_index + 2}"
+                        logger.warning(
+                            "LLM rate limit persisted on %s after %d attempts; switching early to %s",
+                            model_name,
+                            attempt,
+                            next_model,
+                        )
+                        break
+                    await _defer_llm_turn(delay)
                     logger.warning(
-                        "LLM rate limit hit on %s; retrying in %.1fs (attempt %d/%d): %s",
+                        "LLM %s on %s; retrying in %.1fs (attempt %d/%d): %s",
+                        retry_label,
                         model_name,
                         delay,
                         attempt,
@@ -268,10 +299,12 @@ async def ainvoke_with_retry(
                     delay = min(delay * 2, 15.0)
                     continue
 
-                if llm_index < len(llms_to_try) - 1:
+                if has_more_models:
                     next_model = _get_llm_model_name(llms_to_try[llm_index + 1]) or f"llm-{llm_index + 2}"
+                    failure_label = "rate limit" if _is_rate_limit_error(exc) else "transient transport error"
                     logger.warning(
-                        "LLM rate limit persisted on %s after %d attempts; switching to %s",
+                        "LLM %s persisted on %s after %d attempts; switching to %s",
+                        failure_label,
                         model_name,
                         attempts_for_model,
                         next_model,
@@ -290,6 +323,29 @@ def _is_rate_limit_error(exc: Exception) -> bool:
     return "rate limit" in message or "429" in message
 
 
+def _is_retryable_llm_error(exc: Exception) -> bool:
+    if _is_rate_limit_error(exc):
+        return True
+
+    message = str(exc).lower()
+    transient_markers = (
+        "incomplete chunked read",
+        "peer closed connection",
+        "server disconnected",
+        "remoteprotocolerror",
+        "connection reset",
+        "connection aborted",
+        "temporarily unavailable",
+        "read timeout",
+        "timed out",
+        "timeout",
+        "502",
+        "503",
+        "504",
+    )
+    return any(marker in message for marker in transient_markers)
+
+
 def get_llm(
     model: str,
     temperature: float = 0.5,
@@ -297,7 +353,7 @@ def get_llm(
     request_timeout: float | None = None,
 ):
     """Route LLM calls through DO Inference when key is available, else direct OpenAI."""
-    inference_key = os.getenv("DIGITALOCEAN_INFERENCE_KEY", "")
+    inference_key = os.getenv("GRADIENT_MODEL_ACCESS_KEY", "") or os.getenv("DIGITALOCEAN_INFERENCE_KEY", "")
     effective_max_tokens = max(256, max_tokens)
     effective_timeout = request_timeout or DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS
 
@@ -311,6 +367,7 @@ def get_llm(
             temperature=_coerce_temperature_for_model(model, temperature),
             max_tokens=effective_max_tokens,
             request_timeout=effective_timeout,
+            use_responses_api=model_endpoint_type(model) == "responses",
         )
 
     from langchain_openai import ChatOpenAI
@@ -320,4 +377,5 @@ def get_llm(
         temperature=_coerce_temperature_for_model(model, temperature),
         max_tokens=effective_max_tokens,
         request_timeout=effective_timeout,
+        use_responses_api=model_endpoint_type(model) == "responses",
     )

@@ -2,6 +2,7 @@ import asyncio
 import os
 
 import httpx
+from gradient_adk.tracing import trace_tool
 
 from ..llm import DO_INFERENCE_BASE_URL, MODEL_CONFIG
 
@@ -16,6 +17,7 @@ FAL_SIZE_MAP = {
 }
 
 
+@trace_tool("generate_app_logo")
 async def generate_app_logo(name: str, description: str) -> dict:
     return await _generate_image(
         prompt=(
@@ -28,6 +30,7 @@ async def generate_app_logo(name: str, description: str) -> dict:
     )
 
 
+@trace_tool("generate_ui_mockup")
 async def generate_ui_mockup(app_description: str) -> dict:
     return await _generate_image(
         prompt=(
@@ -40,6 +43,7 @@ async def generate_ui_mockup(app_description: str) -> dict:
     )
 
 
+@trace_tool("generate_placeholder_image")
 async def generate_placeholder_image(context: str) -> dict:
     return await _generate_image(
         prompt=f"Simple placeholder illustration for: {context}. Minimal, modern style.",
@@ -48,14 +52,15 @@ async def generate_placeholder_image(context: str) -> dict:
     )
 
 
+@trace_tool("image_generation_request")
 async def _generate_image(
     prompt: str,
     size: str = "1024x1024",
     purpose: str = "image",
 ) -> dict:
-    api_key = os.getenv("DIGITALOCEAN_INFERENCE_KEY")
+    api_key = os.getenv("GRADIENT_MODEL_ACCESS_KEY") or os.getenv("DIGITALOCEAN_INFERENCE_KEY")
     if not api_key:
-        return {"image_url": "", "error": "DIGITALOCEAN_INFERENCE_KEY not set"}
+        return {"image_url": "", "error": "GRADIENT_MODEL_ACCESS_KEY not set"}
 
     image_size = FAL_SIZE_MAP.get(size, "square")
     model_id = MODEL_CONFIG["image"]

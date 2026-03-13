@@ -3,6 +3,7 @@ import os
 from collections.abc import Awaitable, Callable
 
 import httpx
+from gradient_adk.tracing import trace_tool
 
 DO_API_BASE = "https://api.digitalocean.com/v2"
 
@@ -17,6 +18,7 @@ def _headers() -> dict:
     }
 
 
+@trace_tool("deploy_to_digitalocean")
 async def deploy_to_digitalocean(repo_url: str, app_spec: dict) -> dict:
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
@@ -43,6 +45,7 @@ async def deploy_to_digitalocean(repo_url: str, app_spec: dict) -> dict:
         return {"app_id": "", "status": "error", "error": str(e)[:200]}
 
 
+@trace_tool("wait_for_app_platform_deployment")
 async def wait_for_deployment(
     app_id: str,
     timeout_seconds: int = 420,
@@ -86,6 +89,7 @@ async def wait_for_deployment(
         return ""
 
 
+@trace_tool("get_app_platform_status")
 async def get_app_status(app_id: str) -> dict:
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
@@ -108,6 +112,7 @@ async def get_app_status(app_id: str) -> dict:
         return {"app_id": app_id, "phase": "ERROR", "error": str(e)[:200]}
 
 
+@trace_tool("list_app_platform_apps")
 async def list_apps(per_page: int = 50) -> list[dict]:
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
@@ -122,6 +127,7 @@ async def list_apps(per_page: int = 50) -> list[dict]:
         return []
 
 
+@trace_tool("delete_app_platform_app")
 async def delete_app(app_id: str) -> dict:
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
@@ -137,6 +143,7 @@ async def delete_app(app_id: str) -> dict:
         return {"status": "error", "error": str(e)[:200]}
 
 
+@trace_tool("get_app_platform_deploy_logs")
 async def get_deploy_error_logs(app_id: str, deployment_id: str = "") -> str:
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
@@ -203,6 +210,7 @@ async def get_deploy_error_logs(app_id: str, deployment_id: str = "") -> str:
         return ""
 
 
+@trace_tool("redeploy_app_platform_app")
 async def redeploy_app(app_id: str) -> dict:
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
@@ -245,11 +253,12 @@ def build_app_spec(
     if db_url:
         envs.append({"key": "DATABASE_URL", "value": db_url, "scope": "RUN_TIME", "type": "SECRET"})
         envs.append({"key": "POSTGRES_URL", "value": db_url, "scope": "RUN_TIME", "type": "SECRET"})
-    inference_key = os.getenv("DIGITALOCEAN_INFERENCE_KEY", "")
+    inference_key = os.getenv("GRADIENT_MODEL_ACCESS_KEY", "") or os.getenv("DIGITALOCEAN_INFERENCE_KEY", "")
     if inference_key:
         envs.append(
-            {"key": "DIGITALOCEAN_INFERENCE_KEY", "value": inference_key, "scope": "RUN_TIME", "type": "SECRET"}
+            {"key": "GRADIENT_MODEL_ACCESS_KEY", "value": inference_key, "scope": "RUN_TIME", "type": "SECRET"}
         )
+        envs.append({"key": "DIGITALOCEAN_INFERENCE_KEY", "value": inference_key, "scope": "RUN_TIME", "type": "SECRET"})
     envs.append({"key": "DO_INFERENCE_MODEL", "value": "openai-gpt-oss-120b", "scope": "RUN_TIME"})
 
     service: dict = {
