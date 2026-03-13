@@ -36,9 +36,8 @@ async def experience_agent(state: VibeDeployState) -> dict:
     )
 
     model = MODEL_CONFIG["brainstorm"]
-    llm = get_llm(model=model, temperature=0.35, max_tokens=2500)
-
     try:
+        llm = get_llm(model=model, temperature=0.35, max_tokens=2500)
         response = await ainvoke_with_retry(
             llm,
             [
@@ -83,6 +82,40 @@ def _parse_json(content) -> dict:
 
 def _fallback_experience_spec(idea: dict, inspiration_pack: dict) -> dict:
     domain = str(idea.get("domain") or inspiration_pack.get("domain") or "").strip().lower()
+
+    if domain == "creator":
+        return {
+            "must_have_surfaces": [
+                "hook card board",
+                "shot list lane",
+                "repurpose lane",
+                "publish queue",
+                "saved content batches",
+            ],
+            "primary_action_label": "Generate content batch",
+            "input_labels": {
+                "query_label": "Content angle, audience, or campaign brief",
+                "preferences_label": "Platforms, tone, cadence, and recording constraints",
+            },
+            "output_entities": ["hook card", "shot list", "repurpose lane", "publish queue"],
+            "trust_surfaces": ["saved content batches", "platform variations", "shoot-day readiness"],
+            "proof_points": ["multi-post content batch", "platform-specific hook variations", "shoot-day checklist"],
+            "experience_non_negotiables": [
+                "no generic dashboard shell",
+                "show creator workflow objects above the fold",
+                "use creator-native language instead of enterprise copy",
+                "keep publish sequencing visible from first load",
+            ],
+            "design_direction": {
+                "visual_tone": "editorial, punchy, and creator-native",
+                "color_strategy": "paper-light neutrals with bold production accents",
+                "typography_strategy": "magazine-style display with sharp sans body",
+                "layout_strategy": "storyboard board with workflow lanes and saved queue",
+                "motion_strategy": "card reveals and sequence transitions",
+                "anti_patterns": ["generic SaaS dashboard", "KPI tile shell", "empty input-first screen"],
+            },
+            "ui_copy_tone": "creator-native and decisive",
+        }
 
     if domain == "travel":
         return {
@@ -147,7 +180,11 @@ def _fallback_experience_spec(idea: dict, inspiration_pack: dict) -> dict:
                 "typography_strategy": "condensed display with compact UI sans",
                 "layout_strategy": "operations console with large timeline spine",
                 "motion_strategy": "status flips, cue pulses, and live-sequence movement",
-                "anti_patterns": ["beige productivity template", "marketing hero-first landing page", "generic dashboard cards"],
+                "anti_patterns": [
+                    "beige productivity template",
+                    "marketing hero-first landing page",
+                    "generic dashboard cards",
+                ],
             },
             "ui_copy_tone": "confident and operational",
         }
@@ -218,6 +255,40 @@ def _fallback_experience_spec(idea: dict, inspiration_pack: dict) -> dict:
                 "anti_patterns": ["bank account clone", "generic analytics dashboard", "neutral admin board"],
             },
             "ui_copy_tone": "calm and directive",
+        }
+
+    if domain == "meal_prep":
+        return {
+            "must_have_surfaces": [
+                "prep block planner",
+                "meal board",
+                "grocery lane",
+                "container checklist",
+                "saved meal boards",
+            ],
+            "primary_action_label": "Generate meal prep board",
+            "input_labels": {
+                "query_label": "Weekly cooking goal, diet, or meal prep brief",
+                "preferences_label": "Household size, prep time, budget, and ingredients to use",
+            },
+            "output_entities": ["prep block", "grocery lane", "meal board", "container checklist"],
+            "trust_surfaces": ["saved meal boards", "grocery grouping", "cook-from-this practicality"],
+            "proof_points": ["weekly prep plan", "organized grocery groups", "saved meal board"],
+            "experience_non_negotiables": [
+                "no generic productivity dashboard",
+                "show prep objects above the fold",
+                "make grocery and meal sequencing practical",
+                "avoid recipe-blog-only framing",
+            ],
+            "design_direction": {
+                "visual_tone": "practical, warm, and kitchen-ready",
+                "color_strategy": "fresh produce accents over clean prep neutrals",
+                "typography_strategy": "friendly display with crisp kitchen note text",
+                "layout_strategy": "atlas board with prep and grocery lanes",
+                "motion_strategy": "prep-step reveals and board transitions",
+                "anti_patterns": ["productivity dashboard shell", "empty hero", "generic ai assistant framing"],
+            },
+            "ui_copy_tone": "practical and encouraging",
         }
 
     if domain == "coaching":

@@ -33,11 +33,12 @@ reasoning (string), recommendations (list)
 
 async def analyze(idea: dict, llm=None) -> dict:
     """Run analysis for this council member."""
-    from ..llm import MODEL_CONFIG, ainvoke_with_retry, get_llm
+    from ..llm import MODEL_CONFIG, ainvoke_with_retry, get_llm, get_rate_limit_fallback_models
     from ..tools.function_tools import ARCHITECT_TOOLS
 
+    council_model = MODEL_CONFIG["council"]
     if llm is None:
-        llm = get_llm(model=MODEL_CONFIG["council"], temperature=0.5, max_tokens=16000)
+        llm = get_llm(model=council_model, temperature=0.5, max_tokens=16000)
 
     llm_with_tools = llm.bind_tools(ARCHITECT_TOOLS)
     idea_text = json.dumps(idea, indent=2, ensure_ascii=False)
@@ -58,7 +59,11 @@ async def analyze(idea: dict, llm=None) -> dict:
         },
     ]
 
-    response = await ainvoke_with_retry(llm_with_tools, messages)
+    response = await ainvoke_with_retry(
+        llm_with_tools,
+        messages,
+        fallback_models=get_rate_limit_fallback_models(council_model),
+    )
 
     if response.tool_calls:
         messages.append(response)
@@ -67,7 +72,11 @@ async def analyze(idea: dict, llm=None) -> dict:
             if tool_fn:
                 result = await tool_fn.ainvoke(tool_call["args"])
                 messages.append({"role": "tool", "tool_call_id": tool_call["id"], "content": str(result)})
-        response = await ainvoke_with_retry(llm_with_tools, messages)
+        response = await ainvoke_with_retry(
+            llm_with_tools,
+            messages,
+            fallback_models=get_rate_limit_fallback_models(council_model),
+        )
 
     return _parse_analysis(response.content)
 

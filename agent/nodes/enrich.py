@@ -39,19 +39,21 @@ async def enrich_idea(state: VibeDeployState) -> dict:
 
     idea = state.get("idea", {})
     brainstorm_model = MODEL_CONFIG["brainstorm"]
-    llm = get_llm(model=brainstorm_model, temperature=0.7, max_tokens=4000)
-
     idea_text = json.dumps(idea, indent=2, ensure_ascii=False)
-    response = await ainvoke_with_retry(
-        llm,
-        [
-            {"role": "system", "content": ENRICH_PROMPT},
-            {"role": "user", "content": f"Enrich this app idea:\n\n{idea_text}"},
-        ],
-        fallback_models=get_rate_limit_fallback_models(brainstorm_model),
-    )
+    try:
+        llm = get_llm(model=brainstorm_model, temperature=0.7, max_tokens=4000)
+        response = await ainvoke_with_retry(
+            llm,
+            [
+                {"role": "system", "content": ENRICH_PROMPT},
+                {"role": "user", "content": f"Enrich this app idea:\n\n{idea_text}"},
+            ],
+            fallback_models=get_rate_limit_fallback_models(brainstorm_model),
+        )
 
-    enrichment = _parse_json(response.content)
+        enrichment = _parse_json(response.content)
+    except Exception as exc:
+        enrichment = _fallback_enrichment(idea, str(exc)[:200])
 
     merged_idea = {**idea}
     if enrichment.get("enriched_features"):
@@ -102,3 +104,39 @@ def _parse_json(content) -> dict:
             except json.JSONDecodeError:
                 pass
         return {}
+
+
+def _fallback_enrichment(idea: dict, reason: str) -> dict:
+    key_features = [str(item).strip() for item in idea.get("key_features", []) if str(item).strip()]
+    must_have_surfaces = [str(item).strip() for item in idea.get("must_have_surfaces", []) if str(item).strip()]
+    proof_points = [str(item).strip() for item in idea.get("proof_points", []) if str(item).strip()]
+    non_negotiables = [str(item).strip() for item in idea.get("experience_non_negotiables", []) if str(item).strip()]
+    design_direction = idea.get("design_direction") if isinstance(idea.get("design_direction"), dict) else {}
+
+    return {
+        "enriched_features": key_features[:7] or ["Guided generation", "Saved artifacts", "Structured workflow"],
+        "tech_approach": "FastAPI backend with lightweight Next.js frontend and simple persistence for saved outputs.",
+        "market_position": f"Focused, artifact-first product for {idea.get('target_users') or 'users with messy product intent'}.",
+        "ux_highlights": must_have_surfaces[:3]
+        or ["Immediate first-screen clarity", "Visible saved outputs", "Focused primary workflow"],
+        "design_direction": design_direction
+        or {
+            "visual_tone": "opinionated and domain-specific",
+            "color_strategy": "high-contrast accent palette over grounded neutrals",
+            "typography_strategy": "distinct display headline with practical body text",
+            "layout_strategy": "artifact-first first screen",
+            "motion_strategy": "subtle staged reveals",
+            "anti_patterns": non_negotiables[:4],
+        },
+        "demo_story": idea.get("demo_story_hints")
+        or f"Fallback enrichment used because model planning was unavailable ({reason}).",
+        "must_have_surfaces": must_have_surfaces[:5],
+        "proof_points": proof_points[:4],
+        "experience_non_negotiables": non_negotiables[:5],
+        "risk_mitigations": [
+            "Keep the scope constrained to one flagship lane.",
+            "Prefer saved outputs over speculative integrations.",
+            "Fail closed when generation quality is too generic.",
+        ],
+        "enhanced_tagline": idea.get("tagline") or idea.get("name") or "Focused product workflow",
+    }

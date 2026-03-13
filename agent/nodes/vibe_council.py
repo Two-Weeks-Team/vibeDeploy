@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import os
 import re
 
 from langgraph.types import Send
@@ -29,7 +30,23 @@ SCORE_AXIS_MAP = {
 }
 
 
+def _serialize_council_fanout() -> bool:
+    return os.getenv("VIBEDEPLOY_SERIALIZE_AGENT_FANOUT", "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 def fan_out_analysis(state: VibeDeployState) -> list[Send]:
+    if _serialize_council_fanout():
+        return [
+            Send(
+                "run_council_agent",
+                {
+                    "serial_run": True,
+                    "agent_names": list(COUNCIL_MEMBERS),
+                    "idea": state.get("idea", {}),
+                    "idea_summary": state.get("idea_summary", ""),
+                },
+            )
+        ]
     return [
         Send(
             "run_council_agent",
@@ -44,6 +61,19 @@ def fan_out_analysis(state: VibeDeployState) -> list[Send]:
 
 
 async def run_council_agent(input: dict) -> dict:
+    if input.get("serial_run"):
+        merged: dict[str, dict] = {}
+        for agent_name in input.get("agent_names", list(COUNCIL_MEMBERS)):
+            result = await run_council_agent(
+                {
+                    "agent_name": agent_name,
+                    "idea": input.get("idea", {}),
+                    "idea_summary": input.get("idea_summary", ""),
+                }
+            )
+            merged.update(result.get("council_analysis", {}) or {})
+        return {"council_analysis": merged}
+
     agent_name = input.get("agent_name", "unknown")
     idea = input.get("idea", {})
 
@@ -163,6 +193,19 @@ async def _run_advocate_challenge(llm, idea: dict, analyses: dict) -> dict:
 
 
 def fan_out_scoring(state: VibeDeployState) -> list[Send]:
+    if _serialize_council_fanout():
+        return [
+            Send(
+                "score_axis",
+                {
+                    "serial_run": True,
+                    "agent_names": list(COUNCIL_MEMBERS),
+                    "idea": state.get("idea", {}),
+                    "council_analysis": state.get("council_analysis", {}),
+                    "cross_examination": state.get("cross_examination", {}),
+                },
+            )
+        ]
     return [
         Send(
             "score_axis",
@@ -178,6 +221,20 @@ def fan_out_scoring(state: VibeDeployState) -> list[Send]:
 
 
 async def score_axis(input: dict) -> dict:
+    if input.get("serial_run"):
+        merged: dict[str, dict] = {}
+        council_analysis = input.get("council_analysis", {}) or {}
+        for agent_name in input.get("agent_names", list(COUNCIL_MEMBERS)):
+            result = await score_axis(
+                {
+                    "agent_name": agent_name,
+                    "analysis": council_analysis.get(agent_name, {}),
+                    "cross_examination": input.get("cross_examination", {}),
+                }
+            )
+            merged.update(result.get("scoring", {}) or {})
+        return {"scoring": merged}
+
     agent_name = input.get("agent_name", "unknown")
     analysis = input.get("analysis", {})
     cross_exam = input.get("cross_examination", {})

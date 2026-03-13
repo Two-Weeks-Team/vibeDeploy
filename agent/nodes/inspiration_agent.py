@@ -38,9 +38,8 @@ async def inspiration_agent(state: VibeDeployState) -> dict:
     )
 
     model = MODEL_CONFIG["brainstorm"]
-    llm = get_llm(model=model, temperature=0.35, max_tokens=2500)
-
     try:
+        llm = get_llm(model=model, temperature=0.35, max_tokens=2500)
         response = await ainvoke_with_retry(
             llm,
             [
@@ -84,6 +83,8 @@ def _parse_json(content) -> dict:
 
 
 def _fallback_inspiration_pack(idea: dict, raw_input: str, transcript: str) -> dict:
+    selected_flagship = str(idea.get("selected_flagship") or "").strip().lower()
+    existing_domain = str(idea.get("flagship_domain") or idea.get("domain") or "").strip().lower()
     text = " ".join(
         [
             json.dumps(idea, ensure_ascii=False),
@@ -92,7 +93,87 @@ def _fallback_inspiration_pack(idea: dict, raw_input: str, transcript: str) -> d
         ]
     ).lower()
 
-    if any(token in text for token in ("travel", "trip", "itinerary", "destination", "vacation", "journey")):
+    if (
+        selected_flagship == "creator-batch-studio"
+        or "creator" in existing_domain
+        or (
+            any(token in text for token in ("creator", "content", "short-form", "hook", "publish", "repurpose"))
+            and not any(
+                token in text
+                for token in (
+                    "travel",
+                    "trip",
+                    "itinerary",
+                    "destination",
+                    "vacation",
+                    "journey",
+                    "meal",
+                    "grocery",
+                    "prep",
+                    "cook",
+                    "recipe",
+                    "kitchen",
+                    "budget",
+                    "finance",
+                    "cash",
+                    "income",
+                    "study",
+                    "learning",
+                    "exam",
+                    "interview",
+                )
+            )
+        )
+    ):
+        return {
+            "domain": "creator",
+            "layout_archetype": "storyboard",
+            "interface_metaphor": "editorial production board",
+            "visual_motifs": ["story cards", "production tape", "editorial markers", "shoot-day lanes"],
+            "interaction_primitives": ["batch planning", "hook drafting", "repurpose mapping", "publish sequencing"],
+            "reference_objects": ["hook card", "shot list", "repurpose lane", "publish queue", "content batch"],
+            "signature_demo_moments": [
+                "assembling a multi-post creator batch live",
+                "turning a rough angle into a publish-ready workflow",
+            ],
+            "anti_patterns": [
+                "no generic SaaS dashboard",
+                "no enterprise KPI framing",
+                "no blank textarea-plus-card shell",
+            ],
+            "sample_seed_data": ["Hook variant", "Shoot-day checklist", "Repurpose lane", "Publish queue"],
+        }
+
+    if (
+        selected_flagship == "meal-prep-atlas"
+        or "meal prep" in existing_domain
+        or "grocery" in existing_domain
+        or any(token in text for token in ("meal", "grocery", "prep", "cook", "recipe", "kitchen"))
+    ):
+        return {
+            "domain": "meal_prep",
+            "layout_archetype": "atlas",
+            "interface_metaphor": "kitchen prep atlas",
+            "visual_motifs": ["recipe tabs", "container labels", "prep maps", "kitchen blocks"],
+            "interaction_primitives": ["prep sequencing", "grocery grouping", "meal slotting", "container planning"],
+            "reference_objects": ["prep block", "grocery lane", "meal board", "container checklist", "recipe slot"],
+            "signature_demo_moments": [
+                "turning grocery inspiration into a prep board",
+                "mapping a week of meals in one pass",
+            ],
+            "anti_patterns": [
+                "no productivity dashboard shell",
+                "no empty recipe blog clone",
+                "no generic AI assistant framing",
+            ],
+            "sample_seed_data": ["Sunday prep block", "Protein lane", "Lunch board", "Container checklist"],
+        }
+
+    if (
+        selected_flagship == "weekender-route-postcards"
+        or "travel" in existing_domain
+        or any(token in text for token in ("travel", "trip", "itinerary", "destination", "vacation", "journey"))
+    ):
         return {
             "domain": "travel",
             "layout_archetype": "storyboard",
@@ -101,11 +182,48 @@ def _fallback_inspiration_pack(idea: dict, raw_input: str, transcript: str) -> d
             "interaction_primitives": ["route building", "day sequencing", "moodboard curation", "quick budget swap"],
             "reference_objects": ["district", "cafe", "stop", "route", "day plan"],
             "signature_demo_moments": ["assembling a day-by-day route live", "turning a mood into a trip board"],
-            "anti_patterns": ["no generic KPI tiles", "no sterile enterprise dashboard", "no blank form-only first screen"],
+            "anti_patterns": [
+                "no generic KPI tiles",
+                "no sterile enterprise dashboard",
+                "no blank form-only first screen",
+            ],
             "sample_seed_data": ["Day 1 route", "Night-view cafe", "Market stop", "Rain backup plan"],
         }
 
-    if any(token in text for token in ("event", "stage", "speaker", "rehearsal", "demo day", "conference", "run of show")):
+    if (
+        selected_flagship == "interview-sprint-forge"
+        or "learning" in existing_domain
+        or any(
+            token in text for token in ("study", "learning", "exam", "interview", "course", "syllabus", "curriculum")
+        )
+    ):
+        return {
+            "domain": "learning",
+            "layout_archetype": "studio",
+            "interface_metaphor": "curriculum workshop",
+            "visual_motifs": ["sticky-note syllabus", "progress tracks", "annotation layers", "bright study accents"],
+            "interaction_primitives": [
+                "sprint planning",
+                "topic sequencing",
+                "review scheduling",
+                "confidence tagging",
+            ],
+            "reference_objects": ["module", "drill", "review block", "milestone", "syllabus"],
+            "signature_demo_moments": [
+                "turning a vague goal into a syllabus instantly",
+                "showing a smart study sprint populate",
+            ],
+            "anti_patterns": [
+                "no empty dashboard shell",
+                "no generic analytics homepage",
+                "no plain textarea-only app",
+            ],
+            "sample_seed_data": ["SQL drill", "Case prompt", "Revision block", "Mock interview"],
+        }
+
+    if any(
+        token in text for token in ("event", "stage", "speaker", "rehearsal", "demo day", "conference", "run of show")
+    ):
         return {
             "domain": "event_ops",
             "layout_archetype": "operations_console",
@@ -114,24 +232,20 @@ def _fallback_inspiration_pack(idea: dict, raw_input: str, transcript: str) -> d
             "interaction_primitives": ["cue locking", "timeline scrubbing", "readiness checks", "incident escalation"],
             "reference_objects": ["cue", "speaker", "sponsor", "stage lane", "incident"],
             "signature_demo_moments": ["seeing readiness flip live", "reordering the show without losing timing"],
-            "anti_patterns": ["no beige productivity shell", "no card zoo without hierarchy", "no generic chatbot framing"],
+            "anti_patterns": [
+                "no beige productivity shell",
+                "no card zoo without hierarchy",
+                "no generic chatbot framing",
+            ],
             "sample_seed_data": ["Opening cue", "Sponsor break", "Speaker handoff", "Volunteer issue"],
         }
 
-    if any(token in text for token in ("study", "learning", "exam", "interview", "course", "syllabus", "curriculum")):
-        return {
-            "domain": "learning",
-            "layout_archetype": "studio",
-            "interface_metaphor": "curriculum workshop",
-            "visual_motifs": ["sticky-note syllabus", "progress tracks", "annotation layers", "bright study accents"],
-            "interaction_primitives": ["sprint planning", "topic sequencing", "review scheduling", "confidence tagging"],
-            "reference_objects": ["module", "drill", "review block", "milestone", "syllabus"],
-            "signature_demo_moments": ["turning a vague goal into a syllabus instantly", "showing a smart study sprint populate"],
-            "anti_patterns": ["no empty dashboard shell", "no generic analytics homepage", "no plain textarea-only app"],
-            "sample_seed_data": ["SQL drill", "Case prompt", "Revision block", "Mock interview"],
-        }
-
-    if any(token in text for token in ("budget", "finance", "cash", "tax", "income", "money", "expense")):
+    if (
+        selected_flagship == "runway-reset-ledger"
+        or "cash runway" in existing_domain
+        or "budget" in existing_domain
+        or any(token in text for token in ("budget", "finance", "cash", "tax", "income", "money", "expense"))
+    ):
         return {
             "domain": "finance",
             "layout_archetype": "atlas",
@@ -139,8 +253,15 @@ def _fallback_inspiration_pack(idea: dict, raw_input: str, transcript: str) -> d
             "visual_motifs": ["radial budget rings", "runway ladders", "ledger cards", "ink-and-neon contrast"],
             "interaction_primitives": ["scenario switching", "runway adjustment", "bucket planning", "risk comparison"],
             "reference_objects": ["bucket", "runway", "bill", "ladder", "scenario"],
-            "signature_demo_moments": ["watching runway scenarios recalc live", "turning income chaos into a visible plan"],
-            "anti_patterns": ["no bank clone dashboard", "no spreadsheet skin", "no generic insight cards without money objects"],
+            "signature_demo_moments": [
+                "watching runway scenarios recalc live",
+                "turning income chaos into a visible plan",
+            ],
+            "anti_patterns": [
+                "no bank clone dashboard",
+                "no spreadsheet skin",
+                "no generic insight cards without money objects",
+            ],
             "sample_seed_data": ["Tax bucket", "Safety runway", "Lean month", "Stretch month"],
         }
 
@@ -150,10 +271,22 @@ def _fallback_inspiration_pack(idea: dict, raw_input: str, transcript: str) -> d
             "layout_archetype": "notebook",
             "interface_metaphor": "growth notebook",
             "visual_motifs": ["annotated dossiers", "milestone ribbons", "coach notes", "paper-over-canvas layers"],
-            "interaction_primitives": ["milestone framing", "feedback loops", "habit tracking", "proof artifact capture"],
+            "interaction_primitives": [
+                "milestone framing",
+                "feedback loops",
+                "habit tracking",
+                "proof artifact capture",
+            ],
             "reference_objects": ["milestone", "artifact", "ritual", "reflection", "path"],
-            "signature_demo_moments": ["turning a vague career goal into a roadmap", "pinning proof artifacts to milestones"],
-            "anti_patterns": ["no generic ai assistant shell", "no neutral admin board", "no metric strip as primary story"],
+            "signature_demo_moments": [
+                "turning a vague career goal into a roadmap",
+                "pinning proof artifacts to milestones",
+            ],
+            "anti_patterns": [
+                "no generic ai assistant shell",
+                "no neutral admin board",
+                "no metric strip as primary story",
+            ],
             "sample_seed_data": ["Stakeholder ritual", "Portfolio proof", "Month-one milestone", "Feedback checkpoint"],
         }
 

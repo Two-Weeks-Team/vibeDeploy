@@ -115,7 +115,7 @@ CRITICAL RULES:
 - main.py must include a GET /health endpoint returning {"status": "ok"}
 - main.py must include a GET / root route returning an HTMLResponse landing page that shows: app name, description, all API endpoints with methods, tech stack info, and links to /docs and /redoc. Use inline CSS for dark-themed styling. Import HTMLResponse from fastapi.responses.
 - ai_service.py must call DO Serverless Inference at https://inference.do-ai.run/v1/chat/completions via httpx.
-- Use env var DIGITALOCEAN_INFERENCE_KEY for inference auth (Bearer token).
+- Use env var GRADIENT_MODEL_ACCESS_KEY for inference auth (Bearer token). DIGITALOCEAN_INFERENCE_KEY may be supported as a legacy alias.
 - Default model: openai-gpt-oss-120b (env: DO_INFERENCE_MODEL).
 - ai_service.py CRITICAL REQUIREMENTS:
   * TIMEOUT: httpx.AsyncClient(timeout=90.0) — the 120B model needs 60-90s. The default 5-30s WILL cause timeouts and 502 errors.

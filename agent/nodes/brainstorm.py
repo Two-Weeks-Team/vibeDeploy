@@ -6,6 +6,7 @@ scoring or judging the idea.
 """
 
 import json
+import os
 import re
 
 from langgraph.types import Send
@@ -62,7 +63,23 @@ BRAINSTORM_PROMPTS = {
 }
 
 
+def _serialize_brainstorm_fanout() -> bool:
+    return os.getenv("VIBEDEPLOY_SERIALIZE_AGENT_FANOUT", "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 def fan_out_brainstorm(state: dict) -> list[Send]:
+    if _serialize_brainstorm_fanout():
+        return [
+            Send(
+                "run_brainstorm_agent",
+                {
+                    "serial_run": True,
+                    "agent_names": list(BRAINSTORM_PROMPTS),
+                    "idea": state.get("idea", {}),
+                    "idea_summary": state.get("idea_summary", ""),
+                },
+            )
+        ]
     return [
         Send(
             "run_brainstorm_agent",
@@ -78,6 +95,19 @@ def fan_out_brainstorm(state: dict) -> list[Send]:
 
 async def run_brainstorm_agent(input: dict) -> dict:
     from ..llm import MODEL_CONFIG, ainvoke_with_retry, get_llm, get_rate_limit_fallback_models
+
+    if input.get("serial_run"):
+        merged: dict[str, dict] = {}
+        for agent_name in input.get("agent_names", list(BRAINSTORM_PROMPTS)):
+            result = await run_brainstorm_agent(
+                {
+                    "agent_name": agent_name,
+                    "idea": input.get("idea", {}),
+                    "idea_summary": input.get("idea_summary", ""),
+                }
+            )
+            merged.update(result.get("brainstorm_insights", {}) or {})
+        return {"brainstorm_insights": merged}
 
     agent_name = input.get("agent_name", "unknown")
     idea = input.get("idea", {})

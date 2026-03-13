@@ -24,16 +24,35 @@ async def doc_generator(state: VibeDeployState) -> dict:
 
     doc_model = MODEL_CONFIG["doc_gen"]
     fallback_models = get_rate_limit_fallback_models(doc_model)
-    llm = get_llm(
-        model=doc_model,
-        temperature=0.3,
-        max_tokens=16000,
-    )
-
     context = _build_context(idea, council_analysis, scoring)
     if _should_use_template_docs(fallback_models):
         return {
             "generated_docs": _build_template_docs(idea),
+            "phase": "docs_generated",
+        }
+
+    try:
+        llm = get_llm(
+            model=doc_model,
+            temperature=0.3,
+            max_tokens=16000,
+        )
+    except Exception as exc:
+        return {
+            "generated_docs": {
+                "prd": _fallback_markdown_doc("Product Requirements", idea, str(exc)[:200]),
+                "tech_spec": _fallback_markdown_doc("Technical Specification", idea, str(exc)[:200]),
+                "api_spec": _fallback_markdown_doc("API Specification", idea, str(exc)[:200]),
+                "db_schema": _fallback_markdown_doc("Database Schema", idea, str(exc)[:200]),
+                "app_spec_yaml": yaml.safe_dump(
+                    build_app_spec(
+                        _slugify(idea.get("name") or idea.get("tagline") or "vibedeploy-app"),
+                        f"https://github.com/example/{_slugify(idea.get('name') or idea.get('tagline') or 'vibedeploy-app')}.git",
+                    ),
+                    sort_keys=False,
+                    allow_unicode=False,
+                ),
+            },
             "phase": "docs_generated",
         }
 
@@ -190,7 +209,9 @@ def _fallback_markdown_doc(title: str, idea: dict, reason: str) -> str:
         lines.extend(["", "## Solution", solution])
     if features:
         lines.extend(["", "## Core Features", *[f"- {feature}" for feature in features[:6]]])
-    lines.extend(["", "## Delivery Note", f"- Fallback document generated because doc generation was unavailable: {reason}."])
+    lines.extend(
+        ["", "## Delivery Note", f"- Fallback document generated because doc generation was unavailable: {reason}."]
+    )
     return "\n".join(lines).strip()
 
 

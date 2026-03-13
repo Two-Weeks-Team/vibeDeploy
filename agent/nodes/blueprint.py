@@ -51,7 +51,7 @@ Output a JSON object with this exact structure:
   },
   "shared_constants": {
     "api_base_url": "/api",
-    "env_vars": ["DATABASE_URL", "DIGITALOCEAN_INFERENCE_KEY"],
+    "env_vars": ["DATABASE_URL", "GRADIENT_MODEL_ACCESS_KEY", "DIGITALOCEAN_INFERENCE_KEY"],
     "theme_tokens": ["background", "foreground", "primary", "accent", "card"]
   },
   "experience_contract": {
@@ -88,41 +88,44 @@ async def blueprint_generator(state: VibeDeployState) -> dict:
     if _should_use_template_blueprint(fallback_models):
         return {"blueprint": _build_template_blueprint(idea), "phase": "blueprint"}
 
-    llm = get_llm(model=doc_model, temperature=0.2, max_tokens=4000)
-
     context = json.dumps(
         {"idea": idea, "generated_docs": generated_docs},
         indent=2,
         ensure_ascii=False,
     )
 
-    response = await ainvoke_with_retry(
-        llm,
-        [
-            {"role": "system", "content": BLUEPRINT_SYSTEM_PROMPT},
-            {"role": "user", "content": f"Create a file manifest for this application:\n\n{context}"},
-        ],
-        fallback_models=fallback_models,
-    )
-
-    raw = content_to_str(response.content).strip()
-    cleaned = raw
-    if cleaned.startswith("```"):
-        cleaned = re.sub(r"^```(?:json)?\n?", "", cleaned)
-        cleaned = re.sub(r"\n?```$", "", cleaned)
-
     try:
-        blueprint = json.loads(cleaned)
-    except json.JSONDecodeError:
-        json_match = re.search(r"\{[\s\S]*\}", cleaned)
-        if json_match:
-            try:
-                blueprint = json.loads(json_match.group())
-            except json.JSONDecodeError:
-                logger.error("[BLUEPRINT] All JSON parse attempts failed")
-                blueprint = {"error": "parse_failed", "raw": raw[:500]}
-        else:
-            blueprint = {"error": "no_json_found", "raw": raw[:500]}
+        llm = get_llm(model=doc_model, temperature=0.2, max_tokens=4000)
+        response = await ainvoke_with_retry(
+            llm,
+            [
+                {"role": "system", "content": BLUEPRINT_SYSTEM_PROMPT},
+                {"role": "user", "content": f"Create a file manifest for this application:\n\n{context}"},
+            ],
+            fallback_models=fallback_models,
+        )
+
+        raw = content_to_str(response.content).strip()
+        cleaned = raw
+        if cleaned.startswith("```"):
+            cleaned = re.sub(r"^```(?:json)?\n?", "", cleaned)
+            cleaned = re.sub(r"\n?```$", "", cleaned)
+
+        try:
+            blueprint = json.loads(cleaned)
+        except json.JSONDecodeError:
+            json_match = re.search(r"\{[\s\S]*\}", cleaned)
+            if json_match:
+                try:
+                    blueprint = json.loads(json_match.group())
+                except json.JSONDecodeError:
+                    logger.error("[BLUEPRINT] All JSON parse attempts failed")
+                    blueprint = {"error": "parse_failed", "raw": raw[:500]}
+            else:
+                blueprint = {"error": "no_json_found", "raw": raw[:500]}
+    except Exception as exc:
+        logger.warning("[BLUEPRINT] Falling back to template blueprint: %s", exc)
+        blueprint = _build_template_blueprint(idea)
 
     logger.info(
         "[BLUEPRINT] Generated: frontend=%d files, backend=%d files",
@@ -162,24 +165,29 @@ def _build_template_blueprint(idea: dict) -> dict:
     blueprint = {
         "app_name": app_name,
         "design_system": {
-            "visual_direction": visual_direction_phrase or ", ".join(visual_direction) or "editorial showcase workspace",
+            "visual_direction": visual_direction_phrase
+            or ", ".join(visual_direction)
+            or "editorial showcase workspace",
             "color_tokens": ["background", "primary", "accent", "card", "muted"],
             "typography": str(design_direction.get("typography_strategy") or "display serif with clean sans body"),
-            "motion_principles": _coerce_string_list(design_direction.get("motion_strategy")) or ["staggered reveal", "soft hover lift", "panel transitions"],
+            "motion_principles": _coerce_string_list(design_direction.get("motion_strategy"))
+            or ["staggered reveal", "soft hover lift", "panel transitions"],
             "ui_constraints": ["avoid generic admin templates", "keep the first screen demo-ready"],
         },
         "frontend_files": {},
         "backend_files": {},
         "shared_constants": {
             "api_base_url": "/api",
-            "env_vars": ["DATABASE_URL", "DIGITALOCEAN_INFERENCE_KEY"],
+            "env_vars": ["DATABASE_URL", "GRADIENT_MODEL_ACCESS_KEY", "DIGITALOCEAN_INFERENCE_KEY"],
             "theme_tokens": ["background", "foreground", "primary", "accent", "card"],
         },
         "experience_contract": {
             "required_surfaces": required_surfaces or _surfaces_for_layout(layout_archetype, trust_surfaces),
             "required_states": ["loading", "empty", "error", "success"],
             "proof_points": proof_points or ["visible recent activity", "credible result framing", "shareable outputs"],
-            "interaction_style": str(design_direction.get("layout_strategy") or interface_metaphor or "guided, tactile, and demo-friendly"),
+            "interaction_style": str(
+                design_direction.get("layout_strategy") or interface_metaphor or "guided, tactile, and demo-friendly"
+            ),
         },
         "frontend_backend_contract": [
             {
@@ -226,13 +234,17 @@ def _normalize_blueprint(blueprint: dict, idea: dict) -> dict:
         {"purpose": "main landing page", "imports_from": ["src/components/Hero.tsx"], "exports": ["default"]},
     )
     frontend_files.setdefault("src/app/globals.css", {"purpose": "global styles", "imports_from": [], "exports": []})
-    frontend_files.setdefault("src/lib/api.ts", {"purpose": "API client", "imports_from": [], "exports": ["fetchItems"]})
+    frontend_files.setdefault(
+        "src/lib/api.ts", {"purpose": "API client", "imports_from": [], "exports": ["fetchItems"]}
+    )
     backend_files.setdefault("requirements.txt", {"purpose": "python deps", "imports_from": [], "exports": []})
     backend_files.setdefault(
         "main.py",
         {"purpose": "FastAPI app entry", "imports_from": ["routes", "models"], "exports": ["app"]},
     )
-    backend_files.setdefault("models.py", {"purpose": "SQLAlchemy models", "imports_from": [], "exports": ["Base", "engine"]})
+    backend_files.setdefault(
+        "models.py", {"purpose": "SQLAlchemy models", "imports_from": [], "exports": ["Base", "engine"]}
+    )
     backend_files.setdefault(
         "routes.py",
         {"purpose": "API routes", "imports_from": ["models", "ai_service"], "exports": ["router"]},
@@ -298,7 +310,11 @@ def _normalize_blueprint(blueprint: dict, idea: dict) -> dict:
             "exports": ["default"],
         }
 
-    if _coerce_string_list(idea.get("reference_objects")) or _coerce_string_list(idea.get("sample_seed_data")) or trust_surfaces:
+    if (
+        _coerce_string_list(idea.get("reference_objects"))
+        or _coerce_string_list(idea.get("sample_seed_data"))
+        or trust_surfaces
+    ):
         component_specs["src/components/ReferenceShelf.tsx"] = {
             "purpose": "domain reference objects, sample data, or signature demo shelf",
             "imports_from": [],
@@ -316,7 +332,7 @@ def _normalize_blueprint(blueprint: dict, idea: dict) -> dict:
 
     shared_constants = dict(normalized.get("shared_constants") or {})
     shared_constants.setdefault("api_base_url", "/api")
-    shared_constants.setdefault("env_vars", ["DATABASE_URL", "DIGITALOCEAN_INFERENCE_KEY"])
+    shared_constants.setdefault("env_vars", ["DATABASE_URL", "GRADIENT_MODEL_ACCESS_KEY", "DIGITALOCEAN_INFERENCE_KEY"])
     theme_tokens = shared_constants.get("theme_tokens", [])
     if not isinstance(theme_tokens, list):
         theme_tokens = []
@@ -333,11 +349,15 @@ def _normalize_blueprint(blueprint: dict, idea: dict) -> dict:
     design_system.setdefault("color_tokens", ["background", "primary", "accent", "card", "muted"])
     design_system.setdefault(
         "typography",
-        str(design_direction_from_idea.get("typography_strategy") or "expressive headline paired with readable body copy"),
+        str(
+            design_direction_from_idea.get("typography_strategy")
+            or "expressive headline paired with readable body copy"
+        ),
     )
     design_system.setdefault(
         "motion_principles",
-        _coerce_string_list(design_direction_from_idea.get("motion_strategy")) or ["staggered reveal", "soft state transitions"],
+        _coerce_string_list(design_direction_from_idea.get("motion_strategy"))
+        or ["staggered reveal", "soft state transitions"],
     )
     constraints = design_system.get("ui_constraints", [])
     if not isinstance(constraints, list):
@@ -390,7 +410,9 @@ def _normalize_blueprint(blueprint: dict, idea: dict) -> dict:
     return normalized
 
 
-def _surfaces_for_layout(layout_archetype: str, trust_surfaces: list[str], wants_collection_ui: bool = True) -> list[str]:
+def _surfaces_for_layout(
+    layout_archetype: str, trust_surfaces: list[str], wants_collection_ui: bool = True
+) -> list[str]:
     normalized = layout_archetype.strip().lower()
     if normalized == "storyboard":
         base = ["destination brief", "route board", "moodboard highlights", "saved itineraries"]
