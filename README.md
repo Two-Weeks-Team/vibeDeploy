@@ -208,10 +208,10 @@ Every app below was generated from a **single sentence** — debated by the Vibe
 
 ```
 ┌─────────────────────────────────┐     ┌──────────────────────────────┐
-│  Frontend (App Platform)        │     │  Agent Backend (Gradient ADK) │
-│  Next.js 15 + shadcn/ui        │────▶│  Python + LangGraph           │
-│  Static Site                    │◀────│  @entrypoint → POST /run      │
-│  .do/app.yaml                   │ SSE │  .gradient/agent.yml          │
+│  Web + Gateway (App Platform)   │     │  Agent Core (Gradient ADK)   │
+│  Next.js 15 + FastAPI proxy     │────▶│  Python + LangGraph          │
+│  Result persistence + dashboard │◀────│  @entrypoint → POST /run     │
+│  .do/app.yaml                   │ SSE │  .gradient/agent.yml         │
 └─────────────────────────────────┘     └──────────────────────────────┘
                                                      │
                           ┌──────────────────────────┼──────────────────┐
@@ -223,9 +223,9 @@ Every app below was generated from a **single sentence** — debated by the Vibe
                    └─────────────┘          └──────────────┘   └──────────────┘
 ```
 
-**Two independent deployments:**
-- **Agent** → `gradient agent deploy` to ADK infrastructure (FREE during preview)
-- **Frontend** → DO App Platform via `.do/app.yaml`
+**Two coordinated deployments:**
+- **ADK core** → `gradient agent deploy` to DigitalOcean Gradient ADK
+- **Gateway + web** → DO App Platform via `.do/app.yaml`
 
 ---
 
@@ -314,9 +314,27 @@ Open `http://localhost:3000` and enter your idea.
 
 **Live at: [https://vibedeploy-7tgzk.ondigitalocean.app](https://vibedeploy-7tgzk.ondigitalocean.app)**
 
-### Full Stack → App Platform
+### Gradient ADK Core
 
-The FastAPI backend and Next.js frontend are both deployed via DigitalOcean App Platform:
+`vibeDeploy` uses `gradient agent run` and `gradient agent deploy` as the canonical lifecycle for the orchestration core. The deployed ADK runtime exposes `/run`, and the App Platform API acts as a thin gateway that persists results and relays SSE to the frontend.
+
+```bash
+cd agent
+gradient agent run --host 0.0.0.0 --port 8080
+
+# Production
+./scripts/deploy.sh
+```
+
+Recommended gateway wiring after deploy:
+
+- `VIBEDEPLOY_ADK_URL`: deployed ADK endpoint URL
+- `VIBEDEPLOY_ADK_AUTH_TOKEN`: preferred endpoint access key for gateway-to-agent calls
+- `DIGITALOCEAN_API_TOKEN`: supported fallback auth used by the official `gradient agent init` example
+
+### App Platform Gateway + Web
+
+The frontend and the FastAPI gateway are deployed via DigitalOcean App Platform:
 
 ```bash
 doctl apps create --spec .do/app.yaml
@@ -324,17 +342,14 @@ doctl apps create --spec .do/app.yaml
 # → https://vibedeploy-7tgzk.ondigitalocean.app
 ```
 
-### Gradient AI Agent (API)
+### Observability
+
+Use the official ADK commands for runtime inspection:
 
 ```bash
-# Create agent via doctl (attach Knowledge Base for RAG)
-doctl gradient agent create \
-  --name "vibedeploy-agent" \
-  --project-id "<project-id>" \
-  --model-id "<model-uuid>" \
-  --region "tor1" \
-  --instruction "Your agent instruction" \
-  --knowledge-base-id "<kb-uuid>"
+cd agent
+gradient agent logs
+gradient agent traces
 ```
 
 ### Knowledge Base (RAG)
@@ -359,15 +374,15 @@ vibeDeploy/
 │   ├── src/components/           # UI components (council, brainstorm, scores, deploy)
 │   └── src/lib/                  # SSE client, API helpers
 ├── agent/                        # Python Agent → Gradient ADK
-│   ├── main.py                   # @entrypoint (Gradient ADK)
-│   ├── server.py                 # Local FastAPI server (dev)
+│   ├── main.py                   # @entrypoint (Gradient ADK core)
+│   ├── server.py                 # App Platform gateway + persistence layer
 │   ├── graph.py                  # Evaluation pipeline (LangGraph StateGraph)
 │   ├── graph_brainstorm.py       # Brainstorm pipeline (LangGraph StateGraph)
 │   ├── nodes/                    # Pipeline nodes (input, council, brainstorm, build)
 │   ├── council/                  # 6 Vibe Council agent definitions
 │   ├── tools/                    # YouTube (yt-dlp), GitHub, DO, search tools
-│   └── .gradient/agent.yml       # ADK config (3 lines)
-├── .do/app.yaml                  # App Platform spec (frontend only)
+│   └── .gradient/agent.yml       # ADK config
+├── .do/app.yaml                  # App Platform spec (web + gateway)
 ├── docs/reference/               # 10 planning documents
 └── LICENSE                       # MIT
 ```
