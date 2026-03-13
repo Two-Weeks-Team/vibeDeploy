@@ -1,7 +1,9 @@
 import asyncio
 import json
 import logging
+import os
 import re
+from html import escape as html_escape
 
 from ..llm import MODEL_CONFIG, ainvoke_with_retry, get_llm, get_rate_limit_fallback_models
 from ..prompts.code_templates import (
@@ -16,9 +18,11 @@ logger = logging.getLogger(__name__)
 # Minimum expected file counts for validation
 _MIN_FRONTEND_FILES = 3  # At least package.json + 2 source files
 _MIN_BACKEND_FILES = 2  # At least main.py + requirements.txt
-_CODEGEN_MODEL_MAX_ATTEMPTS = 2
+_CODEGEN_MODEL_MAX_ATTEMPTS = 4
 _STRICT_PRIMARY_CODEGEN_MAX_ATTEMPTS = 3
 _STACK_GENERATION_PAUSE_SECONDS = 2
+_FALLBACK_FRONTEND_MARKER_FILE = ".vibedeploy-fallback-frontend.json"
+_FALLBACK_BACKEND_MARKER_FILE = ".vibedeploy-fallback-backend.json"
 _FONT_DEFAULT_WEIGHTS = {
     "Merriweather": ["400", "700"],
     "Playfair_Display": ["400", "700"],
@@ -229,6 +233,9 @@ async def code_generator(state: VibeDeployState) -> dict:
     blueprint = state.get("blueprint", {}) or {}
     prompt_strategy = state.get("prompt_strategy", {}) or {}
     code_eval_result = state.get("code_eval_result")
+    execution_tasks = state.get("execution_tasks") or []
+    repair_tasks = state.get("repair_tasks") or []
+    task_contracts = state.get("task_contracts") or {}
     existing_frontend_code = _normalize_frontend_files(_normalize_files_dict(state.get("frontend_code") or {}))
     existing_backend_code = _normalize_backend_files(_normalize_files_dict(state.get("backend_code") or {}))
     frontend_model = MODEL_CONFIG.get("code_gen_frontend", MODEL_CONFIG["code_gen"])
@@ -238,22 +245,38 @@ async def code_generator(state: VibeDeployState) -> dict:
     frontend_max_attempts = _codegen_max_attempts(frontend_fallback_models)
     backend_max_attempts = _codegen_max_attempts(backend_fallback_models)
 
-    frontend_llm = get_llm(
-        model=frontend_model,
-        temperature=0.3,
-        max_tokens=12000,
-    )
-    backend_llm = get_llm(
-        model=backend_model,
-        temperature=0.3,
-        max_tokens=10000,
-    )
+    frontend_llm = None
+    backend_llm = None
+    frontend_llm_error = ""
+    backend_llm_error = ""
+    try:
+        frontend_llm = get_llm(
+            model=frontend_model,
+            temperature=0.3,
+            max_tokens=12000,
+        )
+    except Exception as exc:
+        frontend_llm_error = str(exc)[:200]
+        logger.warning("[CODE_GEN] Frontend model unavailable, using fallback bundle: %s", frontend_llm_error)
+    try:
+        backend_llm = get_llm(
+            model=backend_model,
+            temperature=0.3,
+            max_tokens=10000,
+        )
+    except Exception as exc:
+        backend_llm_error = str(exc)[:200]
+        logger.warning("[CODE_GEN] Backend model unavailable, using fallback bundle: %s", backend_llm_error)
 
+    iteration = state.get("code_eval_iteration", 0)
     context = json.dumps(
         {
             "idea": idea,
             "generated_docs": generated_docs,
             "blueprint": blueprint,
+            "execution_tasks": execution_tasks,
+            "repair_tasks": repair_tasks,
+            "task_contracts": task_contracts,
         },
         indent=2,
         ensure_ascii=False,
@@ -276,14 +299,13 @@ async def code_generator(state: VibeDeployState) -> dict:
     frontend_code = dict(existing_frontend_code)
     backend_code = dict(existing_backend_code)
     force_frontend_fallback = _should_force_frontend_fallback(code_eval_result)
-    prefer_deterministic_frontend = bool(str(idea.get("layout_archetype") or "").strip())
 
     if regenerate_frontend:
-        if prefer_deterministic_frontend or force_frontend_fallback:
+        if force_frontend_fallback or frontend_llm is None:
             logger.warning(
-                "[CODE_GEN] Using deterministic frontend scaffold (layout_archetype=%s, forced=%s)",
-                str(idea.get("layout_archetype") or ""),
+                "[CODE_GEN] Using deterministic frontend scaffold after repeated evaluation failure (forced=%s, model_available=%s)",
                 force_frontend_fallback,
+                frontend_llm is not None,
             )
             generated_frontend = _build_fallback_frontend_bundle(context)
         else:
@@ -294,6 +316,7 @@ async def code_generator(state: VibeDeployState) -> dict:
                 eval_feedback=eval_feedback,
                 fallback_models=frontend_fallback_models,
                 max_attempts=frontend_max_attempts,
+                iteration=iteration,
             )
         frontend_code = _merge_generated_files(existing_frontend_code, generated_frontend, label="frontend")
     else:
@@ -303,14 +326,19 @@ async def code_generator(state: VibeDeployState) -> dict:
         await asyncio.sleep(_STACK_GENERATION_PAUSE_SECONDS)
 
     if regenerate_backend:
-        generated_backend = await _generate_backend_files(
-            backend_llm,
-            context,
-            prompt_strategy=prompt_strategy,
-            eval_feedback=eval_feedback,
-            fallback_models=backend_fallback_models,
-            max_attempts=backend_max_attempts,
-        )
+        if backend_llm is None:
+            logger.warning("[CODE_GEN] Using deterministic backend scaffold because the backend model is unavailable")
+            generated_backend = _build_fallback_backend_bundle(context)
+        else:
+            generated_backend = await _generate_backend_files(
+                backend_llm,
+                context,
+                prompt_strategy=prompt_strategy,
+                eval_feedback=eval_feedback,
+                fallback_models=backend_fallback_models,
+                max_attempts=backend_max_attempts,
+                iteration=iteration,
+            )
         backend_code = _merge_generated_files(existing_backend_code, generated_backend, label="backend")
     else:
         logger.info("[CODE_GEN] Reusing previous backend bundle (%d files)", len(backend_code))
@@ -318,6 +346,15 @@ async def code_generator(state: VibeDeployState) -> dict:
     frontend_code, backend_code = _normalize_cross_stack(frontend_code, backend_code)
 
     generation_warnings = []
+
+    if _FALLBACK_FRONTEND_MARKER_FILE in frontend_code:
+        generation_warnings.append("fallback_frontend_scaffold_used")
+        if frontend_llm_error:
+            generation_warnings.append(f"frontend_model_unavailable:{frontend_llm_error}")
+    if _FALLBACK_BACKEND_MARKER_FILE in backend_code:
+        generation_warnings.append("fallback_backend_scaffold_used")
+        if backend_llm_error:
+            generation_warnings.append(f"backend_model_unavailable:{backend_llm_error}")
 
     if regenerate_frontend and len(frontend_code) < _MIN_FRONTEND_FILES:
         warning = (
@@ -329,14 +366,18 @@ async def code_generator(state: VibeDeployState) -> dict:
         generation_warnings.append(warning)
 
         logger.info("[CODE_GEN] Retrying frontend generation (attempt 2)...")
-        retried_frontend = await _generate_frontend_files(
-            frontend_llm,
-            context,
-            retry=True,
-            prompt_strategy=prompt_strategy,
-            eval_feedback=eval_feedback,
-            fallback_models=frontend_fallback_models,
-            max_attempts=frontend_max_attempts,
+        retried_frontend = (
+            _build_fallback_frontend_bundle(context)
+            if frontend_llm is None
+            else await _generate_frontend_files(
+                frontend_llm,
+                context,
+                retry=True,
+                prompt_strategy=prompt_strategy,
+                eval_feedback=eval_feedback,
+                fallback_models=frontend_fallback_models,
+                max_attempts=frontend_max_attempts,
+            )
         )
         frontend_code = _merge_generated_files(frontend_code, retried_frontend, label="frontend")
         frontend_code, backend_code = _normalize_cross_stack(frontend_code, backend_code)
@@ -359,14 +400,18 @@ async def code_generator(state: VibeDeployState) -> dict:
         generation_warnings.append(warning)
 
         logger.info("[CODE_GEN] Retrying backend generation (attempt 2)...")
-        retried_backend = await _generate_backend_files(
-            backend_llm,
-            context,
-            retry=True,
-            prompt_strategy=prompt_strategy,
-            eval_feedback=eval_feedback,
-            fallback_models=backend_fallback_models,
-            max_attempts=backend_max_attempts,
+        retried_backend = (
+            _build_fallback_backend_bundle(context)
+            if backend_llm is None
+            else await _generate_backend_files(
+                backend_llm,
+                context,
+                retry=True,
+                prompt_strategy=prompt_strategy,
+                eval_feedback=eval_feedback,
+                fallback_models=backend_fallback_models,
+                max_attempts=backend_max_attempts,
+            )
         )
         backend_code = _merge_generated_files(backend_code, retried_backend, label="backend")
         frontend_code, backend_code = _normalize_cross_stack(frontend_code, backend_code)
@@ -410,6 +455,8 @@ def _build_eval_feedback(code_eval_result: dict | None) -> str | None:
 def _should_force_frontend_fallback(code_eval_result: dict | None) -> bool:
     if not isinstance(code_eval_result, dict) or code_eval_result.get("passed", False):
         return False
+    if os.getenv("VIBEDEPLOY_ENABLE_LAST_RESORT_FRONTEND_FALLBACK", "").strip() != "1":
+        return False
 
     try:
         iteration = int(code_eval_result.get("iteration", 0) or 0)
@@ -425,7 +472,7 @@ def _should_regenerate_target(
     blueprint: dict | None,
     code_eval_result: dict | None,
 ) -> bool:
-    expected_files = ((blueprint or {}).get(f"{target}_files") or {})
+    expected_files = (blueprint or {}).get(f"{target}_files") or {}
     if not expected_files:
         return False
     if not existing_files:
@@ -510,6 +557,7 @@ def _build_frontend_prompt_messages(
     prompt_strategy: dict | None,
     retry: bool = False,
     eval_feedback: str | None = None,
+    iteration: int = 0,
 ) -> list[dict[str, str]]:
     extra_instruction = ""
     if retry:
@@ -520,6 +568,13 @@ def _build_frontend_prompt_messages(
         )
     if eval_feedback:
         extra_instruction += f"\n\nPREVIOUS EVALUATION FEEDBACK (fix these issues):\n{eval_feedback}"
+    if iteration > 1:
+        extra_instruction += (
+            f"\n\nITERATION {iteration}: This is retry #{iteration}. "
+            "Focus on fixing the specific issues from evaluation feedback. "
+            "Do NOT regenerate files that already passed evaluation. "
+            "Only modify files that had problems."
+        )
 
     strategy_appendix = ((prompt_strategy or {}).get("frontend_prompt_appendix") or "").strip()
     cross_model_contract = _build_cross_model_user_contract(prompt_strategy, "frontend")
@@ -556,7 +611,12 @@ def _build_frontend_prompt_messages(
         system_sections.append("### Runtime Strategy Stack\n" + strategy_appendix)
 
     if _should_use_user_only_messages(prompt_strategy, "frontend"):
-        return [{"role": "user", "content": "\n\n".join(section for section in [*system_sections, *user_sections] if section)}]
+        return [
+            {
+                "role": "user",
+                "content": "\n\n".join(section for section in [*system_sections, *user_sections] if section),
+            }
+        ]
 
     return [
         {"role": "system", "content": "\n\n".join(section for section in system_sections if section)},
@@ -570,6 +630,7 @@ def _build_backend_prompt_messages(
     prompt_strategy: dict | None,
     retry: bool = False,
     eval_feedback: str | None = None,
+    iteration: int = 0,
 ) -> list[dict[str, str]]:
     extra_instruction = ""
     if retry:
@@ -580,6 +641,13 @@ def _build_backend_prompt_messages(
         )
     if eval_feedback:
         extra_instruction += f"\n\nPREVIOUS EVALUATION FEEDBACK (fix these issues):\n{eval_feedback}"
+    if iteration > 1:
+        extra_instruction += (
+            f"\n\nITERATION {iteration}: This is retry #{iteration}. "
+            "Focus on fixing the specific issues from evaluation feedback. "
+            "Do NOT regenerate files that already passed evaluation. "
+            "Only modify files that had problems."
+        )
 
     strategy_appendix = ((prompt_strategy or {}).get("backend_prompt_appendix") or "").strip()
     cross_model_contract = _build_cross_model_user_contract(prompt_strategy, "backend")
@@ -611,7 +679,12 @@ def _build_backend_prompt_messages(
         system_sections.append("### Runtime Strategy Stack\n" + strategy_appendix)
 
     if _should_use_user_only_messages(prompt_strategy, "backend"):
-        return [{"role": "user", "content": "\n\n".join(section for section in [*system_sections, *user_sections] if section)}]
+        return [
+            {
+                "role": "user",
+                "content": "\n\n".join(section for section in [*system_sections, *user_sections] if section),
+            }
+        ]
 
     return [
         {"role": "system", "content": "\n\n".join(section for section in system_sections if section)},
@@ -627,6 +700,7 @@ async def _generate_frontend_files(
     eval_feedback: str | None = None,
     fallback_models: list[str] | None = None,
     max_attempts: int = 6,
+    iteration: int = 0,
 ) -> dict[str, str]:
     try:
         response = await ainvoke_with_retry(
@@ -636,12 +710,14 @@ async def _generate_frontend_files(
                 prompt_strategy=prompt_strategy,
                 retry=retry,
                 eval_feedback=eval_feedback,
+                iteration=iteration,
             ),
             max_attempts=max_attempts,
             fallback_models=fallback_models,
+            rate_limit_switch_after_attempts=max_attempts,
         )
 
-        parsed = _parse_json_response(response.content, {"files": {}}, label="frontend")
+        parsed = await _parse_generated_files_response(response.content, label="frontend")
         files = parsed.get("files", {})
         return _normalize_frontend_files(_normalize_files_dict(files))
     except Exception as exc:
@@ -657,6 +733,7 @@ async def _generate_backend_files(
     eval_feedback: str | None = None,
     fallback_models: list[str] | None = None,
     max_attempts: int = 6,
+    iteration: int = 0,
 ) -> dict[str, str]:
     try:
         response = await ainvoke_with_retry(
@@ -666,12 +743,14 @@ async def _generate_backend_files(
                 prompt_strategy=prompt_strategy,
                 retry=retry,
                 eval_feedback=eval_feedback,
+                iteration=iteration,
             ),
             max_attempts=max_attempts,
             fallback_models=fallback_models,
+            rate_limit_switch_after_attempts=max_attempts,
         )
 
-        parsed = _parse_json_response(response.content, {"files": {}}, label="backend")
+        parsed = await _parse_generated_files_response(response.content, label="backend")
         files = parsed.get("files", {})
         return _normalize_backend_files(_normalize_files_dict(files))
     except Exception as exc:
@@ -711,23 +790,55 @@ def _extract_template_seed(context: str) -> dict[str, object]:
     ui_copy_tone = str(idea.get("ui_copy_tone") or "").strip()
     primary_action_label = str(idea.get("primary_action_label") or "").strip() or "Generate showcase plan"
     ready_title = signature_demo_moments[0] if signature_demo_moments else "Ready for the live demo"
-    ready_detail = str(idea.get("demo_story_hints") or "").strip() or "The first action should create a visible, judge-friendly output."
+    ready_detail = (
+        str(idea.get("demo_story_hints") or "").strip()
+        or "The first action should create a visible, judge-friendly output."
+    )
+    flagship_hint = str(idea.get("selected_flagship") or title or domain).strip()
+    domain_defaults = _fallback_domain_defaults(domain, interface_metaphor, flagship_hint)
+    if not ui_copy_tone:
+        ui_copy_tone = domain_defaults["ui_copy_tone"]
+    if not ready_detail or ("trip" in ready_detail.lower() and "travel" not in domain):
+        ready_detail = domain_defaults["ready_detail"]
 
-    palette = _fallback_palette_for_layout(layout_archetype or domain)
+    palette = _fallback_palette_for_profile(layout_archetype or domain, flagship_hint)
     surface_labels = {
-        "hero": interface_metaphor or _fallback_surface_label(layout_archetype, "hero"),
-        "workspace": surfaces[0] if surfaces else _fallback_surface_label(layout_archetype, "workspace"),
-        "result": surfaces[1] if len(surfaces) > 1 else _fallback_surface_label(layout_archetype, "result"),
-        "support": trust_surfaces[0] if trust_surfaces else _fallback_surface_label(layout_archetype, "support"),
-        "collection": surfaces[-1] if surfaces else _fallback_surface_label(layout_archetype, "collection"),
+        "hero": interface_metaphor or domain_defaults["hero"] or _fallback_surface_label(layout_archetype, "hero"),
+        "workspace": surfaces[0]
+        if surfaces
+        else domain_defaults["workspace"] or _fallback_surface_label(layout_archetype, "workspace"),
+        "result": surfaces[1]
+        if len(surfaces) > 1
+        else domain_defaults["result"] or _fallback_surface_label(layout_archetype, "result"),
+        "support": trust_surfaces[0]
+        if trust_surfaces
+        else domain_defaults["support"] or _fallback_surface_label(layout_archetype, "support"),
+        "collection": surfaces[-1]
+        if surfaces
+        else domain_defaults["collection"] or _fallback_surface_label(layout_archetype, "collection"),
     }
     placeholders = {
-        "query": str(input_labels.get("query_label") or "Describe the session you want to generate.").strip(),
-        "preferences": str(input_labels.get("preferences_label") or "Add constraints, style cues, or priorities.").strip(),
+        "query": str(
+            input_labels.get("query_label")
+            or domain_defaults["query_placeholder"]
+            or "Describe the session you want to generate."
+        ).strip(),
+        "preferences": str(
+            input_labels.get("preferences_label")
+            or domain_defaults["preferences_placeholder"]
+            or "Add constraints, style cues, or priorities."
+        ).strip(),
     }
     stats = [
-        {"label": output_entities[0] if output_entities else "Feature lanes", "value": str(len(features))},
-        {"label": trust_surfaces[0] if trust_surfaces else "Saved library", "value": "0"},
+        {
+            "label": output_entities[0]
+            if output_entities
+            else reference_objects[0]
+            if reference_objects
+            else "Feature lanes",
+            "value": str(len(features)),
+        },
+        {"label": surface_labels["collection"], "value": "0"},
         {"label": "Readiness score", "value": "88"},
     ]
 
@@ -740,8 +851,10 @@ def _extract_template_seed(context: str) -> dict[str, object]:
         "layout_archetype": layout_archetype,
         "domain": domain,
         "ui_copy_tone": ui_copy_tone,
-        "primary_action_label": primary_action_label,
-        "ready_title": ready_title,
+        "primary_action_label": primary_action_label
+        if primary_action_label != "Generate showcase plan"
+        else domain_defaults["button_label"],
+        "ready_title": ready_title if ready_title != "Ready for the live demo" else domain_defaults["ready_title"],
         "ready_detail": ready_detail,
         "surface_labels": surface_labels,
         "placeholders": placeholders,
@@ -752,15 +865,118 @@ def _extract_template_seed(context: str) -> dict[str, object]:
         "collection_title": (
             f"{interface_metaphor.title()} stays visible after each run."
             if interface_metaphor
-            else "Outputs stay visible after each successful run."
+            else domain_defaults["collection_title"]
         ),
-        "support_title": (
-            trust_surfaces[0].title() if trust_surfaces else "Supporting evidence and proof points"
-        ),
-        "reference_title": (
-            surfaces[2].title() if len(surfaces) > 2 else "Signature demo objects"
-        ),
-        "button_label": primary_action_label,
+        "support_title": (trust_surfaces[0].title() if trust_surfaces else domain_defaults["support_title"]),
+        "reference_title": (surfaces[2].title() if len(surfaces) > 2 else domain_defaults["reference_title"]),
+        "button_label": primary_action_label
+        if primary_action_label != "Generate showcase plan"
+        else domain_defaults["button_label"],
+    }
+
+
+def _fallback_domain_defaults(domain: str, interface_metaphor: str, flagship_hint: str = "") -> dict[str, str]:
+    normalized = " ".join(part for part in [domain or "", flagship_hint or ""] if part).lower()
+    if "creator" in normalized or "content" in normalized:
+        return {
+            "hero": interface_metaphor or "editorial production board",
+            "workspace": "hook card builder",
+            "result": "shot list",
+            "support": "repurpose lane",
+            "collection": "publish queue",
+            "query_placeholder": "Content angle, audience, or campaign brief",
+            "preferences_placeholder": "Platforms, tone, cadence, and recording constraints",
+            "button_label": "Generate content batch",
+            "ready_title": "assembling a multi-post creator batch live",
+            "ready_detail": "Show the system turning rough content intent into a reusable creator batch with hooks, shot lists, and repurpose lanes.",
+            "collection_title": "Editorial Production Board stays visible after each run.",
+            "support_title": "Repurpose Lane",
+            "reference_title": "Publish Queue",
+            "ui_copy_tone": "creator-native and decisive",
+        }
+    if "travel" in normalized or "weekender" in normalized:
+        return {
+            "hero": interface_metaphor or "postcard route studio",
+            "workspace": "route card",
+            "result": "district stop",
+            "support": "saved trip shelf",
+            "collection": "destination brief",
+            "query_placeholder": "Trip brief, mood, or city goal",
+            "preferences_placeholder": "Style, budget, season, and must-see cues",
+            "button_label": "Build trip route",
+            "ready_title": "assembling a day-by-day route live",
+            "ready_detail": "Show the system turning a rough travel cue into a screenshot-ready route board with stops, backups, and timing fallbacks.",
+            "collection_title": "Postcard Route Studio stays visible after each run.",
+            "support_title": "Saved Trip Shelf",
+            "reference_title": "Backup Plan",
+            "ui_copy_tone": "cinematic and traveler-friendly",
+        }
+    if "budget" in normalized or "cash runway" in normalized or "financial" in normalized:
+        return {
+            "hero": interface_metaphor or "money runway atlas",
+            "workspace": "runway band",
+            "result": "scenario card",
+            "support": "safety ladder",
+            "collection": "money bucket archive",
+            "query_placeholder": "Income shock, budget reset, or monthly target",
+            "preferences_placeholder": "Bills, risk tolerance, runway goal, and safety rules",
+            "button_label": "Build runway plan",
+            "ready_title": "turning a reset brief into a runway map",
+            "ready_detail": "Show the system turning a money reset brief into a visible runway plan with buckets, scenarios, and tradeoff clarity.",
+            "collection_title": "Money Runway Atlas stays visible after each run.",
+            "support_title": "Safety Ladder",
+            "reference_title": "Scenario Card",
+            "ui_copy_tone": "calm and analytical",
+        }
+    if "interview" in normalized or "learning" in normalized:
+        return {
+            "hero": interface_metaphor or "curriculum workshop",
+            "workspace": "sprint lane",
+            "result": "drill card",
+            "support": "review block",
+            "collection": "saved revision roadmap",
+            "query_placeholder": "Learning goal or interview target",
+            "preferences_placeholder": "Available time, topics, and pressure points",
+            "button_label": "Generate study sprint",
+            "ready_title": "turning a vague goal into a syllabus instantly",
+            "ready_detail": "Show the system turning an interview target into a sprint lane, drill sequence, and saved revision roadmap.",
+            "collection_title": "Curriculum Workshop stays visible after each run.",
+            "support_title": "Review Block",
+            "reference_title": "Confidence Checkpoint",
+            "ui_copy_tone": "focused and coach-like",
+        }
+    if "meal" in normalized or "grocery" in normalized:
+        return {
+            "hero": interface_metaphor or "kitchen prep atlas",
+            "workspace": "prep block",
+            "result": "meal board",
+            "support": "grocery lane",
+            "collection": "saved meal board",
+            "query_placeholder": "Weekly cooking goal, diet, or meal prep brief",
+            "preferences_placeholder": "Household size, prep time, budget, and ingredients to use",
+            "button_label": "Generate meal prep board",
+            "ready_title": "turning grocery inspiration into a prep board",
+            "ready_detail": "Show the system turning cooking inspiration into prep blocks, grocery lanes, and a reusable meal board.",
+            "collection_title": "Kitchen Prep Atlas stays visible after each run.",
+            "support_title": "Grocery Lane",
+            "reference_title": "Container Checklist",
+            "ui_copy_tone": "practical and kitchen-ready",
+        }
+    return {
+        "hero": interface_metaphor or "product surface",
+        "workspace": "primary workspace",
+        "result": "insight panel",
+        "support": "supporting evidence",
+        "collection": "saved library",
+        "query_placeholder": "Describe the session you want to generate.",
+        "preferences_placeholder": "Add constraints, style cues, or priorities.",
+        "button_label": "Generate showcase plan",
+        "ready_title": "Ready for the live demo",
+        "ready_detail": "The first action should create a visible, judge-friendly output.",
+        "collection_title": "Outputs stay visible after each successful run.",
+        "support_title": "Supporting evidence and proof points",
+        "reference_title": "Signature demo objects",
+        "ui_copy_tone": "clear and direct",
     }
 
 
@@ -802,13 +1018,16 @@ def _fallback_surface_label(layout_archetype: str, role: str) -> str:
             "collection": "Saved coaching paths",
         },
     }
-    return labels.get(layout_archetype, {}).get(role, {
-        "hero": "Product surface",
-        "workspace": "Primary workspace",
-        "result": "Insight or result panel",
-        "support": "Secondary supporting panel",
-        "collection": "Saved library and recent activity",
-    }[role])
+    return labels.get(layout_archetype, {}).get(
+        role,
+        {
+            "hero": "Product surface",
+            "workspace": "Primary workspace",
+            "result": "Insight or result panel",
+            "support": "Secondary supporting panel",
+            "collection": "Saved library and recent activity",
+        }[role],
+    )
 
 
 def _fallback_palette_for_layout(layout_archetype: str) -> dict[str, str]:
@@ -864,29 +1083,112 @@ def _fallback_palette_for_layout(layout_archetype: str) -> dict[str, str]:
             "font": '"Fraunces", Georgia, serif',
         },
     }
-    return palettes.get(layout_archetype, {
-        "background": "#f3efe4",
-        "foreground": "#1f1a17",
-        "primary": "#0f5f52",
-        "accent": "#d98c3f",
-        "card": "rgba(255, 252, 246, 0.86)",
-        "muted": "rgba(31, 26, 23, 0.62)",
-        "border": "rgba(31, 26, 23, 0.12)",
-        "font": 'Georgia, "Times New Roman", serif',
-    })
+    return palettes.get(
+        layout_archetype,
+        {
+            "background": "#f3efe4",
+            "foreground": "#1f1a17",
+            "primary": "#0f5f52",
+            "accent": "#d98c3f",
+            "card": "rgba(255, 252, 246, 0.86)",
+            "muted": "rgba(31, 26, 23, 0.62)",
+            "border": "rgba(31, 26, 23, 0.12)",
+            "font": 'Georgia, "Times New Roman", serif',
+        },
+    )
+
+
+def _fallback_palette_for_profile(layout_archetype: str, flagship_hint: str) -> dict[str, str]:
+    normalized = str(flagship_hint or "").lower()
+    if "creator" in normalized:
+        return {
+            "background": "#f7f2ec",
+            "foreground": "#1d1820",
+            "primary": "#1a1330",
+            "accent": "#ff6b6b",
+            "card": "rgba(255, 248, 243, 0.9)",
+            "muted": "rgba(29, 24, 32, 0.62)",
+            "border": "rgba(29, 24, 32, 0.12)",
+            "font": '"Fraunces", Georgia, serif',
+        }
+    if "weekender" in normalized or "routepostcard" in normalized or "travel" in normalized:
+        return {
+            "background": "#f5eadc",
+            "foreground": "#211814",
+            "primary": "#0c5c73",
+            "accent": "#f08a3c",
+            "card": "rgba(255, 249, 242, 0.9)",
+            "muted": "rgba(33, 24, 20, 0.6)",
+            "border": "rgba(33, 24, 20, 0.12)",
+            "font": '"Cormorant Garamond", Georgia, serif',
+        }
+    if "runway" in normalized or "ledger" in normalized or "finance" in normalized:
+        return {
+            "background": "#f3f5f2",
+            "foreground": "#142018",
+            "primary": "#0f6c48",
+            "accent": "#d9a441",
+            "card": "rgba(252, 255, 250, 0.92)",
+            "muted": "rgba(20, 32, 24, 0.6)",
+            "border": "rgba(20, 32, 24, 0.1)",
+            "font": '"IBM Plex Sans", "Helvetica Neue", sans-serif',
+        }
+    if "interview" in normalized or "forge" in normalized or "study" in normalized:
+        return {
+            "background": "#eff3ff",
+            "foreground": "#162139",
+            "primary": "#3159ff",
+            "accent": "#ff9a3d",
+            "card": "rgba(255, 255, 255, 0.92)",
+            "muted": "rgba(22, 33, 57, 0.6)",
+            "border": "rgba(49, 89, 255, 0.12)",
+            "font": '"Sora", "Avenir Next", sans-serif',
+        }
+    if "meal" in normalized or "prep" in normalized or "kitchen" in normalized:
+        return {
+            "background": "#f1f6ea",
+            "foreground": "#182114",
+            "primary": "#497b2b",
+            "accent": "#ff9f43",
+            "card": "rgba(252, 255, 248, 0.92)",
+            "muted": "rgba(24, 33, 20, 0.58)",
+            "border": "rgba(24, 33, 20, 0.1)",
+            "font": '"IBM Plex Sans", "Helvetica Neue", sans-serif',
+        }
+    return _fallback_palette_for_layout(layout_archetype)
 
 
 def _build_fallback_frontend_bundle(context: str) -> dict[str, str]:
     seed = _extract_template_seed(context)
     title = str(seed["title"])
     tagline = str(seed["tagline"])
-    features = list(seed["features"])
-    proof_points = list(seed["proof_points"])
     palette = dict(seed["palette"])
 
     return _normalize_frontend_files(
         {
+            _FALLBACK_FRONTEND_MARKER_FILE: json.dumps(
+                {"kind": "frontend", "reason": "deterministic_fallback"}, indent=2
+            ),
             "package.json": json.dumps({"name": str(seed["slug"]), "private": True}, indent=2),
+            "next.config.js": """/** @type {import('next').NextConfig} */
+const nextConfig = {
+  async rewrites() {
+    const apiBase = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+    return [
+      {
+        source: "/api/:path*",
+        destination: `${apiBase}/api/:path*`,
+      },
+    ];
+  },
+};
+
+module.exports = nextConfig;
+""",
+            "public/hero-scene.svg": _build_fallback_scene_svg(seed),
+            "public/thumb-1.svg": _build_fallback_thumb_svg(seed, 0),
+            "public/thumb-2.svg": _build_fallback_thumb_svg(seed, 1),
+            "public/thumb-3.svg": _build_fallback_thumb_svg(seed, 2),
             "src/app/layout.tsx": f"""import type {{ Metadata }} from "next";
 import type {{ ReactNode }} from "react";
 import "./globals.css";
@@ -941,19 +1243,25 @@ export async function createInsights(body: { selection: string; context: string 
   tagline: string;
   proofPoints: string[];
   eyebrow: string;
+  visualSrc: string;
 };
 
-export default function Hero({ appName, tagline, proofPoints, eyebrow }: HeroProps) {
+export default function Hero({ appName, tagline, proofPoints, eyebrow, visualSrc }: HeroProps) {
   return (
     <section className="hero">
-      <span className="eyebrow">{eyebrow}</span>
-      <h1>{appName}</h1>
-      <p>{tagline}</p>
-      <ul className="hero-proof-list">
-        {proofPoints.map((point) => (
-          <li key={point}>{point}</li>
-        ))}
-      </ul>
+      <div className="hero-copy">
+        <span className="eyebrow">{eyebrow}</span>
+        <h1>{appName}</h1>
+        <p>{tagline}</p>
+        <ul className="hero-proof-list">
+          {proofPoints.map((point) => (
+            <li className="proof-pill" key={point}>{point}</li>
+          ))}
+        </ul>
+      </div>
+      <div className="hero-visual-frame">
+        <img className="hero-visual" src={visualSrc} alt={`${appName} visual`} />
+      </div>
     </section>
   );
 }
@@ -1048,11 +1356,24 @@ export default function FeaturePanel({ eyebrow, title, features, proofPoints }: 
     <section className="feature-panel">
       <span className="eyebrow">{eyebrow}</span>
       <h2>{title}</h2>
-      <ul className="feature-list">
-        {features.concat(proofPoints).map((entry) => (
-          <li key={entry}>{entry}</li>
-        ))}
-      </ul>
+      <div className="feature-columns">
+        <div className="feature-group">
+          <h3>Core moves</h3>
+          <ul className="feature-list">
+            {features.map((entry) => (
+              <li key={entry}>{entry}</li>
+            ))}
+          </ul>
+        </div>
+        <div className="feature-group">
+          <h3>Proof markers</h3>
+          <ul className="feature-list feature-proof-list">
+            {proofPoints.map((entry) => (
+              <li key={entry}>{entry}</li>
+            ))}
+          </ul>
+        </div>
+      </div>
     </section>
   );
 }
@@ -1063,9 +1384,10 @@ export default function FeaturePanel({ eyebrow, title, features, proofPoints }: 
   items: string[];
   objects: string[];
   tone: string;
+  thumbs: string[];
 };
 
-export default function ReferenceShelf({ eyebrow, title, items, objects, tone }: ReferenceShelfProps) {
+export default function ReferenceShelf({ eyebrow, title, items, objects, tone, thumbs }: ReferenceShelfProps) {
   return (
     <section className="reference-shelf">
       <div className="section-heading">
@@ -1076,6 +1398,11 @@ export default function ReferenceShelf({ eyebrow, title, items, objects, tone }:
       <div className="reference-grid">
         {items.map((item, index) => (
           <article className="reference-card" key={`${item}-${index}`}>
+            <img
+              className="reference-thumb"
+              src={thumbs[index % Math.max(thumbs.length, 1)] || "/thumb-1.svg"}
+              alt={`${item} visual`}
+            />
             <strong>{item}</strong>
             <span>{objects[index % Math.max(objects.length, 1)] || title}</span>
           </article>
@@ -1100,10 +1427,14 @@ export default function CollectionPanel({
   saved,
   eyebrow,
   title,
+  emptyTitle,
+  emptyDetail,
 }: {
   saved: SavedPlan[];
   eyebrow: string;
   title: string;
+  emptyTitle: string;
+  emptyDetail: string;
 }) {
   return (
     <section className="collection-panel">
@@ -1127,9 +1458,9 @@ export default function CollectionPanel({
         ) : (
             <article className="saved-card">
               <span className="saved-score">Empty state</span>
-              <h3>Generate the first output</h3>
-              <p>The saved library and recent activity surface will fill after the first successful run.</p>
-          </article>
+              <h3>{emptyTitle}</h3>
+              <p>{emptyDetail}</p>
+           </article>
         )}
       </div>
     </section>
@@ -1195,8 +1526,15 @@ def _build_fallback_page_source(seed: dict[str, object]) -> str:
     ui_copy_tone_json = json.dumps(str(seed["ui_copy_tone"] or "intentional and domain-specific"))
     sample_seed_data_json = json.dumps(list(seed["sample_seed_data"]))
     reference_objects_json = json.dumps(list(seed["reference_objects"]))
+    hero_visual_json = json.dumps("/hero-scene.svg")
+    thumbs_json = json.dumps(["/thumb-1.svg", "/thumb-2.svg", "/thumb-3.svg"])
+    slug_json = json.dumps(str(seed["slug"]))
+    empty_collection_title_json = json.dumps(f"Create the first {str(seed['surface_labels']['collection']).lower()}")
+    empty_collection_detail_json = json.dumps(
+        f"The {str(seed['surface_labels']['collection']).lower()} surface fills after the first successful run."
+    )
 
-    return f'''"use client";
+    return f""""use client";
 
 import {{ useState }} from "react";
 import CollectionPanel from "@/components/CollectionPanel";
@@ -1227,6 +1565,11 @@ const LAYOUT: LayoutKind = {layout_json};
 const UI_COPY_TONE = {ui_copy_tone_json};
 const SAMPLE_ITEMS = {sample_seed_data_json};
 const REFERENCE_OBJECTS = {reference_objects_json};
+const HERO_VISUAL = {hero_visual_json};
+const THUMBS = {thumbs_json};
+const DOMAIN_CLASS: string = {slug_json};
+const EMPTY_COLLECTION_TITLE = {empty_collection_title_json};
+const EMPTY_COLLECTION_DETAIL = {empty_collection_detail_json};
 
 type PlanItem = {{ title: string; detail: string; score: number }};
 type InsightPayload = {{ insights: string[]; next_actions: string[]; highlights: string[] }};
@@ -1273,6 +1616,7 @@ export default function Page() {{
       tagline={{TAGLINE}}
       proofPoints={{PROOF_POINTS}}
       eyebrow={{SURFACE_LABELS.hero}}
+      visualSrc={{HERO_VISUAL}}
     />
   );
   const statsNode = <StatsStrip stats={{stats}} />;
@@ -1301,7 +1645,15 @@ export default function Page() {{
   const featureNode = (
     <FeaturePanel eyebrow={{SURFACE_LABELS.support}} title={{SUPPORT_TITLE}} features={{FEATURE_CHIPS}} proofPoints={{PROOF_POINTS}} />
   );
-  const collectionNode = <CollectionPanel eyebrow={{SURFACE_LABELS.collection}} title={{COLLECTION_TITLE}} saved={{saved}} />;
+  const collectionNode = (
+    <CollectionPanel
+      eyebrow={{SURFACE_LABELS.collection}}
+      title={{COLLECTION_TITLE}}
+      saved={{saved}}
+      emptyTitle={{EMPTY_COLLECTION_TITLE}}
+      emptyDetail={{EMPTY_COLLECTION_DETAIL}}
+    />
+  );
   const referenceNode = (
     <ReferenceShelf
       eyebrow={{SURFACE_LABELS.support}}
@@ -1309,10 +1661,82 @@ export default function Page() {{
       items={{SAMPLE_ITEMS}}
       objects={{REFERENCE_OBJECTS}}
       tone={{UI_COPY_TONE}}
+      thumbs={{THUMBS}}
     />
   );
 
   function renderLayout() {{
+    if (DOMAIN_CLASS === "creator-batch-studio") {{
+      return (
+        <section className="creator-shell">
+          <div className="creator-topline">
+            <div className="creator-workbench">
+              {{workspaceNode}}
+              {{statsNode}}
+            </div>
+            {{heroNode}}
+          </div>
+          <div className="creator-editorial-stage">
+            <div className="creator-side-rail">
+              {{featureNode}}
+            </div>
+            <div className="creator-primary-rail">{{primaryNode}}</div>
+            <div className="creator-library-rail">
+              {{referenceNode}}
+            </div>
+          </div>
+          <div className="creator-bottomline">
+            <div className="creator-collection-rail">
+              {{collectionNode}}
+            </div>
+            <div className="creator-proof-rail">{{referenceNode}}</div>
+          </div>
+        </section>
+      );
+    }}
+
+    if (DOMAIN_CLASS === "weekender-route-postcards") {{
+      return (
+        <section className="travel-shell">
+          {{heroNode}}
+          {{statsNode}}
+          <div className="travel-ribbon">{{referenceNode}}</div>
+          <div className="travel-planner-grid">
+            <div className="travel-brief-column">{{workspaceNode}}</div>
+            <div className="travel-result-column">
+              {{primaryNode}}
+              {{collectionNode}}
+            </div>
+            <div className="travel-proof-column">
+              {{featureNode}}
+            </div>
+          </div>
+        </section>
+      );
+    }}
+
+    if (DOMAIN_CLASS === "meal-prep-atlas") {{
+      return (
+        <section className="meal-shell">
+          <div className="meal-top-row">
+            {{heroNode}}
+            <div className="meal-proof-stack">
+              {{statsNode}}
+              {{featureNode}}
+            </div>
+          </div>
+          <div className="meal-main-grid">
+            <div className="meal-planner-column">{{workspaceNode}}</div>
+            <div className="meal-reference-column">{{referenceNode}}</div>
+          </div>
+          <div className="meal-bottom-row">
+            {{primaryNode}}
+            {{collectionNode}}
+          </div>
+        </section>
+      );
+    }}
+
     if (LAYOUT === "storyboard") {{
       return (
         <>
@@ -1441,14 +1865,145 @@ export default function Page() {{
   }}
 
   return (
-    <main className={{`page-shell layout-${{layoutClass}}`}}>
+    <main className={{`page-shell layout-${{layoutClass}} domain-${{DOMAIN_CLASS}}`}}>
       {{renderLayout()}}
     </main>
-  );
+    );
 }}
-'''
-    
-    
+"""
+
+
+def _build_fallback_scene_svg(seed: dict[str, object]) -> str:
+    palette = dict(seed["palette"])
+    title = _svg_text(str(seed["title"]))
+    tagline = _svg_text(str(seed["tagline"]))
+    layout = str(seed.get("layout_archetype") or "lab")
+    objects = list(seed.get("reference_objects") or [])[:3]
+    labels = [_svg_text(str(item)) for item in objects] or ["signal", "artifact", "result"]
+    while len(labels) < 3:
+        labels.append(labels[-1])
+
+    if layout == "storyboard":
+        cards = "".join(
+            [
+                f'<g transform="translate({80 + index * 210} {160 + (index % 2) * 22}) rotate({-6 + index * 6})">'
+                f'<rect width="220" height="280" rx="26" fill="rgba(255,255,255,0.82)" stroke="{palette["border"]}"/>'
+                f'<rect x="20" y="22" width="180" height="150" rx="18" fill="{palette["accent"]}" opacity="0.22"/>'
+                f'<rect x="20" y="190" width="130" height="12" rx="6" fill="{palette["primary"]}" opacity="0.86"/>'
+                f'<rect x="20" y="214" width="168" height="10" rx="5" fill="{palette["foreground"]}" opacity="0.18"/>'
+                f'<text x="20" y="252" font-size="20" fill="{palette["foreground"]}" font-family="Arial, sans-serif">{labels[index]}</text>'
+                "</g>"
+                for index in range(3)
+            ]
+        )
+        inner = cards
+    elif layout == "atlas":
+        inner = "".join(
+            [
+                f'<rect x="80" y="120" width="240" height="180" rx="28" fill="rgba(255,255,255,0.82)" stroke="{palette["border"]}"/>',
+                f'<rect x="360" y="96" width="300" height="220" rx="32" fill="rgba(255,255,255,0.86)" stroke="{palette["border"]}"/>',
+                f'<rect x="700" y="148" width="180" height="180" rx="26" fill="rgba(255,255,255,0.78)" stroke="{palette["border"]}"/>',
+                f'<path d="M200 300 C 280 360, 360 360, 460 250 S 660 120, 780 210" stroke="{palette["primary"]}" stroke-width="14" stroke-linecap="round" fill="none" opacity="0.88"/>',
+                f'<circle cx="200" cy="300" r="18" fill="{palette["accent"]}"/>',
+                f'<circle cx="460" cy="250" r="18" fill="{palette["accent"]}"/>',
+                f'<circle cx="780" cy="210" r="18" fill="{palette["accent"]}"/>',
+                f'<text x="110" y="174" font-size="22" fill="{palette["foreground"]}">{labels[0]}</text>',
+                f'<text x="390" y="150" font-size="22" fill="{palette["foreground"]}">{labels[1]}</text>',
+                f'<text x="725" y="204" font-size="22" fill="{palette["foreground"]}">{labels[2]}</text>',
+            ]
+        )
+    elif layout == "studio":
+        inner = "".join(
+            [
+                f'<rect x="86" y="88" width="760" height="500" rx="24" fill="rgba(255,255,255,0.86)" stroke="{palette["border"]}"/>',
+                "".join(
+                    f'<line x1="120" y1="{160 + row * 52}" x2="800" y2="{160 + row * 52}" stroke="{palette["border"]}" stroke-width="2" opacity="0.8"/>'
+                    for row in range(7)
+                ),
+                "".join(
+                    f'<rect x="{140 + index * 190}" y="120" width="150" height="72" rx="18" fill="{palette["accent"]}" opacity="0.22"/>'
+                    f'<text x="{158 + index * 190}" y="164" font-size="20" fill="{palette["foreground"]}">{labels[index]}</text>'
+                    for index in range(3)
+                ),
+                f'<rect x="170" y="264" width="180" height="108" rx="18" fill="{palette["primary"]}" opacity="0.14"/>',
+                f'<rect x="404" y="312" width="204" height="108" rx="18" fill="{palette["primary"]}" opacity="0.14"/>',
+                f'<rect x="648" y="232" width="126" height="156" rx="18" fill="{palette["accent"]}" opacity="0.18"/>',
+            ]
+        )
+    elif layout == "notebook":
+        inner = "".join(
+            [
+                f'<rect x="92" y="92" width="736" height="490" rx="34" fill="rgba(255,251,247,0.92)" stroke="{palette["border"]}" stroke-dasharray="10 8"/>',
+                "".join(
+                    f'<line x1="132" y1="{160 + row * 50}" x2="792" y2="{160 + row * 50}" stroke="{palette["border"]}" stroke-width="2" opacity="0.8"/>'
+                    for row in range(7)
+                ),
+                f'<path d="M180 110 L320 110 L360 150 L220 150 Z" fill="{palette["accent"]}" opacity="0.26"/>',
+                f'<text x="220" y="140" font-size="22" fill="{palette["foreground"]}">{labels[0]}</text>',
+                f'<rect x="490" y="128" width="210" height="120" rx="20" fill="{palette["primary"]}" opacity="0.16"/>',
+                f'<text x="520" y="196" font-size="22" fill="{palette["foreground"]}">{labels[1]}</text>',
+                f'<rect x="212" y="334" width="420" height="140" rx="22" fill="rgba(255,255,255,0.64)" stroke="{palette["border"]}"/>',
+                f'<text x="250" y="412" font-size="26" fill="{palette["foreground"]}">{labels[2]}</text>',
+            ]
+        )
+    else:
+        inner = "".join(
+            [
+                f'<rect x="96" y="104" width="720" height="460" rx="36" fill="rgba(255,255,255,0.84)" stroke="{palette["border"]}"/>',
+                f'<circle cx="220" cy="220" r="80" fill="{palette["accent"]}" opacity="0.24"/>',
+                f'<circle cx="690" cy="260" r="110" fill="{palette["primary"]}" opacity="0.16"/>',
+                f'<text x="172" y="232" font-size="22" fill="{palette["foreground"]}">{labels[0]}</text>',
+                f'<text x="558" y="268" font-size="22" fill="{palette["foreground"]}">{labels[1]}</text>',
+                f'<rect x="250" y="380" width="400" height="90" rx="22" fill="rgba(255,255,255,0.68)" stroke="{palette["border"]}"/>',
+                f'<text x="310" y="435" font-size="24" fill="{palette["foreground"]}">{labels[2]}</text>',
+            ]
+        )
+
+    return (
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 640" fill="none">'
+        f'<defs><linearGradient id="hero-gradient" x1="0" y1="0" x2="1" y2="1">'
+        f'<stop offset="0%" stop-color="{palette["background"]}"/>'
+        f'<stop offset="100%" stop-color="{palette["card"]}"/>'
+        f"</linearGradient></defs>"
+        f'<rect width="960" height="640" fill="url(#hero-gradient)"/>'
+        f'<circle cx="860" cy="70" r="180" fill="{palette["accent"]}" opacity="0.16"/>'
+        f'<circle cx="120" cy="560" r="160" fill="{palette["primary"]}" opacity="0.14"/>'
+        f"{inner}"
+        f'<text x="96" y="66" font-size="18" letter-spacing="3" fill="{palette["primary"]}" font-family="Arial, sans-serif">{title}</text>'
+        f'<text x="96" y="604" font-size="20" fill="{palette["foreground"]}" opacity="0.72" font-family="Arial, sans-serif">{tagline[:84]}</text>'
+        "</svg>"
+    )
+
+
+def _build_fallback_thumb_svg(seed: dict[str, object], index: int) -> str:
+    palette = dict(seed["palette"])
+    items = list(seed.get("sample_seed_data") or [])
+    objects = list(seed.get("reference_objects") or [])
+    label = _svg_text(str(items[index % max(len(items), 1)] if items else f"Frame {index + 1}"))
+    sublabel = _svg_text(str(objects[index % max(len(objects), 1)] if objects else seed.get("title", "Artifact")))
+    accent = palette["accent"]
+    primary = palette["primary"]
+    border = palette["border"]
+    foreground = palette["foreground"]
+    background = palette["background"]
+    return (
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 480" fill="none">'
+        f'<rect width="640" height="480" rx="40" fill="{background}"/>'
+        f'<rect x="34" y="34" width="572" height="412" rx="30" fill="rgba(255,255,255,0.78)" stroke="{border}"/>'
+        f'<rect x="64" y="66" width="512" height="224" rx="24" fill="{accent}" opacity="0.24"/>'
+        f'<path d="M84 242 C 160 180, 248 310, 336 224 S 486 176, 552 246" stroke="{primary}" stroke-width="16" stroke-linecap="round" fill="none" opacity="0.8"/>'
+        f'<rect x="64" y="324" width="222" height="18" rx="9" fill="{primary}" opacity="0.84"/>'
+        f'<rect x="64" y="358" width="314" height="14" rx="7" fill="{foreground}" opacity="0.18"/>'
+        f'<text x="64" y="404" font-size="28" fill="{foreground}" font-family="Arial, sans-serif">{label}</text>'
+        f'<text x="64" y="434" font-size="18" fill="{foreground}" opacity="0.68" font-family="Arial, sans-serif">{sublabel}</text>'
+        "</svg>"
+    )
+
+
+def _svg_text(value: str) -> str:
+    return html_escape(str(value or ""), quote=False)
+
+
 def _build_fallback_globals_css(seed: dict[str, object], palette: dict[str, str]) -> str:
     background_css = str(palette["background"])
     foreground_css = str(palette["foreground"])
@@ -1490,17 +2045,33 @@ def _build_fallback_globals_css(seed: dict[str, object], palette: dict[str, str]
         "  box-shadow: 0 26px 80px rgba(20, 16, 12, 0.08);\n"
         "}\n"
         ".hero, .workspace-panel, .insight-panel, .status-panel, .feature-panel, .collection-panel, .reference-shelf { padding: 24px; }\n"
-        ".hero { overflow: hidden; position: relative; }\n"
+        ".hero { overflow: hidden; position: relative; display: grid; grid-template-columns: minmax(0, 1.02fr) minmax(280px, 0.98fr); gap: 22px; align-items: stretch; }\n"
+        ".hero-copy { display: grid; gap: 16px; align-content: start; }\n"
+        ".hero-visual-frame { min-height: 320px; border-radius: 22px; overflow: hidden; border: 1px solid var(--border); background: rgba(255,255,255,0.42); box-shadow: inset 0 1px 0 rgba(255,255,255,0.4); }\n"
+        ".hero-visual { width: 100%; height: 100%; display: block; object-fit: cover; }\n"
         ".hero::after { content: ''; position: absolute; inset: auto -10% -35% auto; width: 260px; height: 260px; border-radius: 50%; background: rgba(255,255,255,0.18); filter: blur(8px); }\n"
         ".hero h1, .section-heading h2 { margin: 0; font-size: clamp(2.3rem, 5vw, 4.8rem); line-height: 0.92; letter-spacing: -0.04em; }\n"
         ".hero p, .section-heading p, .status-panel p, .item-card p { color: var(--muted); }\n"
         ".eyebrow { display: inline-flex; padding: 8px 12px; border-radius: 999px; background: rgba(255,255,255,0.52); color: var(--primary); font-size: 0.78rem; letter-spacing: 0.14em; text-transform: uppercase; }\n"
-        ".hero-proof-list, .feature-list, .insight-list, .saved-card ul { padding-left: 18px; color: var(--muted); }\n"
+        ".hero-proof-list { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 10px; }\n"
+        ".proof-pill { display: inline-flex; padding: 9px 12px; border-radius: 999px; background: rgba(255,255,255,0.68); border: 1px solid var(--border); color: var(--foreground); font-size: 0.92rem; }\n"
+        ".feature-list, .insight-list, .saved-card ul { padding-left: 18px; color: var(--muted); }\n"
         ".stats-strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; padding: 14px; }\n"
         ".stat-chip { padding: 14px 16px; border-radius: 18px; background: rgba(255,255,255,0.58); border: 1px solid var(--border); }\n"
         ".stat-chip strong { display: block; margin-top: 6px; font-size: 1.45rem; }\n"
-        ".content-grid, .stack, .storyboard-main, .storyboard-side, .console-operator-lane, .console-support-lane, .studio-left, .studio-right, .atlas-side-stack, .atlas-primary-stack, .atlas-secondary-stack, .notebook-left, .notebook-right { display: grid; gap: 20px; }\n"
+        ".content-grid, .stack, .storyboard-main, .storyboard-side, .console-operator-lane, .console-support-lane, .studio-left, .studio-right, .atlas-side-stack, .atlas-primary-stack, .atlas-secondary-stack, .notebook-left, .notebook-right, .creator-workbench, .creator-primary-rail, .creator-side-rail, .creator-library-rail, .creator-collection-rail, .creator-proof-rail, .travel-brief-column, .travel-result-column, .travel-proof-column, .meal-proof-stack, .meal-planner-column, .meal-reference-column { display: grid; gap: 20px; }\n"
         ".content-grid { grid-template-columns: 1.05fr 0.95fr; }\n"
+        ".creator-shell, .travel-shell, .meal-shell { display: grid; gap: 22px; }\n"
+        ".creator-topline { display: grid; grid-template-columns: 0.76fr 1.24fr; gap: 20px; align-items: start; }\n"
+        ".creator-workbench .stats-strip { grid-template-columns: 1fr; }\n"
+        ".creator-editorial-stage { display: grid; grid-template-columns: 0.7fr 1.14fr 0.74fr; gap: 20px; align-items: start; }\n"
+        ".creator-bottomline { display: grid; grid-template-columns: 1.08fr 0.92fr; gap: 20px; align-items: start; }\n"
+        ".travel-ribbon .reference-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }\n"
+        ".travel-planner-grid { display: grid; grid-template-columns: 0.86fr 1.12fr 0.82fr; gap: 20px; align-items: start; }\n"
+        ".travel-result-column .collection-panel { min-height: 100%; }\n"
+        ".meal-top-row { display: grid; grid-template-columns: 1.12fr 0.88fr; gap: 20px; align-items: start; }\n"
+        ".meal-main-grid { display: grid; grid-template-columns: 0.98fr 1.02fr; gap: 20px; align-items: start; }\n"
+        ".meal-bottom-row { display: grid; grid-template-columns: 1.06fr 0.94fr; gap: 20px; align-items: start; }\n"
         ".workspace-panel textarea { width: 100%; min-height: 140px; margin-top: 12px; border-radius: 18px; border: 1px solid var(--border); padding: 16px; background: rgba(255,255,255,0.74); color: var(--foreground); }\n"
         ".controls { display: grid; gap: 12px; }\n"
         ".button-row { display: flex; gap: 12px; align-items: center; }\n"
@@ -1510,8 +2081,13 @@ def _build_fallback_globals_css(seed: dict[str, object], palette: dict[str, str]
         ".feature-chip, .saved-score, .object-pill { display: inline-flex; padding: 8px 12px; border-radius: 999px; background: rgba(217,140,63,0.14); color: var(--accent); }\n"
         ".score-pill { display: inline-flex; padding: 10px 14px; border-radius: 999px; background: rgba(15,95,82,0.1); color: var(--primary); font-weight: 600; }\n"
         ".item-card, .reference-card { margin-top: 12px; padding: 16px; border-radius: 18px; background: rgba(255,255,255,0.72); border: 1px solid var(--border); }\n"
+        ".feature-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 14px; }\n"
+        ".feature-group { padding: 14px; border-radius: 18px; background: rgba(255,255,255,0.58); border: 1px solid var(--border); }\n"
+        ".feature-group h3 { margin: 0 0 12px; font-size: 0.98rem; letter-spacing: 0.02em; }\n"
         ".saved-grid, .reference-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px; margin-top: 16px; }\n"
         ".saved-card { padding: 18px; }\n"
+        ".reference-card { display: grid; gap: 10px; align-content: start; }\n"
+        ".reference-thumb { width: 100%; aspect-ratio: 1.24 / 1; border-radius: 16px; object-fit: cover; border: 1px solid var(--border); background: rgba(255,255,255,0.5); }\n"
         ".reference-card strong { display: block; font-size: 1.06rem; }\n"
         ".reference-card span { display: inline-flex; margin-top: 8px; color: var(--muted); }\n"
         ".storyboard-stage { display: grid; grid-template-columns: 1.14fr 0.86fr; gap: 20px; align-items: start; }\n"
@@ -1528,6 +2104,45 @@ def _build_fallback_globals_css(seed: dict[str, object], palette: dict[str, str]
         ".layout-storyboard .hero { background: linear-gradient(135deg, rgba(255,255,255,0.9), rgba(243, 217, 179, 0.68)); }\n"
         ".layout-storyboard .reference-card:nth-child(odd) { transform: rotate(-1.2deg); }\n"
         ".layout-storyboard .reference-card:nth-child(even) { transform: rotate(1deg); }\n"
+        ".domain-creator-batch-studio .hero { background: linear-gradient(135deg, rgba(255,247,243,0.95), rgba(255,107,107,0.14)); }\n"
+        ".domain-creator-batch-studio { background: linear-gradient(180deg, #f7f2ec 0%, #f3ece5 52%, #f8f5f0 100%); }\n"
+        ".domain-creator-batch-studio .hero { background: linear-gradient(145deg, rgba(255,248,244,0.98), rgba(255,107,107,0.12)); border-radius: 40px 14px 32px 14px; }\n"
+        ".domain-creator-batch-studio .hero-visual-frame { border-radius: 32px 32px 14px 14px; background: linear-gradient(180deg, rgba(255,255,255,0.42), rgba(255,107,107,0.08)); }\n"
+        ".domain-creator-batch-studio .workspace-panel, .domain-creator-batch-studio .feature-panel, .domain-creator-batch-studio .collection-panel { border-radius: 14px; box-shadow: 0 16px 36px rgba(29,24,32,0.08); }\n"
+        ".domain-creator-batch-studio .insight-panel, .domain-creator-batch-studio .status-panel { border-radius: 40px 14px 32px 14px; }\n"
+        ".domain-creator-batch-studio .reference-card:nth-child(3n+1) { transform: translateY(-10px) rotate(-1.4deg); }\n"
+        ".domain-creator-batch-studio .reference-card:nth-child(3n+2) { transform: translateY(6px) rotate(1.1deg); }\n"
+        ".domain-creator-batch-studio .feature-group { border-radius: 26px; background: #1a1330; color: rgba(255,255,255,0.88); }\n"
+        ".domain-creator-batch-studio .feature-group h3 { color: #ffb4a2; }\n"
+        ".domain-creator-batch-studio .feature-list { color: rgba(255,255,255,0.76); }\n"
+        ".domain-creator-batch-studio .proof-pill { background: rgba(255,107,107,0.12); color: #9f2239; }\n"
+        ".domain-creator-batch-studio .creator-topline .hero { min-height: 100%; }\n"
+        ".domain-creator-batch-studio .creator-primary-rail .insight-panel, .domain-creator-batch-studio .creator-primary-rail .status-panel { min-height: 100%; }\n"
+        ".domain-creator-batch-studio .stats-strip { display: flex; flex-wrap: wrap; gap: 10px; padding: 0; background: transparent; border: none; box-shadow: none; }\n"
+        ".domain-creator-batch-studio .stat-chip { min-width: 150px; border-radius: 999px; background: #1a1330; color: white; border: none; }\n"
+        ".domain-creator-batch-studio .stat-chip .eyebrow { background: rgba(255,255,255,0.14); color: #ffb4a2; }\n"
+        ".domain-creator-batch-studio .creator-bottomline { align-items: stretch; }\n"
+        ".domain-creator-batch-studio .creator-proof-rail .reference-grid { grid-template-columns: 1fr; }\n"
+        ".domain-weekender-route-postcards .hero { background: linear-gradient(145deg, rgba(255,250,243,0.96), rgba(240,138,60,0.18)); }\n"
+        ".domain-weekender-route-postcards { background: linear-gradient(180deg, #f4e6d5 0%, #f8efe4 50%, #f6ecdf 100%); }\n"
+        ".domain-weekender-route-postcards .hero { border-radius: 18px 18px 44px 18px; box-shadow: 0 22px 50px rgba(43,28,20,0.1); }\n"
+        ".domain-weekender-route-postcards .hero-visual-frame { border-radius: 18px; box-shadow: 0 18px 40px rgba(25,20,18,0.15); }\n"
+        ".domain-weekender-route-postcards .workspace-panel, .domain-weekender-route-postcards .feature-panel, .domain-weekender-route-postcards .collection-panel { border-radius: 22px; }\n"
+        ".domain-weekender-route-postcards .reference-card { border-radius: 12px; box-shadow: 0 12px 26px rgba(25,20,18,0.1); }\n"
+        ".domain-weekender-route-postcards .reference-card:nth-child(odd) { transform: rotate(-2.2deg); }\n"
+        ".domain-weekender-route-postcards .reference-card:nth-child(even) { transform: rotate(1.8deg); }\n"
+        ".domain-weekender-route-postcards .proof-pill { background: rgba(240,138,60,0.14); color: #9c4b14; }\n"
+        ".domain-weekender-route-postcards .travel-ribbon { margin-top: -6px; }\n"
+        ".domain-weekender-route-postcards .travel-proof-column .stats-strip { grid-template-columns: 1fr; background: rgba(255,248,240,0.84); border-radius: 24px; }\n"
+        ".domain-weekender-route-postcards .travel-proof-column .stat-chip { border-radius: 16px; }\n"
+        ".domain-weekender-route-postcards .travel-ribbon .reference-card { min-height: 238px; }\n"
+        ".domain-meal-prep-atlas .hero { background: radial-gradient(circle at top right, rgba(73,123,43,0.15), transparent 34%), rgba(255,255,255,0.88); }\n"
+        ".domain-meal-prep-atlas .hero-visual-frame { border-radius: 30px; background: linear-gradient(180deg, rgba(255,255,255,0.52), rgba(73,123,43,0.08)); }\n"
+        ".domain-meal-prep-atlas .feature-group { background: rgba(255,255,255,0.76); }\n"
+        ".domain-meal-prep-atlas .reference-card { border-radius: 28px; }\n"
+        ".domain-meal-prep-atlas .proof-pill { background: rgba(73,123,43,0.12); color: #2f6d1e; }\n"
+        ".domain-meal-prep-atlas .meal-reference-column .reference-grid { grid-template-columns: 1fr; }\n"
+        ".domain-meal-prep-atlas .meal-proof-stack .stats-strip { grid-template-columns: 1fr; }\n"
         ".layout-operations-console .hero,\n"
         ".layout-operations-console .workspace-panel,\n"
         ".layout-operations-console .insight-panel,\n"
@@ -1550,9 +2165,18 @@ def _build_fallback_globals_css(seed: dict[str, object], palette: dict[str, str]
         ".layout-notebook .reference-shelf, .layout-notebook .workspace-panel { border-style: dashed; }\n"
         ".layout-notebook .saved-card { background: rgba(255, 248, 241, 0.82); }\n"
         "@media (max-width: 1080px) {\n"
+        "  .hero,\n"
         "  .storyboard-stage,\n"
         "  .console-top,\n"
         "  .console-grid,\n"
+        "  .creator-hero-row,\n"
+        "  .creator-topline,\n"
+        "  .creator-editorial-stage,\n"
+        "  .creator-bottomline,\n"
+        "  .travel-planner-grid,\n"
+        "  .meal-top-row,\n"
+        "  .meal-main-grid,\n"
+        "  .meal-bottom-row,\n"
         "  .studio-top,\n"
         "  .studio-bottom,\n"
         "  .atlas-hero-row,\n"
@@ -1566,11 +2190,11 @@ def _build_fallback_globals_css(seed: dict[str, object], palette: dict[str, str]
         "@media (max-width: 720px) {\n"
         "  .page-shell { padding: 18px 14px 72px; }\n"
         "  .stats-strip { grid-template-columns: 1fr; }\n"
+        "  .feature-columns { grid-template-columns: 1fr; }\n"
         "  .hero, .workspace-panel, .insight-panel, .status-panel, .feature-panel, .collection-panel, .reference-shelf { padding: 18px; }\n"
         "  .hero h1, .section-heading h2 { font-size: clamp(2rem, 14vw, 3.2rem); }\n"
         "}\n"
     )
-    
 
 
 def _build_fallback_backend_bundle(context: str) -> dict[str, str]:
@@ -1579,15 +2203,31 @@ def _build_fallback_backend_bundle(context: str) -> dict[str, str]:
     tagline_json = json.dumps(str(seed["tagline"]))
     features_json = json.dumps(list(seed["features"]))
     proof_points_json = json.dumps(list(seed["proof_points"]))
+    reference_objects_json = json.dumps(list(seed["reference_objects"]))
+    sample_seed_data_json = json.dumps(list(seed["sample_seed_data"]))
+    surface_labels_json = json.dumps(seed["surface_labels"])
+    collection_title_json = json.dumps(str(seed["collection_title"]))
 
     return _normalize_backend_files(
         {
+            _FALLBACK_BACKEND_MARKER_FILE: json.dumps(
+                {"kind": "backend", "reason": "deterministic_fallback"}, indent=2
+            ),
             "requirements.txt": "fastapi\nuvicorn[standard]\npydantic\n",
             "main.py": """from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from routes import router
 
 app = FastAPI(title="Generated Showcase API")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 app.include_router(router)
+app.include_router(router, prefix="/api")
 """,
             "models.py": """from pydantic import BaseModel
 
@@ -1627,40 +2267,66 @@ async def create_insights(payload: InsightRequest):
 APP_TAGLINE = {tagline_json}
 KEY_FEATURES = {features_json}
 PROOF_POINTS = {proof_points_json}
+REFERENCE_OBJECTS = {reference_objects_json}
+SAMPLE_SEED_DATA = {sample_seed_data_json}
+SURFACE_LABELS = {surface_labels_json}
+COLLECTION_TITLE = {collection_title_json}
+
+
+def _artifact_label(items, index, fallback):
+    if index < len(items) and str(items[index]).strip():
+        return str(items[index]).strip()
+    return fallback
+
+
+def _sentence_case(value: str) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    return text[0].upper() + text[1:]
 
 
 def build_plan(query: str, preferences: str) -> dict:
     subject = (query or APP_TAGLINE).strip() or APP_NAME
-    guidance = (preferences or "Prioritize a polished live demo with clear momentum.").strip()
+    guidance = (preferences or "Keep the result practical, saveable, and ready to use immediately.").strip()
+    result_labels = SAMPLE_SEED_DATA or PROOF_POINTS or KEY_FEATURES
+    object_labels = REFERENCE_OBJECTS or KEY_FEATURES
     items = []
-    for index, feature in enumerate(KEY_FEATURES[:3], start=1):
+    for index in range(3):
+        object_label = _artifact_label(object_labels, index, f"Step {{index + 1}}")
+        result_label = _artifact_label(result_labels, index, _artifact_label(PROOF_POINTS, index, "usable output"))
+        partner_label = _artifact_label(object_labels, min(index + 1, len(object_labels) - 1), SURFACE_LABELS.get("collection", "saved result"))
         items.append(
             {{
-                "title": f"Stage {{index}}: {{feature}}",
-                "detail": f"Apply {{feature.lower()}} to '{{subject}}' while respecting: {{guidance}}.",
-                "score": min(96, 72 + index * 6),
+                "title": _sentence_case(object_label),
+                "detail": f"Shape {{result_label.lower()}} through {{object_label.lower()}}, keep {{partner_label.lower()}} visible, and follow: {{guidance}}.",
+                "score": min(96, 78 + index * 5),
             }}
         )
+    summary_result = _artifact_label(result_labels, 0, "usable output")
+    summary_objects = ", ".join(label.lower() for label in object_labels[:2])
     return {{
-        "summary": f"{{APP_NAME}} shaped '{{subject}}' into a judge-ready working session.",
+        "summary": f"{{APP_NAME}} turned '{{subject}}' into {{summary_result.lower()}} with {{summary_objects}} and a reusable {{SURFACE_LABELS.get('collection', 'saved result').lower()}}.",
         "score": 88,
         "items": items,
     }}
 
 
 def build_insights(selection: str, context: str) -> dict:
-    focus = (selection or APP_NAME).strip()
+    focus = (selection or _artifact_label(REFERENCE_OBJECTS, 0, APP_NAME)).strip()
     base_context = (context or APP_TAGLINE).strip()
+    collection_label = SURFACE_LABELS.get("collection", "saved result")
+    support_label = SURFACE_LABELS.get("support", "support rail")
     return {{
         "insights": [
-            f"Lead with {{focus}} so the first screen proves value instantly.",
-            f"Use {{base_context}} as the narrative thread across the workflow.",
+            f"Lead with {{focus}} so the first screen proves {{_artifact_label(PROOF_POINTS, 0, 'usable value').lower()}} immediately.",
+            f"Keep {{support_label.lower()}} and {{collection_label.lower()}} visible so the workflow reads like a dedicated product, not a generic tool.",
         ],
         "next_actions": [
-            f"Save the strongest {{focus.lower()}} output as the demo finale.",
-            "Keep one guided CTA visible at every stage.",
+            f"Save the strongest {{collection_label.lower()}} after each run.",
+            f"Use {{base_context}} to refine the next {{_artifact_label(REFERENCE_OBJECTS, 1, 'artifact').lower()}}.",
         ],
-        "highlights": PROOF_POINTS[:3],
+        "highlights": PROOF_POINTS[:3] or SAMPLE_SEED_DATA[:3],
     }}
 """,
         }
@@ -1911,7 +2577,9 @@ def _normalize_backend_files(files: dict[str, str]) -> dict[str, str]:
     return normalized
 
 
-def _normalize_cross_stack(frontend_files: dict[str, str], backend_files: dict[str, str]) -> tuple[dict[str, str], dict[str, str]]:
+def _normalize_cross_stack(
+    frontend_files: dict[str, str], backend_files: dict[str, str]
+) -> tuple[dict[str, str], dict[str, str]]:
     normalized_backend = _normalize_backend_files(backend_files)
     normalized_frontend = _normalize_frontend_request_payloads(frontend_files, normalized_backend)
     return normalized_frontend, normalized_backend
@@ -2048,9 +2716,9 @@ def _normalize_backend_flexible_request_fields(files: dict[str, str]) -> dict[st
                     if "Any" not in imported:
                         imported.append("Any")
                         updated = (
-                            f"{updated[:typing_import.start()]}"
+                            f"{updated[: typing_import.start()]}"
                             f"from typing import {', '.join(imported)}"
-                            f"{updated[typing_import.end():]}"
+                            f"{updated[typing_import.end() :]}"
                         )
         normalized[path] = updated
 
@@ -2069,7 +2737,11 @@ def _normalize_frontend_use_client_directives(files: dict[str, str]) -> dict[str
     for path, content in files.items():
         updated = content
         stripped = content.lstrip()
-        if path.endswith(".tsx") and not stripped.startswith('"use client"') and not stripped.startswith("'use client'"):
+        if (
+            path.endswith(".tsx")
+            and not stripped.startswith('"use client"')
+            and not stripped.startswith("'use client'")
+        ):
             if client_signal.search(content):
                 updated = f'"use client";\n\n{content.lstrip()}'
         normalized[path] = updated
@@ -2112,9 +2784,7 @@ def _normalize_frontend_layout_metadata_boundaries(files: dict[str, str]) -> dic
 
     for path, content in files.items():
         updated = content
-        if path.endswith(layout_suffixes) and (
-            "export const metadata" in content or "generateMetadata" in content
-        ):
+        if path.endswith(layout_suffixes) and ("export const metadata" in content or "generateMetadata" in content):
             updated = re.sub(r'^\s*"use client";\n+', "", updated, count=1)
         normalized[path] = updated
 
@@ -2126,13 +2796,15 @@ def _normalize_frontend_react_hook_imports(files: dict[str, str]) -> dict[str, s
     for path, content in files.items():
         updated = content
         if path.endswith((".ts", ".tsx", ".js", ".jsx")):
-            used_symbols = sorted(symbol for symbol in _REACT_IMPORTABLE_SYMBOLS if re.search(rf"\b{symbol}\b", updated))
+            used_symbols = sorted(
+                symbol for symbol in _REACT_IMPORTABLE_SYMBOLS if re.search(rf"\b{symbol}\b", updated)
+            )
             if used_symbols:
                 match = re.search(r'import\s+\{(?P<named>[^}]+)\}\s+from\s+[\'"]react[\'"]\s*;?', updated)
                 if match:
                     existing = {part.strip() for part in match.group("named").split(",") if part.strip()}
                     merged = ", ".join(sorted(existing | set(used_symbols)))
-                    updated = f"{updated[:match.start()]}import {{ {merged} }} from \"react\";{updated[match.end():]}"
+                    updated = f'{updated[: match.start()]}import {{ {merged} }} from "react";{updated[match.end() :]}'
                 elif 'from "react"' not in updated and "from 'react'" not in updated:
                     updated = f'import {{ {", ".join(used_symbols)} }} from "react";\n{updated}'
         normalized[path] = updated
@@ -2156,10 +2828,7 @@ def _normalize_frontend_heroicons_imports(files: dict[str, str]) -> dict[str, st
                     normalized_item = _LEGACY_HEROICON_RENAMES.get(item, item)
                     if normalized_item not in renamed_items:
                         renamed_items.append(normalized_item)
-                return (
-                    f"import {{ {', '.join(renamed_items)} }} "
-                    f"from '@heroicons/react/24/{match.group('variant')}';"
-                )
+                return f"import {{ {', '.join(renamed_items)} }} from '@heroicons/react/24/{match.group('variant')}';"
 
             updated = import_pattern.sub(repl, updated)
         normalized[path] = updated
@@ -2258,7 +2927,7 @@ def _normalize_frontend_error_parsing(files: dict[str, str]) -> dict[str, str]:
                 expr = match.group(1)
                 literals = re.findall(r'["\']([^"\']+)["\']', expr)
                 fallback = literals[-1] if literals else "Request failed"
-                return f'if (!res.ok) {{\n    await throwApiError(res, {json.dumps(fallback)});\n  }}'
+                return f"if (!res.ok) {{\n    await throwApiError(res, {json.dumps(fallback)});\n  }}"
 
             updated, replacements = pattern.subn(repl, updated)
             if replacements and "async function throwApiError" not in updated:
@@ -2279,7 +2948,7 @@ def _normalize_frontend_error_parsing(files: dict[str, str]) -> dict[str, str]:
                 )
                 import_block = re.match(r"((?:import[^\n]*\n)+)", updated)
                 if import_block:
-                    updated = f"{import_block.group(1)}\n{helper}{updated[import_block.end():]}"
+                    updated = f"{import_block.group(1)}\n{helper}{updated[import_block.end() :]}"
                 else:
                     updated = f"{helper}{updated}"
         normalized[path] = updated
@@ -2297,12 +2966,17 @@ def _normalize_frontend_partial_ai_requests(files: dict[str, str]) -> dict[str, 
 
     for path, content in files.items():
         updated = content
-        if path.endswith(".tsx") and "summarize(" in content and "generateTags(" in content and "Promise.all([" in content:
+        if (
+            path.endswith(".tsx")
+            and "summarize(" in content
+            and "generateTags(" in content
+            and "Promise.all([" in content
+        ):
             updated = pattern.sub(
                 lambda match: (
-                    f'const [summaryResult, tagsResult] = await Promise.allSettled([\n'
-                    f'        summarize({match.group("arg")}),\n'
-                    f'        generateTags({match.group("arg")}),\n'
+                    f"const [summaryResult, tagsResult] = await Promise.allSettled([\n"
+                    f"        summarize({match.group('arg')}),\n"
+                    f"        generateTags({match.group('arg')}),\n"
                     "      ]);\n"
                     '      if (summaryResult.status === "fulfilled") {\n'
                     "        setSummary(summaryResult.value);\n"
@@ -2332,13 +3006,17 @@ def _normalize_frontend_api_overloads(files: dict[str, str]) -> dict[str, str]:
     for path, content in files.items():
         updated = content
         if path.endswith("api.ts"):
+
             def repl(match: re.Match[str]) -> str:
                 name = match.group("name")
                 params = match.group("params")
                 returns = [item.strip() for item in match.group("returns").split("|") if item.strip()]
                 if "body?:" not in params or len(returns) != 2:
                     return match.group(0)
-                if f"export async function {name}(" in updated[: match.start()] and f"{name}(" in updated[: match.start()]:
+                if (
+                    f"export async function {name}(" in updated[: match.start()]
+                    and f"{name}(" in updated[: match.start()]
+                ):
                     return match.group(0)
 
                 body_match = re.search(r",?\s*body\?\s*:\s*(?P<body_type>[^,\n)]+)", params)
@@ -2428,11 +3106,7 @@ def _detect_frontend_external_dependencies(files: dict[str, str]) -> set[str]:
             continue
         for match in import_pattern.finditer(content):
             module_name = (
-                match.group("from")
-                or match.group("bare")
-                or match.group("dynamic")
-                or match.group("require")
-                or ""
+                match.group("from") or match.group("bare") or match.group("dynamic") or match.group("require") or ""
             )
             package_name = _extract_npm_package_name(module_name)
             if not package_name or package_name in _BUILTIN_FRONTEND_PACKAGES:
@@ -2529,11 +3203,7 @@ def _normalize_next_config(raw: str) -> str:
     if raw.strip() and "serverComponents" not in raw and "swcMinify" not in raw:
         return raw
 
-    return (
-        "module.exports = {\n"
-        "  reactStrictMode: true,\n"
-        "};\n"
-    )
+    return "module.exports = {\n  reactStrictMode: true,\n};\n"
 
 
 def _normalize_backend_api_routes(files: dict[str, str]) -> dict[str, str]:
@@ -2561,7 +3231,7 @@ def _strip_api_prefix_from_router(content: str) -> str:
     args = re.sub(r"^\s*,\s*", "", args)
     args = re.sub(r",\s*,", ", ", args).strip().strip(",")
     replacement = f"APIRouter({args})" if args else "APIRouter()"
-    return f"{content[:match.start()]}{replacement}{content[match.end():]}"
+    return f"{content[: match.start()]}{replacement}{content[match.end() :]}"
 
 
 def _strip_api_prefix_from_route_decorators(content: str) -> str:
@@ -2653,7 +3323,7 @@ def _normalize_backend_ai_fallbacks(files: dict[str, str]) -> dict[str, str]:
                     "def _coerce_unstructured_payload(raw_text: str) -> dict[str, object]:\n"
                     "    compact = raw_text.strip()\n"
                     '    normalized = compact.replace("\\n", ",")\n'
-                    "    tags = [part.strip(\" -•\\t\") for part in normalized.split(\",\") if part.strip(\" -•\\t\")]\n"
+                    '    tags = [part.strip(" -•\\t") for part in normalized.split(",") if part.strip(" -•\\t")]\n'
                     "    if not tags:\n"
                     '        tags = ["guided plan", "saved output", "shareable insight"]\n'
                     "    headline = tags[0].title()\n"
@@ -2704,7 +3374,7 @@ def _normalize_backend_ai_fallbacks(files: dict[str, str]) -> dict[str, str]:
                     '    raw_insights = normalized.get("insights")\n'
                     "    if isinstance(raw_insights, list):\n"
                     "        insights = [str(entry) for entry in raw_insights if str(entry).strip()]\n"
-                    '    elif isinstance(raw_insights, str) and raw_insights.strip():\n'
+                    "    elif isinstance(raw_insights, str) and raw_insights.strip():\n"
                     "        insights = [raw_insights.strip()]\n"
                     "    else:\n"
                     "        insights = []\n"
@@ -2735,11 +3405,11 @@ def _normalize_backend_ai_fallbacks(files: dict[str, str]) -> dict[str, str]:
                 )
                 marker_match = re.search(r"^async def\s+_?call_inference\b", updated, flags=re.MULTILINE)
                 if marker_match:
-                    updated = f"{updated[:marker_match.start()]}{helper}\n\n{updated[marker_match.start():]}"
+                    updated = f"{updated[: marker_match.start()]}{helper}\n\n{updated[marker_match.start() :]}"
                 else:
                     import_block = re.match(r"((?:from [^\n]+\n|import [^\n]+\n)+\n?)", updated)
                     if import_block:
-                        updated = f"{updated[:import_block.end()]}{helper}\n\n{updated[import_block.end():]}"
+                        updated = f"{updated[: import_block.end()]}{helper}\n\n{updated[import_block.end() :]}"
                     else:
                         updated = f"{helper}\n\n{updated}"
         normalized[path] = updated
@@ -2854,14 +3524,7 @@ def _normalize_postcss_config(raw: str) -> str:
     if "module.exports" in raw and "plugins" in raw:
         return raw
 
-    return (
-        "module.exports = {\n"
-        "  plugins: {\n"
-        "    tailwindcss: {},\n"
-        "    autoprefixer: {},\n"
-        "  },\n"
-        "};\n"
-    )
+    return "module.exports = {\n  plugins: {\n    tailwindcss: {},\n    autoprefixer: {},\n  },\n};\n"
 
 
 def _parse_json_response(content, default: dict, label: str = "unknown") -> dict:
@@ -2912,6 +3575,54 @@ def _parse_json_response(content, default: dict, label: str = "unknown") -> dict
     result = dict(default)
     result["raw_response"] = raw_content[:500]
     return result
+
+
+async def _parse_generated_files_response(content, label: str) -> dict:
+    parsed = _parse_json_response(content, {"files": {}}, label=label)
+    files = parsed.get("files")
+    if isinstance(files, dict) and files:
+        return parsed
+
+    raw_response = str(parsed.get("raw_response") or "").strip()
+    if not raw_response:
+        return parsed
+
+    repair_model = MODEL_CONFIG["ci_repair"]
+    repair_llm = get_llm(model=repair_model, temperature=0.0, max_tokens=20000)
+    repair_messages = [
+        {
+            "role": "system",
+            "content": (
+                "You repair malformed code-generation payloads.\n"
+                "Return ONLY strict JSON with this exact shape: "
+                '{"files":{"path":"full file content"}}.\n'
+                "Preserve file contents, escape newlines and quotes correctly, and remove any prose outside the JSON object."
+            ),
+        },
+        {
+            "role": "user",
+            "content": (
+                f"Repair this malformed code-generation payload into strict JSON.\n\nLabel: {label}\n\n{raw_response}"
+            ),
+        },
+    ]
+
+    try:
+        repaired = await ainvoke_with_retry(
+            repair_llm,
+            repair_messages,
+            max_attempts=2,
+            fallback_models=get_rate_limit_fallback_models(repair_model),
+            rate_limit_switch_after_attempts=2,
+        )
+        repaired_payload = _parse_json_response(repaired.content, {"files": {}}, label=f"{label}-repair")
+        if isinstance(repaired_payload.get("files"), dict) and repaired_payload["files"]:
+            logger.info("[CODE_GEN] %s: recovered malformed JSON via repair pass", label)
+            return repaired_payload
+    except Exception as exc:
+        logger.warning("[CODE_GEN] %s: repair pass failed: %s", label, str(exc)[:200])
+
+    return parsed
 
 
 def _extract_balanced_json_block(raw: str) -> str | None:

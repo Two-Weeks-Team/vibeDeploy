@@ -4,6 +4,7 @@ import pytest
 
 import agent.nodes.code_generator as code_generator_module
 from agent.nodes.code_generator import (
+    _parse_generated_files_response,
     _build_backend_prompt_messages,
     _build_frontend_prompt_messages,
     _normalize_backend_files,
@@ -40,7 +41,7 @@ def test_normalize_frontend_files_patches_next_tsconfig_and_tailwind():
     normalized = _normalize_frontend_files(files)
     tsconfig = json.loads(normalized["tsconfig.json"])
 
-    assert normalized["next-env.d.ts"].startswith("/// <reference types=\"next\" />")
+    assert normalized["next-env.d.ts"].startswith('/// <reference types="next" />')
     assert "@/src/" not in normalized["src/app/page.tsx"]
     assert "@/components/Form" in normalized["src/app/page.tsx"]
     assert normalized["src/app/page.tsx"].startswith('"use client";')
@@ -135,10 +136,7 @@ def test_normalize_cross_stack_fixes_api_prefix_and_payload_field_names():
     }
     backend = {
         "main.py": (
-            "from fastapi import FastAPI\n"
-            "from routes import router\n\n"
-            "app = FastAPI()\n"
-            "app.include_router(router)\n"
+            "from fastapi import FastAPI\nfrom routes import router\n\napp = FastAPI()\napp.include_router(router)\n"
         ),
         "routes.py": (
             "from fastapi import APIRouter\n"
@@ -148,7 +146,7 @@ def test_normalize_cross_stack_fixes_api_prefix_and_payload_field_names():
             "    content: str\n\n"
             '@router.post("/summarize")\n'
             "async def summarize(req: SummarizeRequest):\n"
-            "    return {\"summary\": req.content}\n"
+            '    return {"summary": req.content}\n'
         ),
     }
 
@@ -156,16 +154,13 @@ def test_normalize_cross_stack_fixes_api_prefix_and_payload_field_names():
 
     assert 'prefix="/api"' not in normalized_backend["routes.py"]
     assert '@app.middleware("http")' in normalized_backend["main.py"]
-    assert 'JSON.stringify({ content: url })' in normalized_frontend["src/lib/api.ts"]
+    assert "JSON.stringify({ content: url })" in normalized_frontend["src/lib/api.ts"]
 
 
 def test_normalize_backend_files_strips_api_prefix_from_route_decorators():
     files = {
         "main.py": (
-            "from fastapi import FastAPI\n"
-            "from routes import router\n\n"
-            "app = FastAPI()\n"
-            "app.include_router(router)\n"
+            "from fastapi import FastAPI\nfrom routes import router\n\napp = FastAPI()\napp.include_router(router)\n"
         ),
         "routes.py": (
             "from fastapi import APIRouter\n\n"
@@ -209,7 +204,7 @@ def test_normalize_frontend_files_adds_resilient_api_error_handling_and_partial_
             "}\n"
         ),
         "src/components/Hero.tsx": (
-            "\"use client\";\n"
+            '"use client";\n'
             "export default async function Hero(url) {\n"
             "  const [generatedSummary, generatedTags] = await Promise.all([\n"
             "    summarize(url),\n"
@@ -290,7 +285,7 @@ def test_normalize_frontend_files_canonicalizes_broken_use_client_directive_and_
         "src/components/Rehearsal.tsx": (
             "\"use client';\n"
             "import { MicrophoneIcon, CloudUploadIcon } from '@heroicons/react/24/solid';\n"
-            "export default function Rehearsal() { return <MicrophoneIcon className=\"h-5 w-5\" />; }\n"
+            'export default function Rehearsal() { return <MicrophoneIcon className="h-5 w-5" />; }\n'
         ),
     }
 
@@ -318,7 +313,7 @@ def test_normalize_frontend_files_adds_detected_optional_dependencies_to_package
         "src/components/QRCodeScanner.tsx": (
             '"use client";\n'
             "import { CameraIcon } from '@heroicons/react/24/outline';\n"
-            "export default function QRCodeScanner() { return <CameraIcon className=\"h-5 w-5\" />; }\n"
+            'export default function QRCodeScanner() { return <CameraIcon className="h-5 w-5" />; }\n'
         ),
     }
 
@@ -344,6 +339,25 @@ def test_parse_json_response_extracts_balanced_json_when_trailing_text_exists():
     parsed = _parse_json_response(response, {"files": {}}, label="frontend")
 
     assert parsed["files"]["src/app/page.tsx"].startswith("export default function Page")
+
+
+@pytest.mark.asyncio
+async def test_parse_generated_files_response_uses_repair_pass(monkeypatch):
+    broken_payload = '{"files":{"main.py":"print("hello")"}}'
+
+    class _Resp:
+        content = '{"files":{"main.py":"print(\\"hello\\")"}}'
+
+    async def fake_ainvoke_with_retry(llm, messages, **kwargs):
+        return _Resp()
+
+    monkeypatch.setattr(code_generator_module, "ainvoke_with_retry", fake_ainvoke_with_retry)
+    monkeypatch.setattr(code_generator_module, "get_llm", lambda *args, **kwargs: object())
+    monkeypatch.setattr(code_generator_module, "get_rate_limit_fallback_models", lambda model: [])
+
+    parsed = await _parse_generated_files_response(broken_payload, label="backend")
+
+    assert parsed["files"]["main.py"] == 'print("hello")'
 
 
 def test_build_frontend_prompt_messages_repeat_strategy_for_deepseek_fallback():
@@ -431,8 +445,14 @@ def test_normalize_frontend_files_adds_overloads_for_optional_body_api_helpers()
 
     normalized = _normalize_frontend_files(files)
 
-    assert "export async function fetchQueuePosition(queueId: string, body: JoinRequest): Promise<JoinResponse>;" in normalized["src/lib/api.ts"]
-    assert "export async function fetchQueuePosition(queueId: string): Promise<PositionResponse>;" in normalized["src/lib/api.ts"]
+    assert (
+        "export async function fetchQueuePosition(queueId: string, body: JoinRequest): Promise<JoinResponse>;"
+        in normalized["src/lib/api.ts"]
+    )
+    assert (
+        "export async function fetchQueuePosition(queueId: string): Promise<PositionResponse>;"
+        in normalized["src/lib/api.ts"]
+    )
 
 
 def test_normalize_frontend_files_adds_missing_react_hook_imports():
@@ -475,9 +495,9 @@ def test_normalize_backend_files_coerces_plain_text_ai_responses():
             "async def _call_inference(messages):\n"
             "    try:\n"
             "        raw_json = 'hello, world'\n"
-            "        return {\"note\": \"Failed to parse JSON from AI response\", \"raw\": raw_json}\n"
+            '        return {"note": "Failed to parse JSON from AI response", "raw": raw_json}\n'
             "    except Exception:\n"
-            "        return {\"note\": \"AI unavailable\"}\n"
+            '        return {"note": "AI unavailable"}\n'
         )
     }
 
@@ -545,8 +565,7 @@ def test_normalize_backend_files_avoids_duplicate_sslmode_query_params():
 def test_normalize_backend_files_awaits_async_ai_helpers_in_routes():
     files = {
         "ai_service.py": (
-            "async def summarize_text(url=None, text=None):\n"
-            "    return {'summary': {'short': 'ok', 'long': 'ok'}}\n"
+            "async def summarize_text(url=None, text=None):\n    return {'summary': {'short': 'ok', 'long': 'ok'}}\n"
         ),
         "routes.py": (
             "from ai_service import summarize_text\n\n"
@@ -689,7 +708,10 @@ async def test_code_generator_regenerates_only_missing_frontend(monkeypatch):
 
 def test_codegen_max_attempts_stays_high_without_fallback_models():
     assert code_generator_module._codegen_max_attempts([]) == code_generator_module._STRICT_PRIMARY_CODEGEN_MAX_ATTEMPTS
-    assert code_generator_module._codegen_max_attempts(["openai-gpt-oss-20b"]) == code_generator_module._CODEGEN_MODEL_MAX_ATTEMPTS
+    assert (
+        code_generator_module._codegen_max_attempts(["openai-gpt-oss-20b"])
+        == code_generator_module._CODEGEN_MODEL_MAX_ATTEMPTS
+    )
 
 
 @pytest.mark.asyncio
@@ -782,7 +804,10 @@ def test_fallback_frontend_bundle_varies_layout_markup_and_reference_objects():
     )
 
     assert "src/components/ReferenceShelf.tsx" in storyboard
-    assert 'type LayoutKind = "storyboard" | "operations_console" | "studio" | "atlas" | "notebook" | "lab";' in storyboard["src/app/page.tsx"]
+    assert (
+        'type LayoutKind = "storyboard" | "operations_console" | "studio" | "atlas" | "notebook" | "lab";'
+        in storyboard["src/app/page.tsx"]
+    )
     assert 'const LAYOUT: LayoutKind = "storyboard"' in storyboard["src/app/page.tsx"]
     assert "storyboard-stage" in storyboard["src/app/page.tsx"]
     assert "Day 1 route" in storyboard["src/app/page.tsx"]
@@ -828,9 +853,83 @@ def test_extract_template_seed_formats_structured_idea_lists_for_readable_ui_cop
         )
     )
 
-    assert seed["features"] == ["Mood-Driven Planner - Choose city, vibe, trip length, and budget in one panel.", "Cinematic Postcard Storyboard - Render a three-card editorial spread."]
+    assert seed["features"] == [
+        "Mood-Driven Planner - Choose city, vibe, trip length, and budget in one panel.",
+        "Cinematic Postcard Storyboard - Render a three-card editorial spread.",
+    ]
     assert seed["sample_seed_data"] == ["Seoul · vibrant nightlife · 3 days · $120/day"]
     assert seed["reference_objects"] == ["Budget slider - Daily cap indicator", "Postcard card - Image + caption + map"]
+
+
+def test_meal_fallback_frontend_bundle_uses_contract_driven_meal_copy():
+    files = code_generator_module._build_fallback_frontend_bundle(
+        json.dumps(
+            {
+                "idea": {
+                    "name": "Meal Prep Atlas",
+                    "tagline": "Turn weekly grocery inspiration into a cookable prep plan",
+                    "selected_flagship": "meal-prep-atlas",
+                    "domain": "meal prep planning",
+                    "layout_archetype": "atlas",
+                    "interface_metaphor": "kitchen prep atlas",
+                    "input_labels": {
+                        "query_label": "Weekly cooking goal, diet, or meal prep brief",
+                        "preferences_label": "Household size, prep time, budget, and ingredients to use",
+                    },
+                    "must_have_surfaces": ["prep block", "grocery lane", "meal board", "saved meal board"],
+                    "trust_surfaces": ["saved meal board", "organized grocery groups"],
+                    "output_entities": ["weekly prep plan", "saved meal board"],
+                    "reference_objects": ["prep block", "grocery lane", "meal board", "container checklist"],
+                    "sample_seed_data": ["weekly prep plan", "organized grocery groups", "saved meal board"],
+                    "proof_points": ["weekly prep plan", "organized grocery groups", "saved meal board"],
+                }
+            },
+            ensure_ascii=False,
+        )
+    )
+
+    page = files["src/app/page.tsx"]
+    assert "Generate meal prep board" in page
+    assert "Weekly cooking goal, diet, or meal prep brief" in page
+    assert "saved meal board" in page
+    assert "Generate content batch" not in page
+    assert "creator-native and decisive" not in page
+    assert "editorial production board" not in page
+
+
+def test_meal_fallback_backend_bundle_uses_contract_objects_and_results():
+    files = code_generator_module._build_fallback_backend_bundle(
+        json.dumps(
+            {
+                "idea": {
+                    "name": "Meal Prep Atlas",
+                    "tagline": "Turn weekly grocery inspiration into a cookable prep plan",
+                    "selected_flagship": "meal-prep-atlas",
+                    "domain": "meal prep planning",
+                    "layout_archetype": "atlas",
+                    "interface_metaphor": "kitchen prep atlas",
+                    "reference_objects": ["prep block", "grocery lane", "meal board", "container checklist"],
+                    "sample_seed_data": ["weekly prep plan", "organized grocery groups", "saved meal board"],
+                    "proof_points": ["weekly prep plan", "organized grocery groups", "saved meal board"],
+                    "must_have_surfaces": ["prep block", "grocery lane", "meal board", "saved meal board"],
+                    "trust_surfaces": ["saved meal board", "organized grocery groups"],
+                    "output_entities": ["weekly prep plan", "saved meal board"],
+                }
+            },
+            ensure_ascii=False,
+        )
+    )
+
+    namespace: dict[str, object] = {}
+    exec(files["ai_service.py"], namespace)
+    plan = namespace["build_plan"]("high-protein meal prep for 5 days", "$80 budget and Sunday prep")
+    insights = namespace["build_insights"]("prep block", "5 days, high-protein, $80 budget")
+
+    assert plan["items"][0]["title"] == "Prep block"
+    assert "weekly prep plan" in plan["summary"].lower()
+    assert "saved meal board" in plan["summary"].lower()
+    assert "saved meal board" in " ".join(insights["next_actions"]).lower()
+    assert "demo finale" not in " ".join(insights["next_actions"]).lower()
 
 
 @pytest.mark.asyncio
@@ -848,6 +947,8 @@ async def test_generate_backend_files_uses_deterministic_fallback_on_llm_error(m
     assert "main.py" in files
     assert "routes.py" in files
     assert "ai_service.py" in files
+    assert "app.include_router(router)" in files["main.py"]
+    assert 'app.include_router(router, prefix="/api")' in files["main.py"]
 
 
 @pytest.mark.asyncio
@@ -865,6 +966,7 @@ async def test_code_generator_forces_frontend_fallback_after_eval_failure(monkey
 
     monkeypatch.setattr(code_generator_module, "get_llm", lambda **kwargs: object())
     monkeypatch.setattr(code_generator_module, "get_rate_limit_fallback_models", lambda model: [])
+    monkeypatch.setenv("VIBEDEPLOY_ENABLE_LAST_RESORT_FRONTEND_FALLBACK", "1")
     monkeypatch.setattr(code_generator_module, "_generate_frontend_files", _unexpected_frontend)
     monkeypatch.setattr(code_generator_module, "_generate_backend_files", _backend_files)
     monkeypatch.setattr(code_generator_module, "_normalize_cross_stack", lambda fe, be: (fe, be))
@@ -918,9 +1020,15 @@ async def test_code_generator_forces_frontend_fallback_after_eval_failure(monkey
 
 
 @pytest.mark.asyncio
-async def test_code_generator_prefers_deterministic_frontend_for_specialized_layout(monkeypatch):
-    async def _unexpected_frontend(*args, **kwargs):
-        raise AssertionError("frontend LLM should not run for specialized layouts")
+async def test_code_generator_does_not_force_deterministic_frontend_for_specialized_layout(monkeypatch):
+    async def _frontend_files(*args, **kwargs):
+        return {
+            "package.json": json.dumps({"name": "stage-signal", "private": True}),
+            "src/app/layout.tsx": "export default function Layout({ children }) { return <html><body>{children}</body></html>; }",
+            "src/app/page.tsx": 'export default function Page(){ return <main className="custom-stage">Live ops canvas</main>; }',
+            "src/app/globals.css": ".custom-stage { color: white; background: black; }",
+            "src/lib/api.ts": 'export async function createPlan(){ return { summary: "ok" }; }',
+        }
 
     async def _backend_files(*args, **kwargs):
         return {
@@ -932,7 +1040,7 @@ async def test_code_generator_prefers_deterministic_frontend_for_specialized_lay
 
     monkeypatch.setattr(code_generator_module, "get_llm", lambda **kwargs: object())
     monkeypatch.setattr(code_generator_module, "get_rate_limit_fallback_models", lambda model: [])
-    monkeypatch.setattr(code_generator_module, "_generate_frontend_files", _unexpected_frontend)
+    monkeypatch.setattr(code_generator_module, "_generate_frontend_files", _frontend_files)
     monkeypatch.setattr(code_generator_module, "_generate_backend_files", _backend_files)
     monkeypatch.setattr(code_generator_module, "_normalize_cross_stack", lambda fe, be: (fe, be))
 
@@ -966,8 +1074,9 @@ async def test_code_generator_prefers_deterministic_frontend_for_specialized_lay
         }
     )
 
-    assert "console-grid" in result["frontend_code"]["src/app/page.tsx"]
-    assert ".layout-operations-console .hero" in result["frontend_code"]["src/app/globals.css"]
+    assert "custom-stage" in result["frontend_code"]["src/app/page.tsx"]
+    assert ".custom-stage" in result["frontend_code"]["src/app/globals.css"]
+    assert ".vibedeploy-fallback-frontend.json" not in result["frontend_code"]
 
 
 @pytest.mark.asyncio
