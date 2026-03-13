@@ -1,3 +1,4 @@
 agent_environment: production
 agent_name: vibedeploy-agent
+description: 'ADK-first vibeDeploy orchestration agent. Invoke: curl -X POST <url>/run -H "Authorization: Bearer $DIGITALOCEAN_API_TOKEN" -H "Content-Type: application/json" -d ''{"action":"evaluate","thread_id":"demo","prompt":"Build a creator workflow app"}'''
 entrypoint_file: main.py

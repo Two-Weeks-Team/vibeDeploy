@@ -57,6 +57,10 @@ services:
         scope: RUN_TIME
         type: SECRET
         value: REPLACE_WITH_MODEL_ACCESS_KEY
+      - key: GRADIENT_MODEL_ACCESS_KEY
+        scope: RUN_TIME
+        type: SECRET
+        value: REPLACE_WITH_MODEL_ACCESS_KEY
       - key: DIGITALOCEAN_API_TOKEN
         scope: RUN_TIME
         type: SECRET
@@ -71,6 +75,13 @@ services:
       - key: DO_KNOWLEDGE_BASE_ID
         scope: RUN_TIME
         value: REPLACE_WITH_KB_ID
+      - key: VIBEDEPLOY_ADK_URL
+        scope: RUN_TIME
+        value: REPLACE_WITH_ADK_URL
+      - key: VIBEDEPLOY_ADK_AUTH_TOKEN
+        scope: RUN_TIME
+        type: SECRET
+        value: REPLACE_WITH_ADK_AUTH_TOKEN
 
   - name: web
     environment_slug: node-js
