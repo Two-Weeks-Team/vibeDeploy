@@ -317,6 +317,7 @@ async def code_generator(state: VibeDeployState) -> dict:
                 fallback_models=frontend_fallback_models,
                 max_attempts=frontend_max_attempts,
                 iteration=iteration,
+                has_existing_bundle=bool(existing_frontend_code),
             )
         frontend_code = _merge_generated_files(existing_frontend_code, generated_frontend, label="frontend")
     else:
@@ -338,6 +339,7 @@ async def code_generator(state: VibeDeployState) -> dict:
                 fallback_models=backend_fallback_models,
                 max_attempts=backend_max_attempts,
                 iteration=iteration,
+                has_existing_bundle=bool(existing_backend_code),
             )
         backend_code = _merge_generated_files(existing_backend_code, generated_backend, label="backend")
     else:
@@ -701,6 +703,7 @@ async def _generate_frontend_files(
     fallback_models: list[str] | None = None,
     max_attempts: int = 6,
     iteration: int = 0,
+    has_existing_bundle: bool = False,
 ) -> dict[str, str]:
     try:
         response = await ainvoke_with_retry(
@@ -721,6 +724,9 @@ async def _generate_frontend_files(
         files = parsed.get("files", {})
         return _normalize_frontend_files(_normalize_files_dict(files))
     except Exception as exc:
+        if has_existing_bundle:
+            logger.warning("[CODE_GEN] Frontend generation failed; preserving previous bundle: %s", str(exc)[:200])
+            return {}
         logger.warning("[CODE_GEN] Falling back to deterministic frontend scaffold: %s", str(exc)[:200])
         return _build_fallback_frontend_bundle(context)
 
@@ -734,6 +740,7 @@ async def _generate_backend_files(
     fallback_models: list[str] | None = None,
     max_attempts: int = 6,
     iteration: int = 0,
+    has_existing_bundle: bool = False,
 ) -> dict[str, str]:
     try:
         response = await ainvoke_with_retry(
@@ -754,6 +761,9 @@ async def _generate_backend_files(
         files = parsed.get("files", {})
         return _normalize_backend_files(_normalize_files_dict(files))
     except Exception as exc:
+        if has_existing_bundle:
+            logger.warning("[CODE_GEN] Backend generation failed; preserving previous bundle: %s", str(exc)[:200])
+            return {}
         logger.warning("[CODE_GEN] Falling back to deterministic backend scaffold: %s", str(exc)[:200])
         return _build_fallback_backend_bundle(context)
 
