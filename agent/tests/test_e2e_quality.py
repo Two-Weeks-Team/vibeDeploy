@@ -1,13 +1,16 @@
-"""Tests verifying pipeline quality hardening changes (Phase 1-2)."""
+"""Tests verifying pipeline quality hardening changes (Phase 1-3)."""
 
 import pytest
 
 from agent.nodes.code_evaluator import (
+    _MIN_UNIQUE_API_ENDPOINTS,
     MAX_CODE_EVAL_ITERATIONS,
     _build_fix_instructions,
+    _check_content_depth,
     _check_experience,
     _check_flagship_artifact_fidelity,
     _check_structural_presence,
+    _collect_quality_blockers,
 )
 from agent.nodes.decision_gate import MAX_FIX_STORM_ROUNDS, route_decision
 from agent.nodes.fix_storm import scope_down
@@ -232,3 +235,164 @@ def test_experience_check_penalizes_comment_only_state():
     }
     score = _check_experience(frontend_comment_only, blueprint)
     assert score < 40.0, f"Comment-only 'loading' should score < 40.0, got {score}"
+
+
+# --- Phase 3: Content Depth Detection ---
+
+
+def _make_rich_frontend():
+    return {
+        "src/app/page.tsx": (
+            "'use client';\nimport { useState, useEffect } from 'react';\n"
+            "export default function Page() {\n"
+            "  const [recipes, setRecipes] = useState([]);\n"
+            "  useEffect(() => { fetch('/api/recipes').then(r => r.json()).then(setRecipes); }, []);\n"
+            "  return <main>{recipes.map(r => <div key={r.id}>{r.title}</div>)}</main>;\n}"
+        ),
+        "src/lib/api.ts": (
+            "const API_BASE = '/api';\n"
+            "export async function getRecipes() { return fetch('/api/recipes').then(r => r.json()); }\n"
+            "export async function getCategories() { return fetch('/api/categories').then(r => r.json()); }\n"
+        ),
+    }
+
+
+def _make_rich_backend():
+    return {
+        "main.py": "from fastapi import FastAPI\nimport uvicorn\napp = FastAPI()\n",
+        "routes.py": (
+            "from fastapi import APIRouter\n"
+            "router = APIRouter(prefix='/api')\n"
+            "@router.get('/recipes')\nasync def get_recipes():\n    return list_recipes()\n"
+            "@router.post('/recipes')\nasync def create_recipe(data: dict):\n    return save_recipe(data)\n"
+            "@router.get('/categories')\nasync def get_categories():\n    return list_categories()\n"
+        ),
+        "ai_service.py": (
+            "async def suggest_recipe(ingredients: list):\n    pass\n"
+            "async def analyze_nutrition(recipe_id: str):\n    pass\n"
+            "async def generate_meal_plan(preferences: dict):\n    pass\n"
+        ),
+    }
+
+
+def test_content_depth_clean_code_scores_high():
+    depth = _check_content_depth(_make_rich_frontend(), _make_rich_backend())
+    assert depth["depth_score"] >= 80, f"Rich code should score >= 80, got {depth['depth_score']}"
+    assert not depth["shallow_patterns_found"]
+    assert depth["has_domain_logic"] is True
+
+
+def test_content_depth_detects_sample_item_placeholder():
+    frontend = {"src/app/page.tsx": "return <div>Sample Item 1</div><div>Sample Item 2</div>;"}
+    depth = _check_content_depth(frontend, _make_rich_backend())
+    assert depth["shallow_patterns_found"], "Should detect 'Sample Item N' as shallow"
+    assert depth["depth_score"] < 100
+
+
+def test_content_depth_detects_lorem_ipsum():
+    frontend = {"src/app/page.tsx": "return <p>Lorem ipsum dolor sit amet</p>;"}
+    depth = _check_content_depth(frontend, _make_rich_backend())
+    assert any("lorem" in p for p in depth["shallow_patterns_found"])
+
+
+def test_content_depth_detects_your_result_here():
+    frontend = {"src/app/page.tsx": "return <span>Your Result Here</span>;"}
+    depth = _check_content_depth(frontend, _make_rich_backend())
+    assert depth["shallow_patterns_found"]
+
+
+def test_content_depth_detects_coming_soon():
+    frontend = {"src/app/page.tsx": "return <div>Coming Soon</div>;"}
+    depth = _check_content_depth(frontend, _make_rich_backend())
+    assert any("coming" in p for p in depth["shallow_patterns_found"])
+
+
+def test_content_depth_penalizes_few_endpoints():
+    frontend = {"src/app/page.tsx": "export default function Page() { return <main>Hi</main>; }"}
+    backend = {"main.py": "from fastapi import FastAPI\napp = FastAPI()\n"}
+    depth = _check_content_depth(frontend, backend)
+    assert depth["unique_api_endpoints"] < _MIN_UNIQUE_API_ENDPOINTS
+    assert depth["depth_score"] < 80
+
+
+def test_content_depth_rewards_seed_data():
+    frontend = {
+        "src/app/page.tsx": (
+            "const DEMO_RECIPES = [\n"
+            '  { id: 1, title: "Pasta Carbonara", category: "Italian", time: 30, rating: 4.5 },\n'
+            '  { id: 2, title: "Chicken Tikka Masala", category: "Indian", time: 45, rating: 4.8 },\n'
+            '  { id: 3, title: "Caesar Salad", category: "American", time: 15, rating: 4.2 },\n'
+            "];\nexport default function Page() { return <main>Content</main>; }"
+        ),
+    }
+    depth = _check_content_depth(frontend, _make_rich_backend())
+    assert depth["has_seed_data"] is True
+
+
+def test_content_depth_detects_no_domain_logic():
+    backend = {
+        "main.py": "from fastapi import FastAPI\napp = FastAPI()\n",
+        "routes.py": "@router.get('/items')\ndef get(): return []\n",
+    }
+    depth = _check_content_depth(None, backend)
+    assert depth["has_domain_logic"] is False
+
+
+def test_content_depth_blocker_triggers_below_40():
+    frontend = {
+        "src/app/page.tsx": (
+            "return <div>Sample Item 1</div><div>Sample Item 2</div>"
+            "<p>Your Result Here</p><p>Coming Soon</p>"
+            "<p>Lorem ipsum dolor sit amet</p>;"
+        )
+    }
+    backend = {"main.py": "app = None\n"}
+    blockers = _collect_quality_blockers(frontend, backend, {})
+    assert any("shallow" in b for b in blockers)
+
+
+def test_content_depth_no_blocker_for_rich_code():
+    blockers = _collect_quality_blockers(_make_rich_frontend(), _make_rich_backend(), {})
+    shallow_blockers = [b for b in blockers if "shallow" in b]
+    assert not shallow_blockers
+
+
+def test_fix_instructions_include_depth_guidance_when_shallow():
+    eval_result = {
+        "iteration": 1,
+        "consistency": 90,
+        "runnability": 90,
+        "experience": 90,
+        "missing_frontend": [],
+        "missing_backend": [],
+        "content_depth": {
+            "depth_score": 30,
+            "shallow_patterns_found": [r"sample\s+(item|data)"],
+            "unique_api_endpoints": 1,
+            "has_seed_data": False,
+            "has_domain_logic": False,
+        },
+    }
+    instructions = _build_fix_instructions(eval_result)
+    assert "DEPTH" in instructions
+    assert "placeholder" in instructions.lower() or "seed" in instructions.lower()
+
+
+def test_fix_instructions_skip_depth_when_score_high():
+    eval_result = {
+        "iteration": 1,
+        "consistency": 90,
+        "runnability": 90,
+        "experience": 90,
+        "missing_frontend": [],
+        "missing_backend": [],
+        "content_depth": {
+            "depth_score": 85,
+            "shallow_patterns_found": [],
+            "unique_api_endpoints": 4,
+            "has_seed_data": True,
+            "has_domain_logic": True,
+        },
+    }
+    instructions = _build_fix_instructions(eval_result)
+    assert "DEPTH" not in instructions
