@@ -50,11 +50,11 @@ async def analyze(idea: dict, llm=None) -> dict:
                 "role": "user",
                 "content": (
                     f"Idea to evaluate:\n\n{idea_text}\n\n"
-                "Provide your strategic synthesis. Return JSON with keys: "
-                "'key_themes' (list), 'critical_concerns' (list), "
-                "'strategic_recommendations' (list), 'overall_assessment' (string). "
-                "Explicitly call out if the concept feels visually generic or lacks a strong first-use story."
-            ),
+                    "Provide your strategic synthesis. Return JSON with keys: "
+                    "'key_themes' (list), 'critical_concerns' (list), "
+                    "'strategic_recommendations' (list), 'overall_assessment' (string). "
+                    "Explicitly call out if the concept feels visually generic or lacks a strong first-use story."
+                ),
             },
         ],
         fallback_models=get_rate_limit_fallback_models(strategist_model),

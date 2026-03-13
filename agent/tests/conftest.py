@@ -108,12 +108,22 @@ def _eval_events():
         make_chain_event(
             "on_custom_event",
             "deploy.step.start",
-            data={"type": "deploy.step.start", "node": "git_push", "phase": "git_push", "message": "Repository push started"},
+            data={
+                "type": "deploy.step.start",
+                "node": "git_push",
+                "phase": "git_push",
+                "message": "Repository push started",
+            },
         ),
         make_chain_event(
             "on_custom_event",
             "deploy.step.complete",
-            data={"type": "deploy.step.complete", "node": "git_push", "phase": "git_push", "message": "Repository push complete"},
+            data={
+                "type": "deploy.step.complete",
+                "node": "git_push",
+                "phase": "git_push",
+                "message": "Repository push complete",
+            },
         ),
         make_chain_event(
             "on_custom_event",
@@ -133,7 +143,12 @@ def _eval_events():
         make_chain_event(
             "on_custom_event",
             "deploy.step.complete",
-            data={"type": "deploy.step.complete", "node": "app_spec", "phase": "app_spec", "message": "App spec complete"},
+            data={
+                "type": "deploy.step.complete",
+                "node": "app_spec",
+                "phase": "app_spec",
+                "message": "App spec complete",
+            },
         ),
         make_chain_event(
             "on_custom_event",
@@ -153,17 +168,32 @@ def _eval_events():
         make_chain_event(
             "on_custom_event",
             "deploy.step.complete",
-            data={"type": "deploy.step.complete", "node": "do_deploy", "phase": "do_deploy", "message": "Deploy complete"},
+            data={
+                "type": "deploy.step.complete",
+                "node": "do_deploy",
+                "phase": "do_deploy",
+                "message": "Deploy complete",
+            },
         ),
         make_chain_event(
             "on_custom_event",
             "deploy.step.start",
-            data={"type": "deploy.step.start", "node": "verified", "phase": "verified", "message": "Verification started"},
+            data={
+                "type": "deploy.step.start",
+                "node": "verified",
+                "phase": "verified",
+                "message": "Verification started",
+            },
         ),
         make_chain_event(
             "on_custom_event",
             "deploy.step.complete",
-            data={"type": "deploy.step.complete", "node": "verified", "phase": "verified", "message": "Verification complete"},
+            data={
+                "type": "deploy.step.complete",
+                "node": "verified",
+                "phase": "verified",
+                "message": "Verification complete",
+            },
         ),
         make_chain_event(
             "on_chain_end",

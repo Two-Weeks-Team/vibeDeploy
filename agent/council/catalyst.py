@@ -63,10 +63,10 @@ async def analyze(idea: dict, llm=None) -> dict:
             {
                 "role": "user",
                 "content": (
-                "Analyze this idea:\n\n"
-                f"{idea_text}\n\n"
-                "Pay attention to whether the app has a memorable demo moment or a differentiated interface, not just novel backend logic.\n"
-                "Return your analysis as a JSON object with keys: "
+                    "Analyze this idea:\n\n"
+                    f"{idea_text}\n\n"
+                    "Pay attention to whether the app has a memorable demo moment or a differentiated interface, not just novel backend logic.\n"
+                    "Return your analysis as a JSON object with keys: "
                     "'findings' (list of key findings), 'score' (0-100 integer), "
                     "'reasoning' (string explaining your score), "
                     "'recommendations' (list of suggestions)."

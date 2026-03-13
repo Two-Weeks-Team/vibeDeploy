@@ -9,7 +9,7 @@ _PROJECT_ROOT = _SCRIPT_DIR.parent.parent
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
-from agent.model_capabilities import probe_model_capabilities
+from agent.model_capabilities import probe_model_capabilities  # noqa: E402
 
 
 async def _main():

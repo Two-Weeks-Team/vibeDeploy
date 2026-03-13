@@ -168,10 +168,7 @@ async def test_dashboard_reconciles_results_to_active_live_apps(app_client, monk
     assert len(results) == 5
     result_ids = {item["thread_id"] for item in results}
     assert "784480-queuebite" not in result_ids
-    assert {
-        item["deployment"]["liveUrl"]
-        for item in results
-    } == {
+    assert {item["deployment"]["liveUrl"] for item in results} == {
         "https://demopilot-168642-xbwvx.ondigitalocean.app",
         "https://trihabit-166567-2fpe6.ondigitalocean.app",
         "https://smartspend-161898-m59ar.ondigitalocean.app",
@@ -187,10 +184,7 @@ async def test_dashboard_reconciles_results_to_active_live_apps(app_client, monk
     assert deployments_response.status_code == 200
     deployments = deployments_response.json()
     assert len(deployments) == 5
-    assert {
-        item["deployment"]["repoUrl"]
-        for item in deployments
-    } == {
+    assert {item["deployment"]["repoUrl"] for item in deployments} == {
         "https://github.com/Two-Weeks-Team/demopilot-168642",
         "https://github.com/Two-Weeks-Team/trihabit-166567",
         "https://github.com/Two-Weeks-Team/smartspend-161898",
@@ -281,7 +275,11 @@ async def test_dashboard_deployments_only_include_live_apps_without_showcase_inv
             "debates": [],
             "documents": [],
             "idea_summary": "Local-only app",
-            "deployment": {"repoUrl": "https://github.com/Two-Weeks-Team/local-only", "liveUrl": "", "status": "local_running"},
+            "deployment": {
+                "repoUrl": "https://github.com/Two-Weeks-Team/local-only",
+                "liveUrl": "",
+                "status": "local_running",
+            },
         },
     )
     assert local_only.status_code == 200

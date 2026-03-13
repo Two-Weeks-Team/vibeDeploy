@@ -1,8 +1,8 @@
 import asyncpg
 import pytest
 
-from agent.db.store import ResultStore
 from agent.db import connection
+from agent.db.store import ResultStore
 from agent.run_server import _read_worker_count
 
 

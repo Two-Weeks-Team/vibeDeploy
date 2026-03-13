@@ -62,10 +62,10 @@ async def analyze(idea: dict, llm=None) -> dict:
             {
                 "role": "user",
                 "content": (
-                "Analyze this idea:\n\n"
-                f"{idea_text}\n\n"
-                "Include product trust risks such as confusing workflows, generic AI patterns that undermine credibility, or fragile multi-step experiences.\n"
-                "Return your analysis as a JSON object with keys: "
+                    "Analyze this idea:\n\n"
+                    f"{idea_text}\n\n"
+                    "Include product trust risks such as confusing workflows, generic AI patterns that undermine credibility, or fragile multi-step experiences.\n"
+                    "Return your analysis as a JSON object with keys: "
                     "'findings' (list of key findings), 'score' (0-100 integer), "
                     "'reasoning' (string explaining your score), "
                     "'recommendations' (list of suggestions)."

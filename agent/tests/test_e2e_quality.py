@@ -1,7 +1,5 @@
 """Tests verifying pipeline quality hardening changes (Phase 1-2)."""
 
-import re
-
 import pytest
 
 from agent.nodes.code_evaluator import (
@@ -13,7 +11,6 @@ from agent.nodes.code_evaluator import (
 )
 from agent.nodes.decision_gate import MAX_FIX_STORM_ROUNDS, route_decision
 from agent.nodes.fix_storm import scope_down
-
 
 # --- Phase 1: Decision Gate Hardening ---
 

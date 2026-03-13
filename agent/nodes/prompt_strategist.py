@@ -181,24 +181,34 @@ def _extract_guidance_from_source(family: str, source: str) -> list[str]:
 
     if family == "openai_gpt_oss":
         if "harmony response format" in normalized.lower():
-            notes.append("Use standard chat-role structure and a strict message contract because GPT-OSS is trained around Harmony format.")
+            notes.append(
+                "Use standard chat-role structure and a strict message contract because GPT-OSS is trained around Harmony format."
+            )
         if "configurable reasoning effort" in normalized.lower():
-            notes.append("Call out the expected reasoning depth in plain language so GPT-OSS does not over- or under-think the generation task.")
+            notes.append(
+                "Call out the expected reasoning depth in plain language so GPT-OSS does not over- or under-think the generation task."
+            )
         if "structured outputs" in normalized.lower():
             notes.append("Lean on structured output contracts for machine-parseable file bundles.")
     elif family == "qwen3":
         if "/no_think" in normalized or "enable_thinking=false" in normalized.lower():
             notes.append("Inject `/no_think` into code-generation requests so Qwen stays in final-answer mode.")
         if "non-thinking mode" in normalized.lower():
-            notes.append("Prefer non-thinking mode for artifact generation and reserve deeper reasoning only for planning or diagnosis.")
+            notes.append(
+                "Prefer non-thinking mode for artifact generation and reserve deeper reasoning only for planning or diagnosis."
+            )
     elif family == "deepseek_r1":
         if "avoid adding a system prompt" in normalized.lower():
-            notes.append("Repeat all critical instructions in the user message so DeepSeek does not lose constraints when the system role is ignored.")
+            notes.append(
+                "Repeat all critical instructions in the user message so DeepSeek does not lose constraints when the system role is ignored."
+            )
         temp_match = re.search(r"temperature within the range of 0\.5-0\.7", normalized, flags=re.IGNORECASE)
         if temp_match:
             notes.append("Keep DeepSeek generation near the 0.5-0.7 band when it becomes the active code model.")
         if "please reason step by step" in normalized.lower():
-            notes.append("Allow structured internal reasoning, but still demand a compact final artifact with no extra prose.")
+            notes.append(
+                "Allow structured internal reasoning, but still demand a compact final artifact with no extra prose."
+            )
 
     return notes
 
@@ -274,8 +284,12 @@ def _build_prompt_strategy(
             [
                 "Honor the frontend/backend contract exactly for endpoint paths, methods, request fields, and response fields.",
                 f"Manifest-critical backend files: {_human_join(backend_files[:6])}.",
-                _summarize_spec_line(api_spec, fallback="Keep API contracts explicit and machine-safe for the frontend."),
-                _summarize_spec_line(tech_spec, fallback="Keep runtime and dependency choices DigitalOcean-compatible."),
+                _summarize_spec_line(
+                    api_spec, fallback="Keep API contracts explicit and machine-safe for the frontend."
+                ),
+                _summarize_spec_line(
+                    tech_spec, fallback="Keep runtime and dependency choices DigitalOcean-compatible."
+                ),
             ],
         ),
         "prompt_engineer": _render_brief(

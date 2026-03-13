@@ -105,7 +105,9 @@ async def probe_model_capabilities(
     *,
     timeout_seconds: float = 90.0,
 ) -> dict[str, Any]:
-    token = (api_key or os.getenv("GRADIENT_MODEL_ACCESS_KEY", "") or os.getenv("DIGITALOCEAN_INFERENCE_KEY", "")).strip()
+    token = (
+        api_key or os.getenv("GRADIENT_MODEL_ACCESS_KEY", "") or os.getenv("DIGITALOCEAN_INFERENCE_KEY", "")
+    ).strip()
     if not token:
         report = {
             "selected_model": DEFAULT_MODEL,

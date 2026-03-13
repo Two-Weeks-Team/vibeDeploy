@@ -24,7 +24,9 @@ async def test_council_run_serial_mode_merges_all_agents(monkeypatch):
     for module in council_module.COUNCIL_MEMBERS.values():
         monkeypatch.setattr(module, "analyze", fake_analyze)
 
-    result = await council_module.run_council_agent({"serial_run": True, "agent_names": ["architect", "scout"], "idea": {"name": "Demo"}})
+    result = await council_module.run_council_agent(
+        {"serial_run": True, "agent_names": ["architect", "scout"], "idea": {"name": "Demo"}}
+    )
 
     assert sorted(result["council_analysis"].keys()) == ["architect", "scout"]
 
@@ -51,6 +53,8 @@ async def test_brainstorm_run_serial_mode_merges_all_agents(monkeypatch):
     monkeypatch.setattr("agent.llm.ainvoke_with_retry", lambda llm, messages, **kwargs: llm.ainvoke(messages))
     monkeypatch.setattr("agent.llm.get_rate_limit_fallback_models", lambda model: [])
 
-    result = await brainstorm_module.run_brainstorm_agent({"serial_run": True, "agent_names": ["architect", "scout"], "idea": {"name": "Demo"}})
+    result = await brainstorm_module.run_brainstorm_agent(
+        {"serial_run": True, "agent_names": ["architect", "scout"], "idea": {"name": "Demo"}}
+    )
 
     assert sorted(result["brainstorm_insights"].keys()) == ["architect", "scout"]

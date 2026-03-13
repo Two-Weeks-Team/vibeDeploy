@@ -255,10 +255,10 @@ def build_app_spec(
         envs.append({"key": "POSTGRES_URL", "value": db_url, "scope": "RUN_TIME", "type": "SECRET"})
     inference_key = os.getenv("GRADIENT_MODEL_ACCESS_KEY", "") or os.getenv("DIGITALOCEAN_INFERENCE_KEY", "")
     if inference_key:
+        envs.append({"key": "GRADIENT_MODEL_ACCESS_KEY", "value": inference_key, "scope": "RUN_TIME", "type": "SECRET"})
         envs.append(
-            {"key": "GRADIENT_MODEL_ACCESS_KEY", "value": inference_key, "scope": "RUN_TIME", "type": "SECRET"}
+            {"key": "DIGITALOCEAN_INFERENCE_KEY", "value": inference_key, "scope": "RUN_TIME", "type": "SECRET"}
         )
-        envs.append({"key": "DIGITALOCEAN_INFERENCE_KEY", "value": inference_key, "scope": "RUN_TIME", "type": "SECRET"})
     envs.append({"key": "DO_INFERENCE_MODEL", "value": "openai-gpt-oss-120b", "scope": "RUN_TIME"})
 
     service: dict = {
