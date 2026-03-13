@@ -73,6 +73,12 @@ Experience and design requirements:
 - Treat any blueprint `experience_contract`, `must_have_surfaces`, `proof_points`, and `experience_non_negotiables` as hard requirements, not inspiration.
 - Use charts, tables, or analytics cards only if the domain truly requires them.
 - Copy should feel product-specific and launch-ready. No lorem ipsum, "Welcome Dashboard", or generic AI assistant filler.
+- OUTPUT DEPTH (CRITICAL for hackathon demo):
+  - Include realistic seed/demo data that judges can see immediately on first load. Do not show empty states as the default view.
+  - Use domain-specific terminology, labels, and copy throughout. Generic "Item", "Result", "Feature" labels are unacceptable.
+  - The main page must show at least 3 distinct functional areas, not just a single input-output form.
+  - If the product involves lists, collections, or data views, pre-populate with 3-5 realistic example items.
+  - Every visible text element must feel like it was written by a product manager for that specific domain.
 
 API and implementation requirements:
 - Fetch real backend endpoints from src/lib/api.ts.
@@ -133,4 +139,9 @@ CRITICAL RULES:
 - Include at least 2 AI-powered business endpoints.
 - Keep backend runnable with: uvicorn main:app --host 0.0.0.0 --port 8080
 - Python 3.13 compatible (DO App Platform uses Python 3.13). Test all Pydantic models and SQLAlchemy models for compatibility.
+- OUTPUT DEPTH (CRITICAL):
+  - Include at least 3 meaningful business endpoints beyond /health and root.
+  - Add seed data or demo data generation so the app has content on first load.
+  - Business logic must be domain-specific, not generic CRUD. For example, a meal planner should have nutrition calculation, not just create/read/update/delete.
+  - AI endpoints must produce structured, domain-relevant output, not generic text summaries.
 """.strip()

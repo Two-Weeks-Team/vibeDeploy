@@ -55,6 +55,18 @@ _FABRICATED_PROOF_TERMS = (
     "beta feedback",
     "no third-party ai calls",
 )
+_SHALLOW_CONTENT_PATTERNS = (
+    r"sample\s+(item|data|entry|record)\s*\d",
+    r"your\s+(result|data|item|content)\s+here",
+    r"lorem\s+ipsum",
+    r"placeholder\s+(text|content|data)",
+    r"example\s+(item|entry|result)\s*\d",
+    r"todo:\s*(add|implement|create)",
+    r"coming\s+soon",
+    r"feature\s+\d+",
+)
+
+_MIN_UNIQUE_API_ENDPOINTS = 2
 
 
 async def code_evaluator(state: VibeDeployState) -> dict:
@@ -77,6 +89,7 @@ async def code_evaluator(state: VibeDeployState) -> dict:
     runnability = _check_runnability(frontend_code, backend_code)
     experience = _check_experience(frontend_code, blueprint)
     artifact_fidelity = _check_flagship_artifact_fidelity(frontend_code, backend_code, flagship_contract)
+    content_depth = _check_content_depth(frontend_code, backend_code)
     match_rate = round(completeness * 0.3 + consistency * 0.25 + runnability * 0.2 + experience * 0.25, 1)
 
     missing_fe = list(expected_frontend - actual_frontend)
@@ -103,6 +116,7 @@ async def code_evaluator(state: VibeDeployState) -> dict:
         "runnability": round(runnability, 1),
         "experience": round(experience, 1),
         "artifact_fidelity": artifact_fidelity,
+        "content_depth": content_depth,
         "flagship_fallback_accepted": flagship_fallback_accepted,
         "iteration": iteration,
         "passed": (
@@ -408,6 +422,47 @@ def _check_experience(frontend_code: dict | None, blueprint: dict | None) -> flo
     return (score / total) * 100
 
 
+def _check_content_depth(frontend_code: dict | None, backend_code: dict | None) -> dict:
+    fe = frontend_code or {}
+    be = backend_code or {}
+    all_frontend = "\n".join(str(v) for v in fe.values()).lower()
+    all_backend = "\n".join(str(v) for v in be.values()).lower()
+
+    shallow_hits = []
+    for pattern in _SHALLOW_CONTENT_PATTERNS:
+        matches = re.findall(pattern, all_frontend, re.IGNORECASE)
+        if matches:
+            shallow_hits.append(pattern)
+
+    api_endpoints = set(re.findall(r'fetch\(["\']/(api/\w+)', all_frontend))
+    backend_routes = set(re.findall(r'@router\.(?:get|post|put|delete)\(["\']/?(\w+)', all_backend))
+    unique_endpoints = len(api_endpoints | backend_routes)
+
+    has_seed_data = bool(re.search(r"(?:const|let)\s+\w+\s*=\s*\[[\s\S]{50,}?\]", all_frontend)) or bool(
+        re.search(r"(?:SEED|DEMO|SAMPLE|DEFAULT)_", "\n".join(str(v) for v in be.values()))
+    )
+
+    has_domain_logic = len(re.findall(r"(?:async\s+)?def\s+\w+\(.*?\).*?:", all_backend)) >= 3
+
+    depth_score = 100.0
+    if shallow_hits:
+        depth_score -= min(len(shallow_hits) * 15, 45)
+    if unique_endpoints < _MIN_UNIQUE_API_ENDPOINTS:
+        depth_score -= 20
+    if not has_seed_data:
+        depth_score -= 15
+    if not has_domain_logic:
+        depth_score -= 20
+
+    return {
+        "depth_score": max(0.0, round(depth_score, 1)),
+        "shallow_patterns_found": shallow_hits,
+        "unique_api_endpoints": unique_endpoints,
+        "has_seed_data": has_seed_data,
+        "has_domain_logic": has_domain_logic,
+    }
+
+
 def _collect_quality_blockers(
     frontend_code: dict | None, backend_code: dict | None, blueprint: dict | None
 ) -> list[str]:
@@ -434,6 +489,10 @@ def _collect_quality_blockers(
         frontend_code or {}, backend_code or {}
     ):
         blockers.append("saved/history experience promised without a real persistence flow")
+
+    depth = _check_content_depth(frontend_code, backend_code)
+    if depth["depth_score"] < 40:
+        blockers.append("generated content is too shallow for demo quality")
 
     return blockers
 
@@ -605,6 +664,31 @@ def _build_fix_instructions(eval_result: dict, blueprint: dict | None = None) ->
     experience_contract = blueprint.get("experience_contract", {}) if isinstance(blueprint, dict) else {}
     required_surfaces = _coerce_string_list(experience_contract.get("required_surfaces"))
     proof_points = _coerce_string_list(experience_contract.get("proof_points"))
+
+    content_depth = eval_result.get("content_depth", {})
+    if isinstance(content_depth, dict):
+        depth_score = content_depth.get("depth_score", 100)
+        if depth_score < 60:
+            depth_issues = []
+            if content_depth.get("shallow_patterns_found"):
+                depth_issues.append(
+                    "REMOVE all placeholder text (Sample Item, Your Result Here, Lorem Ipsum, Coming Soon). "
+                    "Replace with realistic domain-specific content."
+                )
+            if not content_depth.get("has_seed_data"):
+                depth_issues.append(
+                    "ADD seed/demo data so the app shows real content on first load. "
+                    "Judges must see a populated, functional product, not empty states."
+                )
+            if content_depth.get("unique_api_endpoints", 0) < _MIN_UNIQUE_API_ENDPOINTS:
+                depth_issues.append(
+                    "ADD more business-specific API endpoints. A real product needs more than just one generic endpoint."
+                )
+            if not content_depth.get("has_domain_logic"):
+                depth_issues.append("ADD domain-specific business logic to the backend. Generic CRUD is not enough.")
+            if depth_issues:
+                issues.append("DEPTH ISSUES:\n" + "\n".join(f"  - {d}" for d in depth_issues))
+
     if eval_result.get("missing_frontend"):
         issues.append(f"MUST generate these frontend files: {', '.join(eval_result['missing_frontend'])}")
     if eval_result.get("missing_backend"):
