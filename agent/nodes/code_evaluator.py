@@ -3,6 +3,7 @@ import logging
 import re
 
 from ..state import VibeDeployState
+from .task_contracts import build_repair_tasks_from_eval, build_task_distribution
 
 logger = logging.getLogger(__name__)
 _HTTP_METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
@@ -30,19 +31,37 @@ _EXPERIENCE_STOPWORDS = {
     "specific",
 }
 
-MAX_CODE_EVAL_ITERATIONS = 3
+MAX_CODE_EVAL_ITERATIONS = 5
 MAX_EMPTY_FRONTEND_RETRIES = 5
 MAX_EMPTY_BACKEND_RETRIES = 5
 PASS_THRESHOLD = 80
 MIN_CONSISTENCY_TO_PASS = 75
 MIN_RUNNABILITY_TO_PASS = 85
 MIN_EXPERIENCE_TO_PASS = 70
+_FALLBACK_MARKER_FILES = {".vibedeploy-fallback-frontend.json", ".vibedeploy-fallback-backend.json"}
+_GENERIC_SCAFFOLD_TERMS = (
+    "hero header",
+    "primary workspace",
+    "secondary supporting panel",
+    "saved library and recent activity",
+    "feature lanes",
+    "readiness score",
+)
+_FABRICATED_PROOF_TERMS = (
+    "professionally authored",
+    "95% test coverage",
+    "mit license",
+    "pilot users report",
+    "beta feedback",
+    "no third-party ai calls",
+)
 
 
 async def code_evaluator(state: VibeDeployState) -> dict:
     blueprint = state.get("blueprint", {})
     frontend_code = state.get("frontend_code", {})
     backend_code = state.get("backend_code", {})
+    flagship_contract = state.get("flagship_contract") if isinstance(state.get("flagship_contract"), dict) else {}
     iteration = state.get("code_eval_iteration", 0) + 1
 
     expected_frontend = set(blueprint.get("frontend_files", {}).keys())
@@ -57,10 +76,25 @@ async def code_evaluator(state: VibeDeployState) -> dict:
     consistency = _check_consistency(frontend_code, backend_code, blueprint)
     runnability = _check_runnability(frontend_code, backend_code)
     experience = _check_experience(frontend_code, blueprint)
+    artifact_fidelity = _check_flagship_artifact_fidelity(frontend_code, backend_code, flagship_contract)
     match_rate = round(completeness * 0.3 + consistency * 0.25 + runnability * 0.2 + experience * 0.25, 1)
 
     missing_fe = list(expected_frontend - actual_frontend)
     missing_be = list(expected_backend - actual_backend)
+    blockers = _collect_quality_blockers(frontend_code, backend_code, blueprint)
+    blockers.extend(_artifact_fidelity_blockers(flagship_contract, artifact_fidelity))
+    flagship_fallback_accepted = _allow_flagship_fallback_pass(
+        flagship_contract,
+        blockers,
+        completeness,
+        consistency,
+        runnability,
+        experience,
+        artifact_fidelity,
+    )
+    if flagship_fallback_accepted:
+        blockers = []
+    deployment_blocked = bool(blockers)
 
     eval_result = {
         "match_rate": match_rate,
@@ -68,21 +102,29 @@ async def code_evaluator(state: VibeDeployState) -> dict:
         "consistency": round(consistency, 1),
         "runnability": round(runnability, 1),
         "experience": round(experience, 1),
+        "artifact_fidelity": artifact_fidelity,
+        "flagship_fallback_accepted": flagship_fallback_accepted,
         "iteration": iteration,
         "passed": (
-            match_rate >= PASS_THRESHOLD
-            and consistency >= MIN_CONSISTENCY_TO_PASS
-            and runnability >= MIN_RUNNABILITY_TO_PASS
+            (match_rate >= PASS_THRESHOLD and consistency >= MIN_CONSISTENCY_TO_PASS) or flagship_fallback_accepted
+        )
+        and (
+            runnability >= MIN_RUNNABILITY_TO_PASS
             and experience >= MIN_EXPERIENCE_TO_PASS
             and not missing_fe
             and not missing_be
+            and not blockers
         ),
         "missing_frontend": missing_fe,
         "missing_backend": missing_be,
+        "blockers": blockers,
+        "deployment_blocked": deployment_blocked,
     }
 
     if not eval_result["passed"] and iteration < MAX_CODE_EVAL_ITERATIONS:
         eval_result["fix_instructions"] = _build_fix_instructions(eval_result, blueprint)
+
+    repair_tasks = build_repair_tasks_from_eval(eval_result)
 
     logger.info(
         "[CODE_EVAL] Iteration %d: match_rate=%.1f%% (completeness=%.1f, consistency=%.1f, runnability=%.1f, experience=%.1f) → %s",
@@ -99,6 +141,8 @@ async def code_evaluator(state: VibeDeployState) -> dict:
         "code_eval_result": eval_result,
         "code_eval_iteration": iteration,
         "match_rate": match_rate,
+        "repair_tasks": repair_tasks,
+        "task_distribution": build_task_distribution((state.get("execution_tasks") or []) + repair_tasks),
         "phase": "code_evaluation",
     }
 
@@ -116,10 +160,9 @@ def _check_consistency(frontend_code: dict | None, backend_code: dict | None, bl
         api_file = _find_file_fuzzy(fe, "api.ts")
         if frontend_endpoints and backend_endpoints:
             overlap = len(frontend_endpoints & backend_endpoints) / max(len(frontend_endpoints | backend_endpoints), 1)
-            penalty = (
-                len(frontend_endpoints - backend_endpoints) / max(len(frontend_endpoints), 1)
-                + len(backend_endpoints - frontend_endpoints) / max(len(backend_endpoints), 1)
-            )
+            penalty = len(frontend_endpoints - backend_endpoints) / max(len(frontend_endpoints), 1) + len(
+                backend_endpoints - frontend_endpoints
+            ) / max(len(backend_endpoints), 1)
             return max(65.0, min(95.0, 72.0 + overlap * 28.0 - penalty * 8.0))
         if api_file and ("fetch" in fe[api_file] or "axios" in fe[api_file]):
             return 85.0
@@ -141,7 +184,9 @@ def _check_consistency(frontend_code: dict | None, backend_code: dict | None, bl
         item_weight = 0.0
 
         scoped_frontend_specs = (
-            _extract_frontend_endpoint_specs({fe_match: fe[fe_match]}) if fe_match and fe_match in fe else frontend_specs
+            _extract_frontend_endpoint_specs({fe_match: fe[fe_match]})
+            if fe_match and fe_match in fe
+            else frontend_specs
         )
         scoped_backend_specs = (
             _extract_backend_endpoint_specs({be_match: be[be_match]}) if be_match and be_match in be else backend_specs
@@ -169,18 +214,30 @@ def _check_consistency(frontend_code: dict | None, backend_code: dict | None, bl
             item_score += 0.1 if fe_match else 0.0
             item_score += 0.1 if be_match else 0.0
 
-        relevant_frontend_specs = _filter_specs_by_endpoints(scoped_frontend_specs, expected_endpoints) or scoped_frontend_specs
-        relevant_backend_specs = _filter_specs_by_endpoints(scoped_backend_specs, expected_endpoints) or scoped_backend_specs
+        relevant_frontend_specs = (
+            _filter_specs_by_endpoints(scoped_frontend_specs, expected_endpoints) or scoped_frontend_specs
+        )
+        relevant_backend_specs = (
+            _filter_specs_by_endpoints(scoped_backend_specs, expected_endpoints) or scoped_backend_specs
+        )
 
         if expected_request_fields:
             item_weight += 0.2
-            item_score += 0.1 * _field_overlap(expected_request_fields, _collect_spec_fields(relevant_frontend_specs, "request_fields"))
-            item_score += 0.1 * _field_overlap(expected_request_fields, _collect_spec_fields(relevant_backend_specs, "request_fields"))
+            item_score += 0.1 * _field_overlap(
+                expected_request_fields, _collect_spec_fields(relevant_frontend_specs, "request_fields")
+            )
+            item_score += 0.1 * _field_overlap(
+                expected_request_fields, _collect_spec_fields(relevant_backend_specs, "request_fields")
+            )
 
         if expected_response_fields:
             item_weight += 0.2
-            item_score += 0.1 * _field_overlap(expected_response_fields, _collect_spec_fields(relevant_frontend_specs, "response_fields"))
-            item_score += 0.1 * _field_overlap(expected_response_fields, _collect_spec_fields(relevant_backend_specs, "response_fields"))
+            item_score += 0.1 * _field_overlap(
+                expected_response_fields, _collect_spec_fields(relevant_frontend_specs, "response_fields")
+            )
+            item_score += 0.1 * _field_overlap(
+                expected_response_fields, _collect_spec_fields(relevant_backend_specs, "response_fields")
+            )
 
         item_scores.append(item_score / max(item_weight, 1e-6))
 
@@ -309,8 +366,21 @@ def _check_experience(frontend_code: dict | None, blueprint: dict | None) -> flo
     if required_states:
         state_hits = sum(1 for state in required_states if _phrase_present(state, all_content.lower()))
         score += state_hits / max(len(required_states), 1)
-    elif any(token in all_content.lower() for token in ("loading", "empty", "error", "no items", "no results", "processing")):
-        score += 1.0
+    else:
+        state_score = 0.0
+        has_use_state = bool(re.search(r"useState\s*[<(]", all_content))
+        has_conditional_render = bool(re.search(r"\{[\w.]+\s*&&\s*[(<]|\?\s*[(<].*:\s*[(<]", all_content))
+        state_keywords = ("loading", "empty", "error", "no items", "no results", "processing")
+        jsx_state_pattern = any(
+            re.search(rf"(?:{{|>)\s*[^/]*{re.escape(token)}", all_content.lower()) for token in state_keywords
+        )
+        if has_use_state:
+            state_score += 0.4
+        if has_conditional_render:
+            state_score += 0.3
+        if jsx_state_pattern:
+            state_score += 0.3
+        score += state_score
 
     if "throwApiError" in all_content or "Promise.allSettled" in all_content:
         score += 1.0
@@ -338,8 +408,200 @@ def _check_experience(frontend_code: dict | None, blueprint: dict | None) -> flo
     return (score / total) * 100
 
 
+def _collect_quality_blockers(
+    frontend_code: dict | None, backend_code: dict | None, blueprint: dict | None
+) -> list[str]:
+    blockers: list[str] = []
+    fe = frontend_code or {}
+    be = backend_code or {}
+    all_frontend = "\n".join(str(content or "") for content in fe.values()).lower()
+    blueprint_text = json.dumps(blueprint or {}, ensure_ascii=False).lower()
+
+    if _FALLBACK_MARKER_FILES & set(fe) or _FALLBACK_MARKER_FILES & set(be):
+        blockers.append("deterministic fallback scaffold detected")
+
+    if _has_raw_object_dump(all_frontend):
+        blockers.append("raw object or JSON dump rendered into the UI")
+
+    taxonomy_hits = sum(1 for token in _GENERIC_SCAFFOLD_TERMS if token in all_frontend)
+    if taxonomy_hits >= 3:
+        blockers.append("generic repeated scaffold taxonomy detected")
+
+    if any(term in all_frontend for term in _FABRICATED_PROOF_TERMS):
+        blockers.append("fabricated proof or testimonial copy detected")
+
+    if _requires_persistence(blueprint_text, all_frontend) and _missing_real_persistence(
+        frontend_code or {}, backend_code or {}
+    ):
+        blockers.append("saved/history experience promised without a real persistence flow")
+
+    return blockers
+
+
+def _check_structural_presence(item: str, frontend_code: dict | None, backend_code: dict | None) -> bool:
+    tokens = [t for t in re.findall(r"[a-z0-9]+", item.lower()) if len(t) > 2 and t not in _EXPERIENCE_STOPWORDS]
+    if not tokens:
+        return False
+
+    all_files = {**(frontend_code or {}), **(backend_code or {})}
+    for _path, content in all_files.items():
+        if not content:
+            continue
+        stripped = re.sub(r"//.*$|/\*.*?\*/|#.*$", "", content, flags=re.MULTILINE | re.DOTALL)
+        stripped = re.sub(r'""".*?"""|\'\'\'.*?\'\'\'', "", stripped, flags=re.DOTALL)
+        stripped_lower = stripped.lower()
+
+        token_alt = "|".join(tokens)
+        structural_patterns = [
+            rf"(?:const|let|var|def|class)\s+\w*{token_alt}\w*",
+            rf"<\w*{token_alt}\w*",
+            rf"\w*{token_alt}\w*\s*\(",
+            rf"\.\w*{token_alt}\w*",
+            rf"(?:import|from)\s+.*{token_alt}",
+        ]
+        for pattern in structural_patterns:
+            if re.search(pattern, stripped_lower):
+                return True
+    return False
+
+
+def _check_flagship_artifact_fidelity(
+    frontend_code: dict | None,
+    backend_code: dict | None,
+    flagship_contract: dict | None,
+) -> dict:
+    contract = flagship_contract or {}
+    required_objects = _coerce_string_list(contract.get("required_objects"))
+    required_results = _coerce_string_list(contract.get("required_results"))
+    acceptance_checks = _coerce_string_list(contract.get("acceptance_checks"))
+    haystack = "\n".join(list((frontend_code or {}).values()) + list((backend_code or {}).values())).lower()
+
+    phrase_object_hits = [item for item in required_objects if _phrase_present(item, haystack)]
+    phrase_result_hits = [item for item in required_results if _phrase_present(item, haystack)]
+    phrase_acceptance_hits = [item for item in acceptance_checks if _phrase_present(item, haystack)]
+
+    structural_object_hits = [
+        item for item in required_objects if _check_structural_presence(item, frontend_code, backend_code)
+    ]
+    structural_result_hits = [
+        item for item in required_results if _check_structural_presence(item, frontend_code, backend_code)
+    ]
+    structural_acceptance_hits = [
+        item for item in acceptance_checks if _check_structural_presence(item, frontend_code, backend_code)
+    ]
+
+    def blended_score(phrase_hits, structural_hits, total_items):
+        if not total_items:
+            return 100.0
+        phrase_rate = len(phrase_hits) / max(len(total_items), 1)
+        structural_rate = len(structural_hits) / max(len(total_items), 1)
+        return (structural_rate * 0.6 + phrase_rate * 0.4) * 100
+
+    object_score = blended_score(phrase_object_hits, structural_object_hits, required_objects)
+    result_score = blended_score(phrase_result_hits, structural_result_hits, required_results)
+    acceptance_score = blended_score(phrase_acceptance_hits, structural_acceptance_hits, acceptance_checks)
+
+    object_hits = list(set(phrase_object_hits) | set(structural_object_hits))
+    result_hits = list(set(phrase_result_hits) | set(structural_result_hits))
+    acceptance_hits = list(set(phrase_acceptance_hits) | set(structural_acceptance_hits))
+
+    return {
+        "score": round(object_score * 0.4 + result_score * 0.4 + acceptance_score * 0.2, 1),
+        "required_object_hits": object_hits,
+        "required_result_hits": result_hits,
+        "acceptance_hits": acceptance_hits,
+        "required_object_misses": [item for item in required_objects if item not in object_hits],
+        "required_result_misses": [item for item in required_results if item not in result_hits],
+        "acceptance_misses": [item for item in acceptance_checks if item not in acceptance_hits],
+    }
+
+
+def _artifact_fidelity_blockers(flagship_contract: dict | None, fidelity: dict | None) -> list[str]:
+    contract = flagship_contract or {}
+    if not contract:
+        return []
+
+    fidelity = fidelity or {}
+    object_count = len(_coerce_string_list(contract.get("required_objects")))
+    result_count = len(_coerce_string_list(contract.get("required_results")))
+    object_misses = fidelity.get("required_object_misses") or []
+    result_misses = fidelity.get("required_result_misses") or []
+    score = float(fidelity.get("score", 0) or 0)
+    blockers: list[str] = []
+
+    if score < 60:
+        blockers.append("flagship artifact fidelity too low")
+    if object_count and len(object_misses) >= max(2, object_count - 1):
+        blockers.append("flagship required objects missing from generated product")
+    if result_count and len(result_misses) >= max(2, result_count - 1):
+        blockers.append("flagship required outputs missing from generated product")
+    return blockers
+
+
+def _allow_flagship_fallback_pass(
+    flagship_contract: dict | None,
+    blockers: list[str],
+    completeness: float,
+    consistency: float,
+    runnability: float,
+    experience: float,
+    artifact_fidelity: dict | None,
+) -> bool:
+    if not flagship_contract:
+        return False
+    if blockers != ["deterministic fallback scaffold detected"]:
+        return False
+    fidelity_score = float((artifact_fidelity or {}).get("score", 0) or 0)
+    return (
+        completeness >= 95
+        and consistency >= 50
+        and runnability >= MIN_RUNNABILITY_TO_PASS
+        and experience >= 90
+        and fidelity_score >= 80
+    )
+
+
+def _has_raw_object_dump(all_frontend: str) -> bool:
+    patterns = (
+        r"\{'name':\s*'[^']+'",
+        r'\{"name":\s*"[^"]+"',
+        r"'\w+':\s*'[^']+'",
+    )
+    return any(re.search(pattern, all_frontend) for pattern in patterns)
+
+
+def _requires_persistence(blueprint_text: str, frontend_text: str) -> bool:
+    haystack = f"{blueprint_text}\n{frontend_text}"
+    return any(token in haystack for token in ("saved", "history", "library", "recent activity", "bookmark"))
+
+
+def _missing_real_persistence(frontend_code: dict[str, str], backend_code: dict[str, str]) -> bool:
+    frontend_text = "\n".join(frontend_code.values()).lower()
+    backend_text = "\n".join(backend_code.values()).lower()
+
+    frontend_has_storage = any(token in frontend_text for token in ("localstorage", "sessionstorage", "indexeddb"))
+    backend_has_storage = any(
+        token in backend_text
+        for token in ("sqlite", "sqlalchemy", "database", "save_", "create_", "insert ", "list_", "get_")
+    )
+    frontend_has_save_call = bool(re.search(r"/api/(save|history|library|favorites?|bookmarks?)", frontend_text))
+    backend_has_save_route = bool(
+        re.search(r"@router\.(post|get)\(\"/((api/)?(save|history|library|favorites?|bookmarks?))", backend_text)
+    )
+
+    return not (frontend_has_storage or backend_has_storage or (frontend_has_save_call and backend_has_save_route))
+
+
 def _build_fix_instructions(eval_result: dict, blueprint: dict | None = None) -> str:
     issues = []
+    iteration = eval_result.get("iteration", 0)
+    if iteration >= 3:
+        issues.insert(
+            0,
+            f"CRITICAL: This is attempt {iteration}/{MAX_CODE_EVAL_ITERATIONS}. "
+            "Previous fixes were insufficient. Focus ONLY on the specific failures listed below. "
+            "Do not regenerate working files. Fix ONLY what is broken.",
+        )
     experience_contract = blueprint.get("experience_contract", {}) if isinstance(blueprint, dict) else {}
     required_surfaces = _coerce_string_list(experience_contract.get("required_surfaces"))
     proof_points = _coerce_string_list(experience_contract.get("proof_points"))
@@ -372,6 +634,8 @@ def _build_fix_instructions(eval_result: dict, blueprint: dict | None = None) ->
             issues.append(f"Required experience surfaces: {', '.join(required_surfaces)}")
         if proof_points:
             issues.append(f"Required proof points: {', '.join(proof_points)}")
+    if eval_result.get("blockers"):
+        issues.append(f"Remove these deployment blockers: {', '.join(eval_result['blockers'])}")
     return "\n".join(issues) if issues else "General quality improvement needed"
 
 
@@ -492,7 +756,9 @@ def _extract_frontend_endpoint_specs(files: dict[str, str]) -> dict[str, dict[st
     for content in files.values():
         api_base_match = re.search(r'API_BASE\s*=\s*["\']([^"\']+)["\']', content)
         api_base = api_base_match.group(1) if api_base_match else "/api"
-        chunks = re.split(r"(?=export\s+(?:default\s+)?async\s+function|async\s+function|export\s+function|function\s+\w+)", content)
+        chunks = re.split(
+            r"(?=export\s+(?:default\s+)?async\s+function|async\s+function|export\s+function|function\s+\w+)", content
+        )
         if not chunks:
             chunks = [content]
 
@@ -615,7 +881,9 @@ def _extract_frontend_response_fields(chunk: str) -> set[str]:
     return response_fields
 
 
-def _filter_specs_by_endpoints(specs: dict[str, dict[str, set[str]]], endpoints: set[str]) -> dict[str, dict[str, set[str]]]:
+def _filter_specs_by_endpoints(
+    specs: dict[str, dict[str, set[str]]], endpoints: set[str]
+) -> dict[str, dict[str, set[str]]]:
     if not endpoints:
         return specs
     return {endpoint: spec for endpoint, spec in specs.items() if endpoint in endpoints}
@@ -675,9 +943,7 @@ def _phrase_present(phrase: str, haystack: str) -> bool:
         return True
 
     tokens = [
-        token
-        for token in re.findall(r"[a-z0-9]+", phrase)
-        if len(token) > 2 and token not in _EXPERIENCE_STOPWORDS
+        token for token in re.findall(r"[a-z0-9]+", phrase) if len(token) > 2 and token not in _EXPERIENCE_STOPWORDS
     ]
     if not tokens:
         return False
@@ -718,7 +984,9 @@ def route_code_eval(state: VibeDeployState) -> str:
         return "deployer"
 
     expected_frontend = blueprint.get("frontend_files", {})
-    missing_frontend = eval_result.get("missing_frontend") or list(expected_frontend.keys() if not frontend_code else [])
+    missing_frontend = eval_result.get("missing_frontend") or list(
+        expected_frontend.keys() if not frontend_code else []
+    )
     if expected_frontend and missing_frontend:
         if iteration < MAX_EMPTY_FRONTEND_RETRIES:
             logger.warning(
@@ -730,7 +998,7 @@ def route_code_eval(state: VibeDeployState) -> str:
             )
             return "code_generator"
         logger.error(
-            "[CODE_EVAL] Still missing %d frontend files after %d iters → deployer (best effort)",
+            "[CODE_EVAL] Still missing %d frontend files after %d iters → deployer (deployment will be blocked)",
             len(missing_frontend),
             iteration,
         )
@@ -748,13 +1016,13 @@ def route_code_eval(state: VibeDeployState) -> str:
             )
             return "code_generator"
         logger.error(
-            "[CODE_EVAL] Still missing %d backend files after %d iters → deployer (best effort)",
+            "[CODE_EVAL] Still missing %d backend files after %d iters → deployer (deployment will be blocked)",
             len(missing_backend),
             iteration,
         )
 
     if iteration >= MAX_CODE_EVAL_ITERATIONS:
-        logger.info("[CODE_EVAL] Max iterations reached → deployer (best effort)")
+        logger.info("[CODE_EVAL] Max iterations reached → deployer (deployment will be blocked unless passed)")
         return "deployer"
 
     logger.info("[CODE_EVAL] FAILED → code_generator (retry)")

@@ -28,12 +28,12 @@ def test_check_consistency_matches_contract_calls_across_generated_files():
     }
     backend_code = {
         "routes.py": (
-            'from fastapi import APIRouter\n'
+            "from fastapi import APIRouter\n"
             'router = APIRouter(prefix="/api/bookmarks")\n'
             '@router.get("/")\n'
-            'async def list_bookmarks(): ...\n'
+            "async def list_bookmarks(): ...\n"
             '@router.post("/summarize")\n'
-            'async def summarize_bookmark(): ...\n'
+            "async def summarize_bookmark(): ...\n"
         )
     }
 
@@ -113,12 +113,7 @@ def test_check_runnability_penalizes_unawaited_async_ai_helpers():
     }
     backend_code = {
         "requirements.txt": "fastapi\nuvicorn\n",
-        "main.py": (
-            "from fastapi import FastAPI\n"
-            "app = FastAPI()\n"
-            "if __name__ == '__main__':\n"
-            "    import uvicorn\n"
-        ),
+        "main.py": ("from fastapi import FastAPI\napp = FastAPI()\nif __name__ == '__main__':\n    import uvicorn\n"),
         "routes.py": (
             "from ai_service import summarize_text\n"
             "def create_bookmark(payload):\n"
@@ -129,6 +124,75 @@ def test_check_runnability_penalizes_unawaited_async_ai_helpers():
     }
 
     assert _check_runnability(frontend_code, backend_code) < 85.0
+
+
+@pytest.mark.asyncio
+async def test_code_evaluator_blocks_deterministic_fallback_scaffold_deployments():
+    result = await code_evaluator(
+        {
+            "blueprint": {
+                "frontend_files": {
+                    "package.json": {},
+                    "src/app/layout.tsx": {},
+                    "src/app/page.tsx": {},
+                    "src/app/globals.css": {},
+                },
+                "backend_files": {"main.py": {}, "requirements.txt": {}},
+            },
+            "frontend_code": {
+                ".vibedeploy-fallback-frontend.json": '{"kind":"frontend"}',
+                "package.json": '{"dependencies":{"next":"15.0.0"}}',
+                "src/app/layout.tsx": "export default function Layout({ children }) { return <html><body>{children}</body></html>; }",
+                "src/app/page.tsx": "export default function Page() { return <main>Fallback</main>; }",
+                "src/app/globals.css": "body { margin: 0; }",
+            },
+            "backend_code": {
+                "main.py": "from fastapi import FastAPI\napp = FastAPI()\n",
+                "requirements.txt": "fastapi\nuvicorn\n",
+            },
+        }
+    )
+
+    assert result["code_eval_result"]["passed"] is False
+    assert result["code_eval_result"]["deployment_blocked"] is True
+    assert "deterministic fallback scaffold detected" in result["code_eval_result"]["blockers"]
+
+
+@pytest.mark.asyncio
+async def test_code_evaluator_reports_flagship_artifact_fidelity_hits():
+    result = await code_evaluator(
+        {
+            "blueprint": {
+                "frontend_files": {
+                    "package.json": {},
+                    "src/app/layout.tsx": {},
+                    "src/app/page.tsx": {},
+                    "src/app/globals.css": {},
+                },
+                "backend_files": {"main.py": {}, "requirements.txt": {}},
+            },
+            "frontend_code": {
+                "package.json": '{"dependencies":{"next":"15.0.0"}}',
+                "src/app/layout.tsx": "export default function Layout({ children }) { return <html><body>{children}</body></html>; }",
+                "src/app/page.tsx": "export default function Page() { return <main>route card district stop backup plan budget cue day-by-day route sequence highlight stops weather fallback</main>; }",
+                "src/app/globals.css": "body { margin: 0; }",
+            },
+            "backend_code": {
+                "main.py": "from fastapi import FastAPI\napp = FastAPI()\n",
+                "requirements.txt": "fastapi\nuvicorn\n",
+            },
+            "flagship_contract": {
+                "required_objects": ["route card", "district stop", "backup plan", "budget cue"],
+                "required_results": ["day-by-day route sequence", "highlight stops", "weather or timing fallback"],
+                "acceptance_checks": ["first fold already looks like a travel artifact"],
+            },
+        }
+    )
+
+    fidelity = result["code_eval_result"]["artifact_fidelity"]
+    assert fidelity["score"] >= 70
+    assert "route card" in fidelity["required_object_hits"]
+    assert "day-by-day route sequence" in fidelity["required_result_hits"]
 
 
 def test_check_consistency_penalizes_misaligned_endpoint_names():
@@ -173,7 +237,14 @@ def test_check_experience_rewards_multi_panel_ui_and_resilient_api_patterns():
         "src/components/Hero.tsx": "export default function Hero(){ return <section>Analyze</section>; }",
         "src/components/InsightPanel.tsx": "export default function InsightPanel(){ return <section>Summary result</section>; }",
         "src/components/CollectionPanel.tsx": "export default function CollectionPanel(){ return <section>Saved bookmarks history</section>; }",
-        "src/components/StatePanel.tsx": "export default function StatePanel(){ return <div>Loading error empty state</div>; }",
+        "src/components/StatePanel.tsx": (
+            "import { useState } from 'react';"
+            "export default function StatePanel(){"
+            "const [loading, setLoading] = useState(false);"
+            "const [error, setError] = useState<string | null>(null);"
+            "return loading ? <div>Loading...</div> : error ? <div>{error}</div> : <div>empty state</div>;"
+            "}"
+        ),
         "src/lib/api.ts": "async function throwApiError(){} async function x(){ await Promise.allSettled([]); }",
     }
 
@@ -264,3 +335,31 @@ def test_route_code_eval_deploys_after_backend_retry_budget_is_exhausted():
     }
 
     assert route_code_eval(state) == "deployer"
+
+
+@pytest.mark.asyncio
+async def test_code_evaluator_returns_repair_tasks_for_blockers():
+    result = await code_evaluator(
+        {
+            "blueprint": {
+                "frontend_files": {"src/app/page.tsx": {}, "src/components/WorkspacePanel.tsx": {}},
+                "backend_files": {"main.py": {}, "routes.py": {}, "requirements.txt": {}},
+            },
+            "frontend_code": {"src/app/page.tsx": "export default function Page(){ return <main />; }"},
+            "backend_code": {"main.py": "from fastapi import FastAPI\napp = FastAPI()\n"},
+            "execution_tasks": [
+                {
+                    "title": "prep block",
+                    "target": "frontend",
+                    "kind": "ui_object",
+                    "success_signal": "visible",
+                    "priority": "high",
+                }
+            ],
+        }
+    )
+
+    repair_tasks = result["repair_tasks"]
+    assert repair_tasks
+    assert any(task["target"] == "frontend" for task in repair_tasks)
+    assert result["task_distribution"]["total"] >= len(repair_tasks)
