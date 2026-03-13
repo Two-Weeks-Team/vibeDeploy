@@ -236,9 +236,7 @@ async def test_prepare_files_for_push_canonicalizes_repaired_use_client_directiv
 async def test_prepare_files_for_push_adds_use_client_to_interactive_repairs():
     files = {
         "web/src/components/WorkspacePanel.tsx": (
-            "export default function WorkspacePanel() {\n"
-            "  return <textarea onChange={() => null} />;\n"
-            "}\n"
+            "export default function WorkspacePanel() {\n  return <textarea onChange={() => null} />;\n}\n"
         )
     }
 
@@ -295,6 +293,86 @@ def test_get_deploy_blocker_accepts_full_stack_bundle():
     )
 
     assert blocker is None
+
+
+def test_get_deploy_blocker_rejects_failed_code_eval_even_with_files_present():
+    blocker = _get_deploy_blocker(
+        frontend_code={
+            "package.json": '{"name":"demo","private":true}',
+            "src/app/layout.tsx": "export default function Layout({ children }) { return <html><body>{children}</body></html>; }",
+            "src/app/page.tsx": "export default function Page() { return <main>Demo</main>; }",
+        },
+        backend_code={
+            "main.py": "from fastapi import FastAPI\napp = FastAPI()\n",
+            "requirements.txt": "fastapi\nuvicorn\n",
+        },
+        blueprint={
+            "frontend_files": {"package.json": {}, "src/app/page.tsx": {}},
+            "backend_files": {"main.py": {}, "requirements.txt": {}},
+        },
+        code_eval_result={
+            "passed": False,
+            "deployment_blocked": True,
+            "blockers": ["deterministic fallback scaffold detected"],
+        },
+    )
+
+    assert blocker == "deterministic fallback scaffold detected"
+
+
+def test_get_deploy_blocker_allows_high_quality_flagship_fallback_bundle():
+    blocker = _get_deploy_blocker(
+        frontend_code={
+            ".vibedeploy-fallback-frontend.json": '{"kind":"frontend"}',
+            "package.json": '{"name":"demo","private":true}',
+            "src/app/layout.tsx": "export default function Layout({ children }) { return <html><body>{children}</body></html>; }",
+            "src/app/page.tsx": "export default function Page() { return <main>Demo</main>; }",
+        },
+        backend_code={
+            "main.py": "from fastapi import FastAPI\napp = FastAPI()\n",
+            "requirements.txt": "fastapi\nuvicorn\n",
+        },
+        blueprint={
+            "frontend_files": {"package.json": {}, "src/app/page.tsx": {}},
+            "backend_files": {"main.py": {}, "requirements.txt": {}},
+        },
+        code_eval_result={
+            "passed": False,
+            "deployment_blocked": True,
+            "blockers": ["deterministic fallback scaffold detected"],
+            "completeness": 100,
+            "runnability": 95,
+            "experience": 98,
+        },
+        selected_flagship="creator-batch-studio",
+    )
+
+    assert blocker is None
+
+
+@pytest.mark.asyncio
+async def test_local_fallback_deploy_reports_local_app_dir(tmp_path, monkeypatch):
+    from agent.nodes import deployer as deployer_module
+
+    monkeypatch.setattr(deployer_module, "_find_free_port", lambda start_port=9100: start_port)
+
+    async def _fake_spawn(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(deployer_module, "_spawn_background_process", _fake_spawn)
+
+    result = await deployer_module._local_fallback_deploy(
+        "creator-batch-studio-test",
+        {
+            "main.py": "from fastapi import FastAPI\napp = FastAPI()\n",
+            "requirements.txt": "fastapi\nuvicorn\n",
+        },
+        "",
+        "github_token_missing",
+    )
+
+    assert result["deploy_result"]["status"] == "local_running"
+    assert result["deploy_result"]["local_app_dir"].endswith("creator-batch-studio-test")
 
 
 def test_apply_deterministic_repairs_relaxes_layout_literal_type_errors():
@@ -403,8 +481,7 @@ def test_apply_deterministic_repairs_removes_use_client_from_layout_metadata_err
         )
     }
     error_logs = (
-        "./src/app/layout.tsx:4:1\n"
-        'You are attempting to export "metadata" from a component marked with "use client"\n'
+        './src/app/layout.tsx:4:1\nYou are attempting to export "metadata" from a component marked with "use client"\n'
     )
 
     repaired = _apply_deterministic_repairs(files, error_logs)
@@ -415,16 +492,10 @@ def test_apply_deterministic_repairs_removes_use_client_from_layout_metadata_err
 def test_apply_deterministic_repairs_canonicalizes_broken_use_client_directive():
     files = {
         "web/src/components/Rehearsal.tsx": (
-            "\"use client';\n"
-            "export default function Rehearsal() {\n"
-            "  return null;\n"
-            "}\n"
+            "\"use client';\nexport default function Rehearsal() {\n  return null;\n}\n"
         )
     }
-    error_logs = (
-        "./src/components/Rehearsal.tsx:1:1\n"
-        "Error: Unterminated string constant\n"
-    )
+    error_logs = "./src/components/Rehearsal.tsx:1:1\nError: Unterminated string constant\n"
 
     repaired = _apply_deterministic_repairs(files, error_logs)
 
