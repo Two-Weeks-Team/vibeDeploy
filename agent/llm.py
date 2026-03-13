@@ -244,7 +244,7 @@ async def ainvoke_with_retry(
     messages: list[dict],
     *,
     max_attempts: int = 6,
-    initial_delay_seconds: float = 5.0,
+    initial_delay_seconds: float = 10.0,
     fallback_models: list[str] | None = None,
     rate_limit_switch_after_attempts: int | None = None,
 ):
@@ -296,7 +296,7 @@ async def ainvoke_with_retry(
                         exc,
                     )
                     await asyncio.sleep(delay)
-                    delay = min(delay * 2, 15.0)
+                    delay = min(delay * 2, 60.0)
                     continue
 
                 if has_more_models:

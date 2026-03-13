@@ -18,8 +18,8 @@ logger = logging.getLogger(__name__)
 # Minimum expected file counts for validation
 _MIN_FRONTEND_FILES = 3  # At least package.json + 2 source files
 _MIN_BACKEND_FILES = 2  # At least main.py + requirements.txt
-_CODEGEN_MODEL_MAX_ATTEMPTS = 4
-_STRICT_PRIMARY_CODEGEN_MAX_ATTEMPTS = 3
+_CODEGEN_MODEL_MAX_ATTEMPTS = 8
+_STRICT_PRIMARY_CODEGEN_MAX_ATTEMPTS = 6
 _STACK_GENERATION_PAUSE_SECONDS = 2
 _FALLBACK_FRONTEND_MARKER_FILE = ".vibedeploy-fallback-frontend.json"
 _FALLBACK_BACKEND_MARKER_FILE = ".vibedeploy-fallback-backend.json"

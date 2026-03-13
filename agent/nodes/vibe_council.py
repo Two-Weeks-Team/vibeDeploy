@@ -11,7 +11,7 @@ from ..state import VibeDeployState
 
 logger = logging.getLogger(__name__)
 
-_COUNCIL_LLM_TIMEOUT_SECONDS = 90
+_COUNCIL_LLM_TIMEOUT_SECONDS = 180
 
 COUNCIL_MEMBERS = {
     "architect": architect,
