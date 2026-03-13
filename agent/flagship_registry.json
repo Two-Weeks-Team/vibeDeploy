@@ -1,0 +1,147 @@
+[
+  {
+    "slug": "creator-batch-studio",
+    "domain": "short-form creator workflow",
+    "product_brief": "Build a premium web service that turns a creator's rough YouTube-based content idea into a batchable short-form production plan with script hooks, shot lists, and repurposing lanes.",
+    "youtube_url": "https://www.youtube.com/watch?v=NZWA8Y-gFGs",
+    "reference_urls": [],
+    "visual_metaphor": "editorial production board",
+    "forbidden_patterns": [
+      "generic SaaS dashboard shell",
+      "plain textarea and result card layout",
+      "fake social proof or testimonials"
+    ],
+    "required_objects": [
+      "hook card",
+      "shot list",
+      "repurpose lane",
+      "publish queue"
+    ],
+    "required_results": [
+      "multi-post content batch",
+      "platform-specific hook variations",
+      "shoot-day checklist"
+    ],
+    "acceptance_checks": [
+      "first screen shows content workflow objects instead of KPI tiles",
+      "user can generate and save at least one production batch",
+      "copy feels creator-native, not enterprise"
+    ]
+  },
+  {
+    "slug": "weekender-route-postcards",
+    "domain": "travel weekender planning",
+    "product_brief": "Build a visually rich trip-planning service that converts a travel inspiration video into an itinerary, route cards, backup plans, and a weekend-ready board someone would actually want to screenshot and use.",
+    "youtube_url": "https://www.youtube.com/watch?v=ox73frLQNgY",
+    "reference_urls": [],
+    "visual_metaphor": "cinematic postcard route board",
+    "forbidden_patterns": [
+      "generic dashboard grid",
+      "blank hero with a single input box",
+      "generic AI assistant framing"
+    ],
+    "required_objects": [
+      "route card",
+      "district stop",
+      "backup plan",
+      "budget cue"
+    ],
+    "required_results": [
+      "day-by-day route sequence",
+      "highlight stops",
+      "weather or timing fallback"
+    ],
+    "acceptance_checks": [
+      "first fold already looks like a travel artifact",
+      "user can save at least one itinerary snapshot",
+      "result language uses travel nouns and place cues"
+    ]
+  },
+  {
+    "slug": "runway-reset-ledger",
+    "domain": "budget reset and cash runway planning",
+    "product_brief": "Build a finance planning service that turns a reset-style money brief into a visible runway plan with buckets, risk scenarios, and decisive tradeoff recommendations rather than a spreadsheet clone.",
+    "youtube_url": "https://www.youtube.com/watch?v=Gmj23v4IeDY",
+    "reference_urls": [],
+    "visual_metaphor": "money runway atlas",
+    "forbidden_patterns": [
+      "bank app clone",
+      "spreadsheet skin",
+      "generic analytics dashboard"
+    ],
+    "required_objects": [
+      "runway band",
+      "money bucket",
+      "scenario card",
+      "safety ladder"
+    ],
+    "required_results": [
+      "cash runway estimate",
+      "scenario comparison",
+      "priority adjustments"
+    ],
+    "acceptance_checks": [
+      "money objects appear above the fold",
+      "user can save at least one scenario plan",
+      "tradeoffs are explicit and understandable"
+    ]
+  },
+  {
+    "slug": "interview-sprint-forge",
+    "domain": "interview skill sprint and learning planner",
+    "product_brief": "Build a study and interview-prep web service that turns a role target into a tactical sprint plan with drills, review cadence, checkpoints, and saved preparation runs.",
+    "youtube_url": "https://www.youtube.com/watch?v=XKu_SEDAykw",
+    "reference_urls": [],
+    "visual_metaphor": "curriculum workshop",
+    "forbidden_patterns": [
+      "generic e-learning admin shell",
+      "chatbot-only experience",
+      "marketing landing page without a real planner"
+    ],
+    "required_objects": [
+      "sprint lane",
+      "drill card",
+      "review block",
+      "confidence checkpoint"
+    ],
+    "required_results": [
+      "structured prep plan",
+      "practice sequence",
+      "saved revision roadmap"
+    ],
+    "acceptance_checks": [
+      "the first screen shows a real plan structure",
+      "user can generate and save at least one sprint",
+      "copy uses learning and interview vocabulary"
+    ]
+  },
+  {
+    "slug": "meal-prep-atlas",
+    "domain": "meal prep and grocery planning assistant",
+    "product_brief": "Build a consumer meal-prep planner that turns a weekly grocery and cooking inspiration video into a prep schedule, grocery map, recipe slots, and reusable saved meal boards.",
+    "youtube_url": "https://www.youtube.com/watch?v=AYXfaVD5o40",
+    "reference_urls": [],
+    "visual_metaphor": "kitchen prep atlas",
+    "forbidden_patterns": [
+      "generic productivity dashboard",
+      "plain recipe blog clone",
+      "empty hero plus single results panel"
+    ],
+    "required_objects": [
+      "prep block",
+      "grocery lane",
+      "meal board",
+      "container checklist"
+    ],
+    "required_results": [
+      "weekly prep plan",
+      "organized grocery groups",
+      "saved meal board"
+    ],
+    "acceptance_checks": [
+      "the first fold shows prep objects, not KPIs",
+      "user can save at least one weekly meal board",
+      "results feel practical enough to cook from"
+    ]
+  }
+]
