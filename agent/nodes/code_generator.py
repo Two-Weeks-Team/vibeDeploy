@@ -252,8 +252,8 @@ async def code_generator(state: VibeDeployState) -> dict:
     try:
         frontend_llm = get_llm(
             model=frontend_model,
-            temperature=0.3,
-            max_tokens=16000,
+            temperature=0.1,
+            max_tokens=32000,
         )
     except Exception as exc:
         frontend_llm_error = str(exc)[:200]
@@ -261,8 +261,8 @@ async def code_generator(state: VibeDeployState) -> dict:
     try:
         backend_llm = get_llm(
             model=backend_model,
-            temperature=0.3,
-            max_tokens=12000,
+            temperature=0.1,
+            max_tokens=24000,
         )
     except Exception as exc:
         backend_llm_error = str(exc)[:200]
@@ -3604,7 +3604,7 @@ async def _parse_generated_files_response(content, label: str) -> dict:
         return parsed
 
     repair_model = MODEL_CONFIG["ci_repair"]
-    repair_llm = get_llm(model=repair_model, temperature=0.0, max_tokens=20000)
+    repair_llm = get_llm(model=repair_model, temperature=0.0, max_tokens=40000)
     repair_messages = [
         {
             "role": "system",

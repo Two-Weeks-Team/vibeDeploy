@@ -6,7 +6,7 @@ from typing import Any
 import httpx
 
 DO_INFERENCE_BASE_URL = "https://inference.do-ai.run/v1"
-DEFAULT_MODEL = "anthropic-claude-4.6-sonnet"
+DEFAULT_MODEL = os.getenv("VIBEDEPLOY_MODEL", "anthropic-claude-4.6-sonnet")
 
 _RESPONSES_MODELS = {
     "openai-gpt-5.4",

@@ -8,7 +8,7 @@ from collections.abc import Iterator
 from .model_capabilities import model_endpoint_type, selected_runtime_model
 
 DO_INFERENCE_BASE_URL = "https://inference.do-ai.run/v1"
-DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS = float(os.getenv("LLM_REQUEST_TIMEOUT_SECONDS", "90"))
+DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS = float(os.getenv("LLM_REQUEST_TIMEOUT_SECONDS", "180"))
 DEFAULT_LLM_MAX_CONCURRENCY = max(1, int(os.getenv("LLM_MAX_CONCURRENCY", "1")))
 DEFAULT_LLM_MIN_INTERVAL_SECONDS = max(0.0, float(os.getenv("LLM_MIN_INTERVAL_SECONDS", "4.0")))
 RATE_LIMIT_FALLBACK_SWITCH_ATTEMPTS = max(1, int(os.getenv("LLM_RATE_LIMIT_FALLBACK_SWITCH_ATTEMPTS", "2")))
@@ -37,30 +37,42 @@ DEFAULT_MODEL_CONFIG = {
 }
 
 _MODEL_ENV_OVERRIDES = {
-    "council": ("VIBEDEPLOY_MODEL_COUNCIL", "VIBEDEPLOY_MODEL_ANALYSIS", "VIBEDEPLOY_MODEL_ALL"),
-    "strategist": ("VIBEDEPLOY_MODEL_STRATEGIST", "VIBEDEPLOY_MODEL_ANALYSIS", "VIBEDEPLOY_MODEL_ALL"),
-    "cross_exam": ("VIBEDEPLOY_MODEL_CROSS_EXAM", "VIBEDEPLOY_MODEL_ANALYSIS", "VIBEDEPLOY_MODEL_ALL"),
-    "code_gen": ("VIBEDEPLOY_MODEL_CODE_GEN", "DO_INFERENCE_MODEL", "VIBEDEPLOY_MODEL_ALL"),
+    "council": ("VIBEDEPLOY_MODEL_COUNCIL", "VIBEDEPLOY_MODEL_ANALYSIS", "VIBEDEPLOY_MODEL_ALL", "VIBEDEPLOY_MODEL"),
+    "strategist": (
+        "VIBEDEPLOY_MODEL_STRATEGIST",
+        "VIBEDEPLOY_MODEL_ANALYSIS",
+        "VIBEDEPLOY_MODEL_ALL",
+        "VIBEDEPLOY_MODEL",
+    ),
+    "cross_exam": (
+        "VIBEDEPLOY_MODEL_CROSS_EXAM",
+        "VIBEDEPLOY_MODEL_ANALYSIS",
+        "VIBEDEPLOY_MODEL_ALL",
+        "VIBEDEPLOY_MODEL",
+    ),
+    "code_gen": ("VIBEDEPLOY_MODEL_CODE_GEN", "DO_INFERENCE_MODEL", "VIBEDEPLOY_MODEL_ALL", "VIBEDEPLOY_MODEL"),
     "code_gen_frontend": (
         "VIBEDEPLOY_MODEL_CODE_GEN_FRONTEND",
         "VIBEDEPLOY_MODEL_CODE_GEN",
         "DO_INFERENCE_MODEL",
         "VIBEDEPLOY_MODEL_ALL",
+        "VIBEDEPLOY_MODEL",
     ),
     "code_gen_backend": (
         "VIBEDEPLOY_MODEL_CODE_GEN_BACKEND",
         "VIBEDEPLOY_MODEL_CODE_GEN",
         "DO_INFERENCE_MODEL",
         "VIBEDEPLOY_MODEL_ALL",
+        "VIBEDEPLOY_MODEL",
     ),
-    "ci_repair": ("VIBEDEPLOY_MODEL_CI_REPAIR", "VIBEDEPLOY_MODEL_ALL"),
-    "doc_gen": ("VIBEDEPLOY_MODEL_DOC_GEN", "VIBEDEPLOY_MODEL_ALL"),
-    "image": ("VIBEDEPLOY_MODEL_IMAGE", "VIBEDEPLOY_MODEL_ALL"),
-    "brainstorm": ("VIBEDEPLOY_MODEL_BRAINSTORM", "VIBEDEPLOY_MODEL_ALL"),
-    "brainstorm_synthesis": ("VIBEDEPLOY_MODEL_BRAINSTORM_SYNTHESIS", "VIBEDEPLOY_MODEL_ALL"),
-    "input": ("VIBEDEPLOY_MODEL_INPUT", "VIBEDEPLOY_MODEL_ALL"),
-    "decision": ("VIBEDEPLOY_MODEL_DECISION", "VIBEDEPLOY_MODEL_ALL"),
-    "web_search": ("VIBEDEPLOY_MODEL_WEB_SEARCH", "VIBEDEPLOY_MODEL_ALL"),
+    "ci_repair": ("VIBEDEPLOY_MODEL_CI_REPAIR", "VIBEDEPLOY_MODEL_ALL", "VIBEDEPLOY_MODEL"),
+    "doc_gen": ("VIBEDEPLOY_MODEL_DOC_GEN", "VIBEDEPLOY_MODEL_ALL", "VIBEDEPLOY_MODEL"),
+    "image": ("VIBEDEPLOY_MODEL_IMAGE",),
+    "brainstorm": ("VIBEDEPLOY_MODEL_BRAINSTORM", "VIBEDEPLOY_MODEL_ALL", "VIBEDEPLOY_MODEL"),
+    "brainstorm_synthesis": ("VIBEDEPLOY_MODEL_BRAINSTORM_SYNTHESIS", "VIBEDEPLOY_MODEL_ALL", "VIBEDEPLOY_MODEL"),
+    "input": ("VIBEDEPLOY_MODEL_INPUT", "VIBEDEPLOY_MODEL_ALL", "VIBEDEPLOY_MODEL"),
+    "decision": ("VIBEDEPLOY_MODEL_DECISION", "VIBEDEPLOY_MODEL_ALL", "VIBEDEPLOY_MODEL"),
+    "web_search": ("VIBEDEPLOY_MODEL_WEB_SEARCH", "VIBEDEPLOY_MODEL_ALL", "VIBEDEPLOY_MODEL"),
 }
 
 
@@ -383,13 +395,17 @@ def get_llm(
     if _is_anthropic_model(model) and anthropic_key:
         from langchain_anthropic import ChatAnthropic
 
-        return ChatAnthropic(
-            model=_anthropic_model_id(model),
-            api_key=anthropic_key,
-            temperature=_coerce_temperature_for_model(model, temperature),
-            max_tokens=effective_max_tokens,
-            timeout=effective_timeout,
-        )
+        kwargs: dict = {
+            "model": _anthropic_model_id(model),
+            "api_key": anthropic_key,
+            "temperature": _coerce_temperature_for_model(model, temperature),
+            "max_tokens": effective_max_tokens,
+            "timeout": effective_timeout,
+            "max_retries": 3,
+        }
+        if os.getenv("VIBEDEPLOY_ENABLE_THINKING", "").strip().lower() in {"1", "true", "yes"}:
+            kwargs["model_kwargs"] = {"thinking": {"type": "adaptive"}}
+        return ChatAnthropic(**kwargs)
 
     inference_key = os.getenv("GRADIENT_MODEL_ACCESS_KEY", "") or os.getenv("DIGITALOCEAN_INFERENCE_KEY", "")
 

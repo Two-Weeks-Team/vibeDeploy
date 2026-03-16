@@ -259,21 +259,22 @@ Every app below was generated from a **single sentence** — debated by the Vibe
 
 | Role | Model | Type | Cost (per 1M tokens) |
 |------|-------|------|---------------------|
-| Council (5 agents) | `openai-gpt-oss-120b` | Open-Source (120B) | $0.10 / $0.70 |
-| Strategist | `openai-gpt-oss-120b` | Open-Source (120B) | $0.10 / $0.70 |
-| Cross-Examination | `openai-gpt-oss-120b` | Open-Source (120B) | $0.10 / $0.70 |
-| Code Generation | `openai-gpt-oss-120b` | Open-Source (120B) | $0.10 / $0.70 |
-| CI Repair | `openai-gpt-oss-120b` | Open-Source (120B) | $0.10 / $0.70 |
-| Doc Generation | `openai-gpt-oss-120b` | Open-Source (120B) | $0.10 / $0.70 |
-| Input Processing | `openai-gpt-oss-120b` | Open-Source (120B) | $0.10 / $0.70 |
-| Decision Gate | `openai-gpt-oss-120b` | Open-Source (120B) | $0.10 / $0.70 |
-| Brainstorm Agents | `openai-gpt-oss-120b` | Open-Source (120B) | $0.10 / $0.70 |
-| Brainstorm Synthesis | `openai-gpt-oss-120b` | Open-Source (120B) | $0.10 / $0.70 |
-| Web Search | `openai-gpt-oss-120b` | Open-Source (120B) | $0.10 / $0.70 |
+| Council (5 agents) | `anthropic-claude-4.6-sonnet` | Commercial (Anthropic) | $3.00 / $15.00 |
+| Strategist | `anthropic-claude-4.6-sonnet` | Commercial (Anthropic) | $3.00 / $15.00 |
+| Cross-Examination | `anthropic-claude-4.6-sonnet` | Commercial (Anthropic) | $3.00 / $15.00 |
+| Code Generation | `anthropic-claude-4.6-sonnet` | Commercial (Anthropic) | $3.00 / $15.00 |
+| CI Repair | `anthropic-claude-4.6-sonnet` | Commercial (Anthropic) | $3.00 / $15.00 |
+| Doc Generation | `anthropic-claude-4.6-sonnet` | Commercial (Anthropic) | $3.00 / $15.00 |
+| Input Processing | `anthropic-claude-4.6-sonnet` | Commercial (Anthropic) | $3.00 / $15.00 |
+| Decision Gate | `anthropic-claude-4.6-sonnet` | Commercial (Anthropic) | $3.00 / $15.00 |
+| Brainstorm Agents | `anthropic-claude-4.6-sonnet` | Commercial (Anthropic) | $3.00 / $15.00 |
+| Brainstorm Synthesis | `anthropic-claude-4.6-sonnet` | Commercial (Anthropic) | $3.00 / $15.00 |
+| Web Search | `anthropic-claude-4.6-sonnet` | Commercial (Anthropic) | $3.00 / $15.00 |
 | Image Generation | `fal-ai/flux/schnell` | Open-Source (fal) | ~$0.003 / image |
 
-**Unified open-source LLM runtime: gpt-oss-120b via DO Serverless Inference**
-**Cost per full deployment: ~$0.12** | $200 credits = ~1,600+ deployments
+**Claude Sonnet 4.6 via Anthropic API**  
+**Cost per full deployment: ~$0.50-1.00** | $200 credits = ~200-400 deployments  
+*Configure via `VIBEDEPLOY_MODEL` env var (default: `anthropic-claude-4.6-sonnet`)*
 
 ---
 
