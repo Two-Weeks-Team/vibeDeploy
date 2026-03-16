@@ -27,7 +27,7 @@ DEFAULT_MODEL_CONFIG = {
     "code_gen_frontend": selected_runtime_model(),
     "code_gen_backend": selected_runtime_model(),
     "ci_repair": selected_runtime_model(),
-    "doc_gen": "openai-gpt-oss-120b",
+    "doc_gen": selected_runtime_model(),
     "image": "fal-ai/flux/schnell",
     "brainstorm": selected_runtime_model(),
     "brainstorm_synthesis": selected_runtime_model(),
@@ -81,6 +81,9 @@ def _coerce_temperature_for_model(model: str, requested: float) -> float:
     normalized = model.lower()
     if "deepseek-r1" in normalized and requested < 0.5:
         return 0.6
+    # Claude models accept 0.0-1.0; clamp if above 1.0
+    if "claude" in normalized:
+        return min(max(requested, 0.0), 1.0)
     return requested
 
 
@@ -225,10 +228,12 @@ def get_rate_limit_fallback_models(model: str) -> list[str]:
         return []
 
     fallbacks = {
-        "openai-gpt-oss-120b": ["openai-gpt-oss-20b", "alibaba-qwen3-32b"],
-        "openai-gpt-oss-20b": ["openai-gpt-oss-120b", "alibaba-qwen3-32b"],
+        "anthropic-claude-4.6-sonnet": ["openai-gpt-oss-120b", "anthropic-claude-opus-4.6"],
+        "anthropic-claude-opus-4.6": ["anthropic-claude-4.6-sonnet", "openai-gpt-oss-120b"],
+        "openai-gpt-oss-120b": ["anthropic-claude-4.6-sonnet", "openai-gpt-oss-20b"],
+        "openai-gpt-oss-20b": ["openai-gpt-oss-120b", "anthropic-claude-4.6-sonnet"],
         "alibaba-qwen3-32b": ["openai-gpt-oss-20b", "openai-gpt-oss-120b"],
-        "deepseek-r1-distill-llama-70b": ["openai-gpt-oss-120b", "openai-gpt-oss-20b"],
+        "deepseek-r1-distill-llama-70b": ["openai-gpt-oss-120b", "anthropic-claude-4.6-sonnet"],
     }
     return list(fallbacks.get(model, []))
 
@@ -339,9 +344,11 @@ def _is_retryable_llm_error(exc: Exception) -> bool:
         "read timeout",
         "timed out",
         "timeout",
+        "overloaded",
         "502",
         "503",
         "504",
+        "529",
     )
     return any(marker in message for marker in transient_markers)
 

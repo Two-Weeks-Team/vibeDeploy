@@ -259,7 +259,7 @@ def build_app_spec(
         envs.append(
             {"key": "DIGITALOCEAN_INFERENCE_KEY", "value": inference_key, "scope": "RUN_TIME", "type": "SECRET"}
         )
-    envs.append({"key": "DO_INFERENCE_MODEL", "value": "openai-gpt-oss-120b", "scope": "RUN_TIME"})
+    envs.append({"key": "DO_INFERENCE_MODEL", "value": "anthropic-claude-4.6-sonnet", "scope": "RUN_TIME"})
 
     service: dict = {
         "name": f"{name[:28]}-api",

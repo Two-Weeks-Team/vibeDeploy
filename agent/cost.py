@@ -84,19 +84,19 @@ class CostTracker:
 def estimate_pipeline_cost() -> dict:
     """Estimate cost for a full evaluation pipeline run based on typical token usage."""
     estimates = [
-        ("openai-gpt-oss-120b", 2000, 3000, "input_processor"),
-        ("openai-gpt-oss-120b", 2000, 4000, "architect"),
-        ("openai-gpt-oss-120b", 2000, 4000, "scout"),
-        ("openai-gpt-oss-120b", 2000, 4000, "guardian"),
-        ("openai-gpt-oss-120b", 2000, 4000, "catalyst"),
-        ("openai-gpt-oss-120b", 2000, 4000, "advocate"),
-        ("openai-gpt-oss-120b", 8000, 6000, "cross_examination"),
-        ("openai-gpt-oss-120b", 10000, 5000, "strategist_verdict"),
-        ("openai-gpt-oss-120b", 3000, 8000, "doc_generation"),
-        ("openai-gpt-oss-120b", 5000, 12000, "code_generation"),
-        ("openai-gpt-oss-120b", 2500, 4000, "brainstorm"),
-        ("openai-gpt-oss-120b", 2500, 3500, "brainstorm_synthesis"),
-        ("openai-gpt-oss-120b", 1500, 2500, "web_search"),
+        ("anthropic-claude-4.6-sonnet", 2000, 3000, "input_processor"),
+        ("anthropic-claude-4.6-sonnet", 2000, 4000, "architect"),
+        ("anthropic-claude-4.6-sonnet", 2000, 4000, "scout"),
+        ("anthropic-claude-4.6-sonnet", 2000, 4000, "guardian"),
+        ("anthropic-claude-4.6-sonnet", 2000, 4000, "catalyst"),
+        ("anthropic-claude-4.6-sonnet", 2000, 4000, "advocate"),
+        ("anthropic-claude-4.6-sonnet", 8000, 6000, "cross_examination"),
+        ("anthropic-claude-4.6-sonnet", 10000, 5000, "strategist_verdict"),
+        ("anthropic-claude-4.6-sonnet", 3000, 8000, "doc_generation"),
+        ("anthropic-claude-4.6-sonnet", 5000, 16000, "code_generation"),
+        ("anthropic-claude-4.6-sonnet", 2500, 4000, "brainstorm"),
+        ("anthropic-claude-4.6-sonnet", 2500, 3500, "brainstorm_synthesis"),
+        ("anthropic-claude-4.6-sonnet", 1500, 2500, "web_search"),
         ("fal-ai/flux/schnell", 500, 500, "image_generation"),
     ]
 

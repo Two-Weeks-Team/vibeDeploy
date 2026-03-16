@@ -1354,7 +1354,7 @@ def _generate_readme(idea: dict, scoring: dict, backend_code: dict, live_url: st
 | Backend | FastAPI + uvicorn | 0.115.0 |
 | Frontend | Next.js + React | 15.5.12 / 19.0.0 |
 | Database | PostgreSQL + psycopg | 3.2.3 |
-| AI | DO Serverless Inference | openai-gpt-oss-120b |
+| AI | DO Serverless Inference | anthropic-claude-4.6-sonnet |
 | Styling | Tailwind CSS | 3.4.17 |
 {tech_rows}
 
@@ -1509,7 +1509,7 @@ jobs:
 def _generate_env_example() -> str:
     return """GRADIENT_MODEL_ACCESS_KEY=your-do-model-access-key
 DIGITALOCEAN_INFERENCE_KEY=your-do-model-access-key
-DO_INFERENCE_MODEL=openai-gpt-oss-120b
+DO_INFERENCE_MODEL=anthropic-claude-4.6-sonnet
 DATABASE_URL=postgresql://user:pass@localhost:5432/myapp
 NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000
 """

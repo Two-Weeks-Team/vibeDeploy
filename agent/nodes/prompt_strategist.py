@@ -15,6 +15,7 @@ _PROMPT_RESEARCH_TIMEOUT_SECONDS = 8.0
 _PROMPT_RESEARCH_CACHE: dict[str, tuple[float, dict]] = {}
 
 _OFFICIAL_MODEL_SOURCES = {
+    "anthropic": [],
     "openai_gpt_oss": [
         {
             "label": "OpenAI GPT-OSS README",
@@ -37,6 +38,12 @@ _OFFICIAL_MODEL_SOURCES = {
 }
 
 _STATIC_MODEL_GUIDANCE = {
+    "anthropic": [
+        "Claude excels at following system prompts precisely; place structural contracts in the system message and domain context in the user message.",
+        "Claude returns clean JSON when explicitly instructed; state the output schema once in the system message and reinforce with a single-line reminder in the user message.",
+        "Avoid multi-turn reasoning prompts; Claude produces higher-quality code with a clear single-shot instruction and complete context.",
+        "Set max_tokens generously (8000-16000) because Claude respects the limit exactly and will truncate mid-file if the budget is too low.",
+    ],
     "openai_gpt_oss": [
         "Keep role separation clear and make the output contract explicit because GPT-OSS expects chat/harmony-style structure.",
         "State the required final format directly and keep file-map schemas strict to improve parse reliability.",
@@ -89,6 +96,8 @@ async def prompt_strategist(state: VibeDeployState) -> dict:
 
 def infer_model_family(model: str) -> str:
     normalized = (model or "").strip().lower()
+    if "claude" in normalized or normalized.startswith("anthropic"):
+        return "anthropic"
     if "gpt-oss" in normalized:
         return "openai_gpt_oss"
     if "qwen3" in normalized or "qwen-" in normalized or normalized.startswith("qwen"):
@@ -178,6 +187,9 @@ async def _get_family_guidance(family: str) -> dict:
 def _extract_guidance_from_source(family: str, source: str) -> list[str]:
     normalized = source or ""
     notes: list[str] = []
+
+    if family == "anthropic":
+        return notes
 
     if family == "openai_gpt_oss":
         if "harmony response format" in normalized.lower():

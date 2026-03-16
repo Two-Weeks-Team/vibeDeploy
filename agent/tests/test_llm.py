@@ -116,9 +116,13 @@ def test_rate_limit_fallbacks_disabled_by_default(monkeypatch):
 def test_rate_limit_fallbacks_can_be_enabled(monkeypatch):
     monkeypatch.setenv("VIBEDEPLOY_ENABLE_RATE_LIMIT_MODEL_FALLBACKS", "1")
 
+    assert get_rate_limit_fallback_models("anthropic-claude-4.6-sonnet") == [
+        "openai-gpt-oss-120b",
+        "anthropic-claude-opus-4.6",
+    ]
     assert get_rate_limit_fallback_models("openai-gpt-oss-120b") == [
+        "anthropic-claude-4.6-sonnet",
         "openai-gpt-oss-20b",
-        "alibaba-qwen3-32b",
     ]
 
 

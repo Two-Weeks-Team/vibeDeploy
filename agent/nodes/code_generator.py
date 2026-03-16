@@ -253,7 +253,7 @@ async def code_generator(state: VibeDeployState) -> dict:
         frontend_llm = get_llm(
             model=frontend_model,
             temperature=0.3,
-            max_tokens=12000,
+            max_tokens=16000,
         )
     except Exception as exc:
         frontend_llm_error = str(exc)[:200]
@@ -262,7 +262,7 @@ async def code_generator(state: VibeDeployState) -> dict:
         backend_llm = get_llm(
             model=backend_model,
             temperature=0.3,
-            max_tokens=10000,
+            max_tokens=12000,
         )
     except Exception as exc:
         backend_llm_error = str(exc)[:200]
@@ -529,6 +529,12 @@ def _build_cross_model_user_contract(prompt_strategy: dict | None, target: str) 
 
     if "qwen3" in bundle["families"]:
         lines.append("/no_think")
+
+    if "anthropic" in bundle["families"]:
+        lines.append(
+            "Output format reminder: Return ONLY the JSON object with a top-level `files` key. "
+            "No markdown fences, no commentary, no preamble."
+        )
 
     if contract:
         lines.append(contract)

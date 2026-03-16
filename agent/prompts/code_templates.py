@@ -25,7 +25,7 @@ MANDATORY VERSION REQUIREMENTS (use these exact versions):
   SQLAlchemy: 2.0.35
   httpx: 0.27.0
   psycopg[binary]: 3.2.3
-  AI Model: openai-gpt-oss-120b (via DO Serverless Inference)
+  AI Model: anthropic-claude-4.6-sonnet (via DO Serverless Inference, OpenAI-compatible endpoint)
 """.strip()
 
 
@@ -122,7 +122,7 @@ CRITICAL RULES:
 - main.py must include a GET / root route returning an HTMLResponse landing page that shows: app name, description, all API endpoints with methods, tech stack info, and links to /docs and /redoc. Use inline CSS for dark-themed styling. Import HTMLResponse from fastapi.responses.
 - ai_service.py must call DO Serverless Inference at https://inference.do-ai.run/v1/chat/completions via httpx.
 - Use env var GRADIENT_MODEL_ACCESS_KEY for inference auth (Bearer token). DIGITALOCEAN_INFERENCE_KEY may be supported as a legacy alias.
-- Default model: openai-gpt-oss-120b (env: DO_INFERENCE_MODEL).
+- Default model: anthropic-claude-4.6-sonnet (env: DO_INFERENCE_MODEL).
 - ai_service.py CRITICAL REQUIREMENTS:
   * TIMEOUT: httpx.AsyncClient(timeout=90.0) — the 120B model needs 60-90s. The default 5-30s WILL cause timeouts and 502 errors.
   * MAX TOKENS: Always pass max_completion_tokens=512 (minimum 256) in every request payload.

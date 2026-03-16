@@ -6,7 +6,7 @@ from typing import Any
 import httpx
 
 DO_INFERENCE_BASE_URL = "https://inference.do-ai.run/v1"
-DEFAULT_MODEL = "openai-gpt-oss-120b"
+DEFAULT_MODEL = "anthropic-claude-4.6-sonnet"
 
 _RESPONSES_MODELS = {
     "openai-gpt-5.4",
@@ -20,11 +20,11 @@ _CHAT_COMPLETIONS_MODELS = {
 }
 
 MODEL_PROBE_CANDIDATES: list[dict[str, str]] = [
+    {"model": "anthropic-claude-4.6-sonnet", "endpoint": "chat"},
+    {"model": "anthropic-claude-opus-4.6", "endpoint": "chat"},
     {"model": "openai-gpt-5.4", "endpoint": "responses"},
     {"model": "openai-gpt-5.3-codex", "endpoint": "responses"},
     {"model": "openai-gpt-5.2", "endpoint": "responses"},
-    {"model": "anthropic-claude-opus-4.6", "endpoint": "chat"},
-    {"model": "anthropic-claude-4.6-sonnet", "endpoint": "chat"},
     {"model": "openai-gpt-oss-120b", "endpoint": "chat"},
 ]
 
