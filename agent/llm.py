@@ -353,16 +353,45 @@ def _is_retryable_llm_error(exc: Exception) -> bool:
     return any(marker in message for marker in transient_markers)
 
 
+def _is_anthropic_model(model: str) -> bool:
+    normalized = (model or "").strip().lower()
+    return "claude" in normalized or normalized.startswith("anthropic")
+
+
+def _anthropic_model_id(model: str) -> str:
+    mapping = {
+        "anthropic-claude-4.6-sonnet": "claude-sonnet-4-20250514",
+        "anthropic-claude-opus-4.6": "claude-opus-4-20250514",
+        "anthropic-claude-opus-4.5": "claude-opus-4-20250415",
+        "anthropic-claude-4.5-sonnet": "claude-sonnet-4-20250414",
+        "anthropic-claude-sonnet-4": "claude-sonnet-4-20250514",
+    }
+    return mapping.get(model.strip().lower(), model)
+
+
 def get_llm(
     model: str,
     temperature: float = 0.5,
     max_tokens: int = 3000,
     request_timeout: float | None = None,
 ):
-    """Route LLM calls through DO Inference when key is available, else direct OpenAI."""
-    inference_key = os.getenv("GRADIENT_MODEL_ACCESS_KEY", "") or os.getenv("DIGITALOCEAN_INFERENCE_KEY", "")
+    """Route LLM calls: Anthropic models → ChatAnthropic, others → DO Inference or OpenAI."""
     effective_max_tokens = max(256, max_tokens)
     effective_timeout = request_timeout or DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS
+
+    anthropic_key = os.getenv("ANTHROPIC_API_KEY", "")
+    if _is_anthropic_model(model) and anthropic_key:
+        from langchain_anthropic import ChatAnthropic
+
+        return ChatAnthropic(
+            model=_anthropic_model_id(model),
+            api_key=anthropic_key,
+            temperature=_coerce_temperature_for_model(model, temperature),
+            max_tokens=effective_max_tokens,
+            timeout=effective_timeout,
+        )
+
+    inference_key = os.getenv("GRADIENT_MODEL_ACCESS_KEY", "") or os.getenv("DIGITALOCEAN_INFERENCE_KEY", "")
 
     if inference_key and inference_key not in ("test-key", ""):
         from langchain_openai import ChatOpenAI

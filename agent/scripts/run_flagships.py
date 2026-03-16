@@ -9,10 +9,15 @@ import uuid
 from pathlib import Path
 
 import httpx
+from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+
+AGENT_DIR = ROOT / "agent"
+load_dotenv(AGENT_DIR / ".env.test")
+load_dotenv(AGENT_DIR / ".env", override=True)
 
 
 def _normalize_base_url(base_url: str) -> str:

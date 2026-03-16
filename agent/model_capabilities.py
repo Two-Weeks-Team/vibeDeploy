@@ -100,11 +100,76 @@ def write_model_capability_report(report: dict[str, Any]) -> Path:
     return path
 
 
+async def _probe_anthropic_direct(timeout_seconds: float) -> dict[str, Any] | None:
+    anthropic_key = os.getenv("ANTHROPIC_API_KEY", "").strip()
+    if not anthropic_key:
+        return None
+
+    headers = {
+        "x-api-key": anthropic_key,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+    }
+    payload = {
+        "model": "claude-sonnet-4-20250514",
+        "max_tokens": 32,
+        "messages": [{"role": "user", "content": "Reply with READY only."}],
+    }
+    try:
+        async with httpx.AsyncClient(timeout=timeout_seconds, follow_redirects=True) as client:
+            response = await client.post("https://api.anthropic.com/v1/messages", headers=headers, json=payload)
+            if response.status_code == 200:
+                return {
+                    "model": "anthropic-claude-4.6-sonnet",
+                    "endpoint": "chat",
+                    "status_code": 200,
+                    "ok": True,
+                    "body_preview": response.text[:500],
+                    "route": "anthropic_direct",
+                }
+            return {
+                "model": "anthropic-claude-4.6-sonnet",
+                "endpoint": "chat",
+                "status_code": response.status_code,
+                "ok": False,
+                "body_preview": response.text[:500],
+                "route": "anthropic_direct",
+            }
+    except Exception as exc:
+        return {
+            "model": "anthropic-claude-4.6-sonnet",
+            "endpoint": "chat",
+            "status_code": None,
+            "ok": False,
+            "body_preview": f"{type(exc).__name__}: {exc}",
+            "route": "anthropic_direct",
+        }
+
+
 async def probe_model_capabilities(
     api_key: str | None = None,
     *,
     timeout_seconds: float = 90.0,
 ) -> dict[str, Any]:
+    candidates: list[dict[str, Any]] = []
+    selected_model = DEFAULT_MODEL
+    selected_endpoint = model_endpoint_type(DEFAULT_MODEL)
+
+    anthropic_result = await _probe_anthropic_direct(timeout_seconds)
+    if anthropic_result:
+        candidates.append(anthropic_result)
+        if anthropic_result["ok"]:
+            selected_model = anthropic_result["model"]
+            selected_endpoint = anthropic_result["endpoint"]
+            report = {
+                "selected_model": selected_model,
+                "selected_endpoint": selected_endpoint,
+                "probed": True,
+                "candidates": candidates,
+            }
+            write_model_capability_report(report)
+            return report
+
     token = (
         api_key or os.getenv("GRADIENT_MODEL_ACCESS_KEY", "") or os.getenv("DIGITALOCEAN_INFERENCE_KEY", "")
     ).strip()
@@ -114,20 +179,19 @@ async def probe_model_capabilities(
             "selected_endpoint": model_endpoint_type(DEFAULT_MODEL),
             "probed": False,
             "error": "missing_digitalocean_inference_key",
-            "candidates": [],
+            "candidates": candidates,
         }
         write_model_capability_report(report)
         return report
 
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-    candidates: list[dict[str, Any]] = []
-    selected_model = DEFAULT_MODEL
-    selected_endpoint = model_endpoint_type(DEFAULT_MODEL)
 
     async with httpx.AsyncClient(timeout=timeout_seconds, follow_redirects=True) as client:
         for item in MODEL_PROBE_CANDIDATES:
             model = item["model"]
             endpoint = item["endpoint"]
+            if _is_anthropic_model_name(model):
+                continue
             if endpoint == "responses":
                 url = f"{DO_INFERENCE_BASE_URL}/responses"
                 payload = {
@@ -173,3 +237,8 @@ async def probe_model_capabilities(
     }
     write_model_capability_report(report)
     return report
+
+
+def _is_anthropic_model_name(model: str) -> bool:
+    normalized = (model or "").strip().lower()
+    return "claude" in normalized or normalized.startswith("anthropic")
