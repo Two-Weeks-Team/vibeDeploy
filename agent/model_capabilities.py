@@ -111,7 +111,7 @@ async def _probe_anthropic_direct(timeout_seconds: float) -> dict[str, Any] | No
         "content-type": "application/json",
     }
     payload = {
-        "model": "claude-sonnet-4-20250514",
+        "model": "claude-sonnet-4-6",
         "max_tokens": 32,
         "messages": [{"role": "user", "content": "Reply with READY only."}],
     }

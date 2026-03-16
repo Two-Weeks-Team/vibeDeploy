@@ -360,10 +360,10 @@ def _is_anthropic_model(model: str) -> bool:
 
 def _anthropic_model_id(model: str) -> str:
     mapping = {
-        "anthropic-claude-4.6-sonnet": "claude-sonnet-4-20250514",
-        "anthropic-claude-opus-4.6": "claude-opus-4-20250514",
-        "anthropic-claude-opus-4.5": "claude-opus-4-20250415",
-        "anthropic-claude-4.5-sonnet": "claude-sonnet-4-20250414",
+        "anthropic-claude-4.6-sonnet": "claude-sonnet-4-6",
+        "anthropic-claude-opus-4.6": "claude-opus-4-6",
+        "anthropic-claude-opus-4.5": "claude-opus-4-5-20251101",
+        "anthropic-claude-4.5-sonnet": "claude-sonnet-4-5-20250929",
         "anthropic-claude-sonnet-4": "claude-sonnet-4-20250514",
     }
     return mapping.get(model.strip().lower(), model)
