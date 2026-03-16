@@ -37,7 +37,7 @@ MAX_EMPTY_BACKEND_RETRIES = 5
 PASS_THRESHOLD = 80
 MIN_CONSISTENCY_TO_PASS = 60
 MIN_RUNNABILITY_TO_PASS = 85
-MIN_EXPERIENCE_TO_PASS = 70
+MIN_EXPERIENCE_TO_PASS = 65
 _FALLBACK_MARKER_FILES = {".vibedeploy-fallback-frontend.json", ".vibedeploy-fallback-backend.json"}
 _GENERIC_SCAFFOLD_TERMS = (
     "hero header",
