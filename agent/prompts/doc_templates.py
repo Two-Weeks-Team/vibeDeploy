@@ -103,5 +103,5 @@ Requirements:
 - Ensure commands and source_dir are coherent
 - Keep naming derived from app idea
 
-Return YAML only. No markdown fences.
+Return JSON with one key: 'content' whose value is the YAML string. No markdown fences.
 """.strip()
