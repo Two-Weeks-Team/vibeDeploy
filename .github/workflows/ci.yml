@@ -104,8 +104,9 @@ jobs:
           pip install langchain-gradient>=0.1.24 --no-deps
           grep -v '^langchain-gradient' requirements.txt > /tmp/req-filtered.txt
           pip install -r /tmp/req-filtered.txt
-      - run: pip install pytest pytest-cov
-      - run: pytest tests/ --cov=. --cov-report=term-missing --cov-fail-under=50
+      - run: pip install pytest pytest-cov mypy
+      - run: pytest tests/ --cov=. --cov-report=term-missing --cov-fail-under=80
+      - run: mypy agent/ --ignore-missing-imports --no-strict || true
 
   agent-security:
     name: Agent Security (bandit)
@@ -120,6 +121,19 @@ jobs:
           python-version: "3.12"
       - run: pip install bandit
       - run: bandit -r . -x ./tests/,./.venv/ --severity-level medium -f json || true
+
+  web-audit:
+    name: Web Audit (npm audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm ci
+        working-directory: web
+      - run: npm audit --audit-level=moderate || true
+        working-directory: web
 
   web-typecheck:
     name: Web Typecheck (tsc)
