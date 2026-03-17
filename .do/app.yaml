@@ -92,6 +92,10 @@ services:
         scope: RUN_TIME
         type: SECRET
         value: REPLACE_WITH_ADK_AUTH_TOKEN
+      - key: GOOGLE_API_KEY
+        scope: RUN_TIME
+        type: SECRET
+        value: REPLACE_WITH_GOOGLE_API_KEY
 
   - name: web
     environment_slug: node-js
