@@ -72,3 +72,39 @@ CREATE TABLE deployments (
 CREATE INDEX idx_sessions_thread_id ON sessions(thread_id);
 CREATE INDEX idx_sessions_status ON sessions(status);
 CREATE INDEX idx_sessions_created_at ON sessions(created_at DESC);
+
+-- Zero-Prompt Session Management (ADR-A3)
+CREATE TABLE IF NOT EXISTS zero_prompt_sessions (
+    session_id TEXT PRIMARY KEY,
+    status TEXT NOT NULL DEFAULT 'exploring',
+    goal_go_cards INTEGER NOT NULL DEFAULT 10,
+    total_cost REAL NOT NULL DEFAULT 0.0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS zero_prompt_cards (
+    card_id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL REFERENCES zero_prompt_sessions(session_id) ON DELETE CASCADE,
+    source_video_id TEXT NOT NULL DEFAULT '',
+    app_name TEXT NOT NULL DEFAULT '',
+    tagline TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'evaluating',
+    verdict TEXT,
+    novelty_boost REAL NOT NULL DEFAULT 0.0,
+    build_thread_id TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_zp_cards_session ON zero_prompt_cards(session_id);
+
+CREATE TABLE IF NOT EXISTS zero_prompt_build_queue (
+    id SERIAL PRIMARY KEY,
+    session_id TEXT NOT NULL REFERENCES zero_prompt_sessions(session_id) ON DELETE CASCADE,
+    card_id TEXT NOT NULL REFERENCES zero_prompt_cards(card_id) ON DELETE CASCADE,
+    status TEXT NOT NULL DEFAULT 'queued',
+    queued_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    started_at TIMESTAMPTZ,
+    completed_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_zp_build_queue_session ON zero_prompt_build_queue(session_id);
