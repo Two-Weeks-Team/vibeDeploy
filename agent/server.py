@@ -1013,7 +1013,8 @@ async def zero_prompt_start(request: ZPStartRequest):
     async def event_stream() -> AsyncGenerator[str, None]:
         yield _fmt(ZP_SESSION_START, start_event)
 
-        videos = []
+        videos: list[tuple[str, str, str]] = []
+
         try:
             from .zero_prompt.discovery import YouTubeDiscovery
 
@@ -1022,8 +1023,18 @@ async def zero_prompt_start(request: ZPStartRequest):
                 max_results=30, min_views=5000, min_likes=100, min_engagement_rate=0.01
             )
             videos = [(c.video_id, c.title, c.description) for c in candidates]
+            logger.info("[ZP] YouTube API discovery: %d videos", len(videos))
         except Exception as exc:
-            logger.warning("[ZP] YouTube discovery failed: %s, using fallback", str(exc)[:200])
+            logger.warning("[ZP] YouTube API failed: %s", str(exc)[:200])
+
+        if not videos:
+            try:
+                from .zero_prompt.grounding_discovery import discover_videos_via_grounding
+
+                videos = await discover_videos_via_grounding(max_results=20)
+                logger.info("[ZP] Gemini grounding discovery: %d videos", len(videos))
+            except Exception as exc:
+                logger.warning("[ZP] Gemini grounding failed: %s", str(exc)[:200])
 
         if not videos:
             fallback_topics = [
@@ -1044,6 +1055,7 @@ async def zero_prompt_start(request: ZPStartRequest):
                 "Handmade crafts marketplace",
             ]
             videos = [(f"fallback-{i}", topic, topic) for i, topic in enumerate(fallback_topics)]
+            logger.info("[ZP] Using hardcoded fallback topics")
 
         video_idx = 0
         while orch.should_continue_exploring(session_id):
