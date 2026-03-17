@@ -11,6 +11,21 @@ logger = logging.getLogger(__name__)
 
 _COUNCIL_LLM_TIMEOUT_SECONDS = 180
 
+
+def _safe_score(value: object, default: int = 0, *, clamp: bool = True) -> int:
+    """Coerce an LLM-produced score to int.
+
+    LLM responses may return scores as strings (``"85"``), floats, or
+    other unexpected types.  This helper guarantees a usable integer.
+    When *clamp* is True (default), the result is clamped to [0, 100].
+    """
+    try:
+        result = int(float(value))
+        return max(0, min(100, result)) if clamp else result
+    except (TypeError, ValueError):
+        return default
+
+
 COUNCIL_MEMBERS = {
     "architect": architect,
     "scout": scout,
@@ -237,15 +252,14 @@ async def score_axis(input: dict) -> dict:
     analysis = input.get("analysis", {})
     cross_exam = input.get("cross_examination", {})
 
-    base_score = analysis.get("score", 50)
+    base_score = _safe_score(analysis.get("score", 50), default=50)
     adjustment = 0
     for debate in cross_exam.values():
         if isinstance(debate, dict):
             score_adjustments = debate.get("score_adjustments", {})
             if isinstance(score_adjustments, dict):
-                adjustment += score_adjustments.get(agent_name, 0)
+                adjustment += _safe_score(score_adjustments.get(agent_name, 0), clamp=False)
 
-    # Cap negative adjustments to prevent cross-examination from destroying scores
     adjustment = max(-10, adjustment)
     final_score = max(0, min(100, base_score + adjustment))
     axis_name = SCORE_AXIS_MAP.get(agent_name, agent_name)
@@ -265,11 +279,11 @@ async def strategist_verdict(state: VibeDeployState) -> dict:
     scoring = state.get("scoring", {})
     council_analysis = state.get("council_analysis", {}) or {}
 
-    tech = scoring.get("technical_feasibility", {}).get("score", 0)
-    market = scoring.get("market_viability", {}).get("score", 0)
-    innovation = scoring.get("innovation_score", {}).get("score", 0)
-    risk = scoring.get("risk_profile", {}).get("score", 0)
-    user_impact = scoring.get("user_impact", {}).get("score", 0)
+    tech = _safe_score(scoring.get("technical_feasibility", {}).get("score", 0))
+    market = _safe_score(scoring.get("market_viability", {}).get("score", 0))
+    innovation = _safe_score(scoring.get("innovation_score", {}).get("score", 0))
+    risk = _safe_score(scoring.get("risk_profile", {}).get("score"), default=100)
+    user_impact = _safe_score(scoring.get("user_impact", {}).get("score", 0))
     fallback_agents = sorted(
         agent_name
         for agent_name, analysis in council_analysis.items()
