@@ -71,6 +71,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .models import Base, engine
 
+try:
+    from .routes import router as api_router
+except ImportError:
+    api_router = None
+
 app = FastAPI(title="{app_name} API")
 
 app.add_middleware(
@@ -81,6 +86,9 @@ app.add_middleware(
 )
 
 Base.metadata.create_all(bind=engine)
+
+if api_router:
+    app.include_router(api_router, prefix="/api")
 
 
 @app.get("/health")
@@ -115,6 +123,28 @@ def get_db():
         yield db
     finally:
         db.close()
+"""
+
+
+_AI_SERVICE_PY = """\
+import os
+import httpx
+
+INFERENCE_URL = os.getenv("DIGITALOCEAN_INFERENCE_URL", "https://inference.do-ai.run/v1")
+INFERENCE_KEY = os.getenv("DIGITALOCEAN_INFERENCE_KEY", "")
+
+
+async def call_inference(prompt: str, model: str = "meta-llama/Llama-3.3-70B-Instruct") -> str:
+    if not INFERENCE_KEY:
+        return "AI service not configured"
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        resp = await client.post(
+            f"{INFERENCE_URL}/chat/completions",
+            headers={"Authorization": f"Bearer {INFERENCE_KEY}"},
+            json={"model": model, "messages": [{"role": "user", "content": prompt}]},
+        )
+        resp.raise_for_status()
+        return resp.json()["choices"][0]["message"]["content"]
 """
 
 
@@ -168,4 +198,5 @@ def generate_scaffold(blueprint: dict[str, Any]) -> dict[str, str]:
         "agent/main.py": main_py_content,
         "agent/models.py": _MODELS_PY,
         "agent/requirements.txt": "\n".join(requirements_lines) + "\n",
+        "agent/ai_service.py": _AI_SERVICE_PY,
     }
