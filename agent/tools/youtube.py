@@ -6,6 +6,17 @@ from typing import Optional
 
 import requests
 
+try:
+    from gradient_adk.tracing import trace_tool
+except ImportError:
+
+    def trace_tool(name):
+        def _noop(fn):
+            return fn
+
+        return _noop
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -44,6 +55,7 @@ def extract_video_id(url: str) -> Optional[str]:
     return None
 
 
+@trace_tool("extract_youtube_transcript")
 async def extract_youtube_transcript(
     url: str,
     languages: Optional[list[str]] = None,
@@ -224,6 +236,7 @@ async def get_transcript_with_timestamps(
     return []
 
 
+@trace_tool("detect_visual_segments")
 async def detect_visual_segments(transcript: str, llm=None) -> list[dict]:
     if not transcript:
         return []
