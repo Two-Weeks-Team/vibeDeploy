@@ -1,9 +1,66 @@
 import asyncio
 import json
 import os
-from typing import Optional
+from typing import Literal, Optional
 
 import aiosqlite
+from pydantic import BaseModel, Field
+
+
+class LineageRecord(BaseModel):
+    record_id: str
+    record_type: Literal["meeting", "brainstorm", "zero_prompt_session", "build_job", "deployment"]
+    parent_id: str | None = None
+    thread_id: str
+    metadata: dict = Field(default_factory=dict)
+    created_at: str
+
+
+class LineageStore:
+    def __init__(self) -> None:
+        self._records: dict[str, LineageRecord] = {}
+
+    def save_record(self, record: LineageRecord) -> str:
+        self._records[record.record_id] = record
+        return record.record_id
+
+    def get_record(self, record_id: str) -> LineageRecord | None:
+        return self._records.get(record_id)
+
+    def get_lineage(self, thread_id: str) -> list[LineageRecord]:
+        matches = [r for r in self._records.values() if r.thread_id == thread_id]
+        return sorted(matches, key=lambda r: r.created_at)
+
+    def get_children(self, parent_id: str) -> list[LineageRecord]:
+        return [r for r in self._records.values() if r.parent_id == parent_id]
+
+    def get_chain(self, record_id: str) -> list[LineageRecord]:
+        chain: list[LineageRecord] = []
+        current_id: str | None = record_id
+        visited: set[str] = set()
+        while current_id is not None:
+            if current_id in visited:
+                break
+            visited.add(current_id)
+            record = self._records.get(current_id)
+            if record is None:
+                break
+            chain.append(record)
+            current_id = record.parent_id
+        return chain
+
+    def get_summary(self) -> dict:
+        by_type: dict[str, int] = {
+            "meeting": 0,
+            "brainstorm": 0,
+            "zero_prompt_session": 0,
+            "build_job": 0,
+            "deployment": 0,
+        }
+        for record in self._records.values():
+            by_type[record.record_type] += 1
+        return {"total": len(self._records), "by_type": by_type}
+
 
 _SQLITE_SCHEMA = """
 CREATE TABLE IF NOT EXISTS meeting_results (
