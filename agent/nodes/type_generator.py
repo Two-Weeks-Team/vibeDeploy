@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 _TYPE_MAP: dict[str, str] = {
@@ -123,6 +124,233 @@ def generate_typescript_types(openapi_json: str) -> str:
         interfaces.append(_schema_to_interface(schema_name, schema_def))
 
     return "\n\n".join(interfaces) + "\n"
+
+
+_HTTP_METHODS_WITH_BODY = {"post", "put", "patch"}
+_ALL_HTTP_METHODS = {"get", "post", "put", "patch", "delete", "head", "options"}
+
+_API_CLIENT_PREAMBLE = """\
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
+
+export class ApiError extends Error {
+  constructor(public status: number, public body: string) {
+    super(`API error ${status}: ${body}`);
+  }
+}"""
+
+
+def _to_pascal(segment: str) -> str:
+    """Convert a kebab/snake/plain string segment to PascalCase."""
+    parts = re.split(r"[-_]", segment)
+    return "".join(p.capitalize() for p in parts if p)
+
+
+def _path_to_function_name(method: str, path: str) -> str:
+    """Convert HTTP method + path to a camelCase TypeScript function name.
+
+    Path parameters like ``{id}`` become ``ById`` in the name.
+
+    Examples::
+
+        GET  /users         → getUsers
+        POST /items         → postItems
+        GET  /users/{id}    → getUsersById
+        DELETE /users/{id}  → deleteUsersById
+    """
+    segments = [s for s in path.split("/") if s]
+    name_parts: list[str] = []
+    for seg in segments:
+        if seg.startswith("{") and seg.endswith("}"):
+            param = seg[1:-1]
+            name_parts.append("By" + _to_pascal(param))
+        else:
+            name_parts.append(_to_pascal(seg))
+    method_lower = method.lower()
+    return method_lower + "".join(name_parts) if name_parts else method_lower
+
+
+def _extract_response_type(operation: dict[str, Any], fallback: str) -> str:
+    """Return the TypeScript response type for an OpenAPI operation.
+
+    Inspects the ``responses`` block (prefers HTTP 200, then 201, then first
+    available) for an ``application/json`` schema ``$ref``.  Falls back to
+    ``fallback`` when no ``$ref`` can be resolved.
+    """
+    responses = operation.get("responses") or {}
+    if not isinstance(responses, dict):
+        return fallback
+
+    response: dict | None = responses.get("200") or responses.get("201")
+    if response is None and responses:
+        response = next(iter(responses.values()), None)
+
+    if not isinstance(response, dict):
+        return fallback
+
+    content = response.get("content") or {}
+    if not isinstance(content, dict):
+        return fallback
+
+    json_content = content.get("application/json") or {}
+    if not isinstance(json_content, dict):
+        return fallback
+
+    schema = json_content.get("schema") or {}
+    if not isinstance(schema, dict):
+        return fallback
+
+    if "$ref" in schema:
+        return _resolve_ref(str(schema["$ref"]))
+
+    if schema.get("type") == "array":
+        items = schema.get("items") or {}
+        if isinstance(items, dict) and "$ref" in items:
+            return f"{_resolve_ref(str(items['$ref']))}[]"
+
+    return fallback
+
+
+def _extract_body_type(operation: dict[str, Any]) -> str:
+    """Return the TypeScript request body type for an OpenAPI operation.
+
+    Resolves a ``$ref`` when present; falls back to ``Record<string, unknown>``.
+    """
+    request_body = operation.get("requestBody") or {}
+    if not isinstance(request_body, dict):
+        return "Record<string, unknown>"
+
+    content = request_body.get("content") or {}
+    if not isinstance(content, dict):
+        return "Record<string, unknown>"
+
+    json_content = content.get("application/json") or {}
+    if not isinstance(json_content, dict):
+        return "Record<string, unknown>"
+
+    schema = json_content.get("schema") or {}
+    if not isinstance(schema, dict):
+        return "Record<string, unknown>"
+
+    if "$ref" in schema:
+        return _resolve_ref(str(schema["$ref"]))
+
+    return "Record<string, unknown>"
+
+
+def _build_function_block(
+    func_name: str,
+    path: str,
+    method: str,
+    response_type: str,
+    body_type: str | None,
+    path_params: list[tuple[str, str]],
+) -> str:
+    """Render a single TypeScript fetch function block."""
+    ts_path = re.sub(r"\{(\w+)\}", r"${\1}", path)
+
+    param_parts: list[str] = []
+    for pname, ptype in path_params:
+        param_parts.append(f"{pname}: {ptype}")
+    if body_type is not None:
+        param_parts.append(f"body: {body_type}")
+    params_str = ", ".join(param_parts)
+
+    lines: list[str] = [
+        f"export async function {func_name}({params_str}): Promise<{response_type}> {{",
+    ]
+
+    if body_type is not None:
+        lines += [
+            f"  const res = await fetch(`${{API_BASE_URL}}{ts_path}`, {{",
+            f'    method: "{method.upper()}",',
+            '    headers: { "Content-Type": "application/json" },',
+            "    body: JSON.stringify(body),",
+            "  });",
+        ]
+    else:
+        lines.append(f"  const res = await fetch(`${{API_BASE_URL}}{ts_path}`);")
+
+    lines += [
+        "  if (!res.ok) throw new ApiError(res.status, await res.text());",
+        "  return res.json();",
+        "}",
+    ]
+    return "\n".join(lines)
+
+
+def _extract_path_params(path: str, operation: dict[str, Any]) -> list[tuple[str, str]]:
+    """Return ``[(name, ts_type), ...]`` for path parameters in the given path."""
+    param_names = re.findall(r"\{(\w+)\}", path)
+    if not param_names:
+        return []
+
+    parameters = operation.get("parameters") or []
+    param_type_map: dict[str, str] = {}
+    if isinstance(parameters, list):
+        for p in parameters:
+            if isinstance(p, dict) and p.get("in") == "path":
+                name = str(p.get("name") or "")
+                schema = p.get("schema") or {}
+                ts_type = _openapi_type_to_ts(schema) if isinstance(schema, dict) else "string"
+                if ts_type in ("any", "unknown"):
+                    ts_type = "string | number"
+                param_type_map[name] = ts_type
+
+    return [(name, param_type_map.get(name, "string | number")) for name in param_names]
+
+
+def generate_api_client(openapi_json: str) -> str:
+    """Generate a TypeScript fetch API client from an OpenAPI spec JSON string.
+
+    For each path+method in ``paths``, emits a typed ``async`` function that:
+
+    * uses ``API_BASE_URL`` (from ``process.env.NEXT_PUBLIC_API_BASE_URL``),
+    * throws ``ApiError`` on non-OK responses,
+    * accepts a typed ``body`` parameter for POST / PUT / PATCH requests,
+    * accepts path-parameter arguments derived from ``{param}`` placeholders.
+
+    The output always includes the ``ApiError`` class definition and the
+    ``API_BASE_URL`` constant regardless of whether the spec has any paths.
+
+    Returns an error comment line when the input is not valid JSON.
+    Pure Python — no subprocess, no npx.
+    """
+    try:
+        spec = json.loads(openapi_json)
+    except (json.JSONDecodeError, ValueError):
+        return "// Error: invalid JSON input\n"
+
+    if not isinstance(spec, dict):
+        return "// Error: spec root must be a JSON object\n"
+
+    paths: dict = spec.get("paths") or {}
+    if not isinstance(paths, dict):
+        paths = {}
+
+    function_blocks: list[str] = []
+    for path, path_item in paths.items():
+        if not isinstance(path_item, dict):
+            continue
+        for method, operation in path_item.items():
+            if method.lower() not in _ALL_HTTP_METHODS:
+                continue
+            if not isinstance(operation, dict):
+                continue
+
+            func_name = _path_to_function_name(method, path)
+            fallback_response = func_name[0].upper() + func_name[1:] + "Response"
+            response_type = _extract_response_type(operation, fallback=fallback_response)
+            path_params = _extract_path_params(path, operation)
+
+            has_body = method.lower() in _HTTP_METHODS_WITH_BODY
+            body_type: str | None = _extract_body_type(operation) if has_body else None
+
+            function_blocks.append(
+                _build_function_block(func_name, path, method, response_type, body_type, path_params)
+            )
+
+    parts = [_API_CLIENT_PREAMBLE] + function_blocks
+    return "\n\n".join(parts) + "\n"
 
 
 def generate_api_dts(openapi_json: str) -> str:
