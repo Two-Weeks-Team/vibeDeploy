@@ -13,6 +13,7 @@ class MCPClient:
     def __init__(self) -> None:
         self._url: str = os.environ.get("DO_MCP_SERVER_URL", "").rstrip("/")
         self._token: str = os.environ.get("DIGITALOCEAN_API_TOKEN", "")
+        self._client: httpx.AsyncClient = httpx.AsyncClient(timeout=_DEFAULT_TIMEOUT)
 
     def is_available(self) -> bool:
         return bool(self._url)
@@ -25,15 +26,14 @@ class MCPClient:
 
     async def _call_tool(self, tool_name: str, arguments: dict[str, Any] | None = None) -> Any:
         payload: dict[str, Any] = {"name": tool_name, "arguments": arguments or {}}
-        async with httpx.AsyncClient(timeout=_DEFAULT_TIMEOUT) as client:
-            response = await client.post(
-                f"{self._url}/v1/tools/call",
-                json=payload,
-                headers=self._headers(),
-            )
-            response.raise_for_status()
-            body: dict[str, Any] = response.json()
-            return body.get("result", body)
+        response = await self._client.post(
+            f"{self._url}/v1/tools/call",
+            json=payload,
+            headers=self._headers(),
+        )
+        response.raise_for_status()
+        body: dict[str, Any] = response.json()
+        return body.get("result", body)
 
     async def list_apps(self) -> list[dict]:
         if not self.is_available():
@@ -80,3 +80,6 @@ class MCPClient:
         except (httpx.HTTPStatusError, httpx.RequestError) as exc:
             logger.warning("create_app failed: %s", exc)
             return {}
+
+    async def aclose(self) -> None:
+        await self._client.aclose()

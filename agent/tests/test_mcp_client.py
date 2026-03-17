@@ -1,4 +1,4 @@
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import pytest
@@ -51,15 +51,8 @@ async def test_list_apps_returns_apps_from_mcp(client_with_url):
     fake_response.raise_for_status = MagicMock()
     fake_response.json.return_value = {"result": {"apps": [{"id": "app-1", "name": "my-app"}]}}
 
-    mock_post = AsyncMock(return_value=fake_response)
-
-    with patch("httpx.AsyncClient") as mock_client_cls:
-        mock_async_client = AsyncMock()
-        mock_async_client.post = mock_post
-        mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_async_client)
-        mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
-
-        result = await client_with_url.list_apps()
+    client_with_url._client.post = AsyncMock(return_value=fake_response)
+    result = await client_with_url.list_apps()
 
     assert result == [{"id": "app-1", "name": "my-app"}]
 
@@ -70,15 +63,8 @@ async def test_list_apps_returns_list_result_directly(client_with_url):
     fake_response.raise_for_status = MagicMock()
     fake_response.json.return_value = {"result": [{"id": "app-2"}]}
 
-    mock_post = AsyncMock(return_value=fake_response)
-
-    with patch("httpx.AsyncClient") as mock_client_cls:
-        mock_async_client = AsyncMock()
-        mock_async_client.post = mock_post
-        mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_async_client)
-        mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
-
-        result = await client_with_url.list_apps()
+    client_with_url._client.post = AsyncMock(return_value=fake_response)
+    result = await client_with_url.list_apps()
 
     assert result == [{"id": "app-2"}]
 
@@ -89,15 +75,8 @@ async def test_get_app_returns_app_dict(client_with_url):
     fake_response.raise_for_status = MagicMock()
     fake_response.json.return_value = {"result": {"app": {"id": "app-123", "name": "found-app"}}}
 
-    mock_post = AsyncMock(return_value=fake_response)
-
-    with patch("httpx.AsyncClient") as mock_client_cls:
-        mock_async_client = AsyncMock()
-        mock_async_client.post = mock_post
-        mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_async_client)
-        mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
-
-        result = await client_with_url.get_app("app-123")
+    client_with_url._client.post = AsyncMock(return_value=fake_response)
+    result = await client_with_url.get_app("app-123")
 
     assert result == {"id": "app-123", "name": "found-app"}
 
@@ -109,15 +88,8 @@ async def test_get_app_returns_none_on_404(client_with_url):
 
     http_error = httpx.HTTPStatusError("not found", request=MagicMock(), response=mock_response)
 
-    mock_post = AsyncMock(side_effect=http_error)
-
-    with patch("httpx.AsyncClient") as mock_client_cls:
-        mock_async_client = AsyncMock()
-        mock_async_client.post = mock_post
-        mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_async_client)
-        mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
-
-        result = await client_with_url.get_app("nonexistent")
+    client_with_url._client.post = AsyncMock(side_effect=http_error)
+    result = await client_with_url.get_app("nonexistent")
 
     assert result is None
 
@@ -128,30 +100,16 @@ async def test_create_app_returns_app_dict(client_with_url):
     fake_response.raise_for_status = MagicMock()
     fake_response.json.return_value = {"result": {"app": {"id": "new-app-id", "name": "created-app"}}}
 
-    mock_post = AsyncMock(return_value=fake_response)
-
-    with patch("httpx.AsyncClient") as mock_client_cls:
-        mock_async_client = AsyncMock()
-        mock_async_client.post = mock_post
-        mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_async_client)
-        mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
-
-        result = await client_with_url.create_app({"name": "created-app", "region": "nyc"})
+    client_with_url._client.post = AsyncMock(return_value=fake_response)
+    result = await client_with_url.create_app({"name": "created-app", "region": "nyc"})
 
     assert result == {"id": "new-app-id", "name": "created-app"}
 
 
 @pytest.mark.asyncio
 async def test_list_apps_returns_empty_on_request_error(client_with_url):
-    mock_post = AsyncMock(side_effect=httpx.RequestError("connection refused"))
-
-    with patch("httpx.AsyncClient") as mock_client_cls:
-        mock_async_client = AsyncMock()
-        mock_async_client.post = mock_post
-        mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_async_client)
-        mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
-
-        result = await client_with_url.list_apps()
+    client_with_url._client.post = AsyncMock(side_effect=httpx.RequestError("connection refused"))
+    result = await client_with_url.list_apps()
 
     assert result == []
 
@@ -162,15 +120,8 @@ async def test_create_app_returns_empty_on_http_error(client_with_url):
     mock_response.status_code = 500
 
     http_error = httpx.HTTPStatusError("server error", request=MagicMock(), response=mock_response)
-    mock_post = AsyncMock(side_effect=http_error)
-
-    with patch("httpx.AsyncClient") as mock_client_cls:
-        mock_async_client = AsyncMock()
-        mock_async_client.post = mock_post
-        mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_async_client)
-        mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
-
-        result = await client_with_url.create_app({"name": "bad-app"})
+    client_with_url._client.post = AsyncMock(side_effect=http_error)
+    result = await client_with_url.create_app({"name": "bad-app"})
 
     assert result == {}
 
