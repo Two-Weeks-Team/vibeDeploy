@@ -108,6 +108,9 @@ class VibeDeployState(TypedDict):
     code_eval_result: Optional[Dict]
     match_rate: Optional[float]
     build_validation: Optional[Dict]
+    build_attempt_count: int
+    build_errors: Optional[str]
+    build_repair_prompt: Optional[str]
 
     # Deployment
     deploy_result: Optional[DeployResult]

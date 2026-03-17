@@ -10,6 +10,26 @@ logger = logging.getLogger(__name__)
 
 _DOCKER_BUILD_TIMEOUT_SECONDS = 120
 
+TEMPERATURE_SCHEDULE = [0.1, 0.05, 0.02]
+MAX_BUILD_ATTEMPTS = 3
+
+
+def _trim_build_errors(stderr: str) -> str:
+    if not stderr:
+        return "Unknown build error"
+    lines = stderr.splitlines()
+    errors = [
+        line.strip()
+        for line in lines
+        if any(k in line.lower() for k in ["error:", "failed", "exception", "syntaxerror"])
+    ]
+    return "\n".join(errors[:3]) if errors else "\n".join(lines[:3])
+
+
+def _build_repair_prompt(errors: str, failing_files: dict[str, str]) -> str:
+    file_context = "\n".join(f"--- {path} ---\n{code}" for path, code in failing_files.items())
+    return f"Fix these build errors:\n{errors}\n\nCurrent code:\n{file_context}"
+
 
 def _write_files_to_tmpdir(files: dict, tmpdir: str) -> None:
     base = Path(tmpdir)
