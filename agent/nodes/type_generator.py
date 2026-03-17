@@ -47,7 +47,8 @@ def _openapi_type_to_ts(schema: Any, *, _depth: int = 0) -> str:
         props: dict = schema.get("properties") or {}
         if not props:
             return "Record<string, unknown>"
-        inner = _render_object_props(props, _depth=_depth + 1)
+        req: list[str] = schema.get("required") or []
+        inner = _render_object_props(props, required=req, _depth=_depth + 1)
         pad = "  " * _depth
         return "{\n" + inner + pad + "}"
 
@@ -57,14 +58,16 @@ def _openapi_type_to_ts(schema: Any, *, _depth: int = 0) -> str:
     return "any"
 
 
-def _render_object_props(properties: dict[str, Any], *, _depth: int = 1) -> str:
+def _render_object_props(properties: dict[str, Any], *, required: list[str] | None = None, _depth: int = 1) -> str:
     pad = "  " * _depth
+    required_set = set(required or [])
     lines: list[str] = []
     for prop_name, prop_schema in properties.items():
         if not isinstance(prop_schema, dict):
             prop_schema = {}
+        optional = "" if prop_name in required_set else "?"
         ts_type = _openapi_type_to_ts(prop_schema, _depth=_depth)
-        lines.append(f"{pad}{prop_name}: {ts_type};")
+        lines.append(f"{pad}{prop_name}{optional}: {ts_type};")
     return "\n".join(lines) + "\n"
 
 
@@ -145,5 +148,6 @@ def generate_api_dts(openapi_json: str) -> str:
         f" */\n\n"
     )
 
-    body = generate_typescript_types(openapi_json)
+    # Reuse already-parsed spec to avoid double json.loads
+    body = generate_typescript_types(json.dumps(spec))
     return header + body

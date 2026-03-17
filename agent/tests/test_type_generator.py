@@ -220,7 +220,7 @@ def test_generate_api_dts_invalid_json_returns_error_comment():
     assert result.startswith("//")
 
 
-def test_no_subprocess_used(monkeypatch):
+def test_no_subprocess_used():
     import agent.nodes.type_generator as mod
 
     subprocess_attrs = [a for a in dir(mod) if "subprocess" in a.lower() or "popen" in a.lower()]
