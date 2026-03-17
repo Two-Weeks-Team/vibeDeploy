@@ -85,6 +85,7 @@ def test_all_doc17_models_in_registry():
         "claude-sonnet-4-6",
         "claude-opus-4-6",
         "gemini-3.1-pro-preview",
+        "gemini-3.1-pro-preview-customtools",
         "gemini-3.1-flash-lite-preview",
     }
     assert required == set(CAPABILITY_REGISTRY.keys())
