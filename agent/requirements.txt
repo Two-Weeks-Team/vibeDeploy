@@ -1,37 +1,38 @@
 # === DO Gradient ADK & LangGraph ===
 gradient-adk>=0.2.11
-gradient>=3.12.0
+gradient>=3.11.0
 langchain-gradient>=0.1.24
-langchain-core>=1.2.19
-langchain-openai>=1.1.11
-langgraph>=1.1.2
+langchain-core>=0.3.81,<0.4.0
+langchain-openai>=0.3.0,<1.0.0
+langchain-anthropic>=0.3.0,<0.4.0
+langgraph>=1.0.0,<1.1.0
 
 # === 외부 LLM SDK (직접 호출 — ADR-A0) ===
-openai>=2.28.0
-anthropic>=0.85.0
-google-genai>=1.67.0
+openai>=1.60.0,<3.0.0
+anthropic>=0.43.0
+google-genai>=1.0.0
 
 # === Web Framework ===
-fastapi>=0.135.1
-uvicorn[standard]>=0.42.0
-pydantic>=2.12.5
-gunicorn>=25.1.0
+fastapi>=0.115.0
+uvicorn[standard]>=0.34.0
+pydantic>=2.9.0
+gunicorn>=23.0.0
 
 # === DO SDK & Tools ===
-pydo>=0.28.0
-boto3>=1.42.69
+pydo>=0.3.0
+boto3>=1.35.0
 
 # === YouTube & Search ===
-yt-dlp>=2026.3.13
-youtube-transcript-api>=1.2.4
-google-api-python-client>=2.192.0
+yt-dlp>=2024.1.0
+youtube-transcript-api>=0.6.3
+google-api-python-client>=2.150.0
 
 # === Database & Storage ===
-httpx>=0.28.1
-python-dotenv>=1.2.2
-PyGithub>=2.8.1
-asyncpg>=0.31.0
-aiosqlite>=0.22.1
+httpx>=0.27.0
+python-dotenv>=1.0.0
+PyGithub>=2.0.0
+asyncpg>=0.30.0
+aiosqlite>=0.20.0
 
 # === Build Validation (ADR-A4: Docker) ===
-docker>=7.1.0
+docker>=7.0.0

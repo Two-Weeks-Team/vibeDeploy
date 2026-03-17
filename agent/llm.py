@@ -89,16 +89,6 @@ def get_runtime_model_config() -> dict[str, str]:
     return {role: get_model_for_role(role, default=value) for role, value in DEFAULT_MODEL_CONFIG.items()}
 
 
-def _coerce_temperature_for_model(model: str, requested: float) -> float:
-    normalized = model.lower()
-    if "deepseek-r1" in normalized and requested < 0.5:
-        return 0.6
-    # Claude models accept 0.0-1.0; clamp if above 1.0
-    if "claude" in normalized:
-        return min(max(requested, 0.0), 1.0)
-    return requested
-
-
 class _RuntimeModelConfig(dict):
     def __init__(self, defaults: dict[str, str]):
         super().__init__(defaults)
@@ -136,13 +126,6 @@ class _RuntimeModelConfig(dict):
 
 
 MODEL_CONFIG = _RuntimeModelConfig(DEFAULT_MODEL_CONFIG)
-
-
-def _strip_openai_prefix(model: str) -> str:
-    """Strip 'openai-' prefix for direct OpenAI API calls."""
-    if model.startswith("openai-"):
-        return model[len("openai-") :]
-    return model
 
 
 def content_to_str(content) -> str:
@@ -220,7 +203,7 @@ def _clone_llm_with_model(llm, model: str):
 
     return get_llm(
         model=model,
-        temperature=_coerce_temperature_for_model(model, float(temperature)),
+        temperature=float(temperature),
         max_tokens=max_tokens,
         request_timeout=request_timeout,
     )
@@ -365,47 +348,28 @@ def _is_retryable_llm_error(exc: Exception) -> bool:
     return any(marker in message for marker in transient_markers)
 
 
-def _is_anthropic_model(model: str) -> bool:
-    normalized = (model or "").strip().lower()
-    return "claude" in normalized or normalized.startswith("anthropic")
-
-
-def _anthropic_model_id(model: str) -> str:
-    mapping = {
-        "anthropic-claude-4.6-sonnet": "claude-sonnet-4-6",
-        "anthropic-claude-opus-4.6": "claude-opus-4-6",
-        "anthropic-claude-opus-4.5": "claude-opus-4-5-20251101",
-        "anthropic-claude-4.5-sonnet": "claude-sonnet-4-5-20250929",
-        "anthropic-claude-sonnet-4": "claude-sonnet-4-20250514",
-    }
-    return mapping.get(model.strip().lower(), model)
-
-
 def get_llm(
     model: str,
     temperature: float = 0.5,
     max_tokens: int = 3000,
     request_timeout: float | None = None,
 ):
-    """Route LLM calls: Anthropic models → ChatAnthropic, others → DO Inference or OpenAI."""
+    """Route LLM calls through the provider adapter registry, then DO Inference, then direct OpenAI."""
+    from .providers.registry import _ensure_adapters_registered, registry, resolve_canonical
+
     effective_max_tokens = max(256, max_tokens)
     effective_timeout = request_timeout or DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS
 
-    anthropic_key = os.getenv("ANTHROPIC_API_KEY", "")
-    if _is_anthropic_model(model) and anthropic_key:
-        from langchain_anthropic import ChatAnthropic
-
-        kwargs: dict = {
-            "model": _anthropic_model_id(model),
-            "api_key": anthropic_key,
-            "temperature": _coerce_temperature_for_model(model, temperature),
-            "max_tokens": effective_max_tokens,
-            "timeout": effective_timeout,
-            "max_retries": 3,
-        }
-        if os.getenv("VIBEDEPLOY_ENABLE_THINKING", "").strip().lower() in {"1", "true", "yes"}:
-            kwargs["model_kwargs"] = {"thinking": {"type": "adaptive"}}
-        return ChatAnthropic(**kwargs)
+    _ensure_adapters_registered()
+    canonical = resolve_canonical(model)
+    result = registry.get_llm(
+        canonical,
+        temperature=temperature,
+        max_tokens=effective_max_tokens,
+        timeout=effective_timeout,
+    )
+    if result is not None:
+        return result
 
     inference_key = os.getenv("GRADIENT_MODEL_ACCESS_KEY", "") or os.getenv("DIGITALOCEAN_INFERENCE_KEY", "")
 
@@ -416,7 +380,7 @@ def get_llm(
             model=model,
             api_key=inference_key,
             base_url=DO_INFERENCE_BASE_URL,
-            temperature=_coerce_temperature_for_model(model, temperature),
+            temperature=float(temperature),
             max_tokens=effective_max_tokens,
             request_timeout=effective_timeout,
             use_responses_api=model_endpoint_type(model) == "responses",
@@ -424,9 +388,10 @@ def get_llm(
 
     from langchain_openai import ChatOpenAI
 
+    stripped = model[len("openai-") :] if model.startswith("openai-") else model
     return ChatOpenAI(
-        model=_strip_openai_prefix(model),
-        temperature=_coerce_temperature_for_model(model, temperature),
+        model=stripped,
+        temperature=float(temperature),
         max_tokens=effective_max_tokens,
         request_timeout=effective_timeout,
         use_responses_api=model_endpoint_type(model) == "responses",

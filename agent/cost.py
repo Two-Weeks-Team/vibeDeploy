@@ -32,6 +32,13 @@ PRICING_PER_MILLION = {
     "openai-gpt-image-1": (5.00, 40.00),
     "fal-ai/flux/schnell": (3.00, 3.00),
     "fal-ai/fast-sdxl": (1.00, 1.00),
+    "gpt-5.4": (2.50, 15.00),
+    "gpt-5.3-codex": (1.75, 14.00),
+    "gpt-5.2": (1.75, 14.00),
+    "claude-sonnet-4-6": (3.00, 15.00),
+    "claude-opus-4-6": (5.00, 25.00),
+    "gemini-3.1-pro-preview": (2.00, 12.00),
+    "gemini-3.1-flash-lite-preview": (0.25, 1.50),
 }
 
 DB_MONTHLY_COST = 15.15
