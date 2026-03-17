@@ -3,10 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ActivePipeline, DashboardEvent, PipelineNodeStatus } from "@/types/dashboard";
 
-const AGENT_URL = process.env.NEXT_PUBLIC_AGENT_URL ?? "http://localhost:8080";
-const DASHBOARD_API_URL = AGENT_URL.includes("ondigitalocean.app")
-  ? `${AGENT_URL}/api`
-  : AGENT_URL;
+import { DASHBOARD_API_URL } from "@/lib/api";
+
 const ACTIVE_POLL_MS = 30_000;
 const MAX_EVENTS = 200;
 
