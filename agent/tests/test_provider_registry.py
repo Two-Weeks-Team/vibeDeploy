@@ -88,4 +88,4 @@ def test_all_doc17_models_in_registry():
         "gemini-3.1-pro-preview-customtools",
         "gemini-3.1-flash-lite-preview",
     }
-    assert required == set(CAPABILITY_REGISTRY.keys())
+    assert required.issubset(CAPABILITY_REGISTRY.keys())

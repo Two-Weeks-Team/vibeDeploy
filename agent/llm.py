@@ -355,12 +355,11 @@ def get_llm(
     request_timeout: float | None = None,
 ):
     """Route LLM calls through the provider adapter registry, then DO Inference, then direct OpenAI."""
-    from .providers.registry import _ensure_adapters_registered, registry, resolve_canonical
+    from .providers.registry import registry, resolve_canonical
 
     effective_max_tokens = max(256, max_tokens)
     effective_timeout = request_timeout or DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS
 
-    _ensure_adapters_registered()
     canonical = resolve_canonical(model)
     result = registry.get_llm(
         canonical,
@@ -377,22 +376,22 @@ def get_llm(
         from langchain_openai import ChatOpenAI
 
         return ChatOpenAI(
-            model=model,
+            model=canonical,
             api_key=inference_key,
             base_url=DO_INFERENCE_BASE_URL,
             temperature=float(temperature),
             max_tokens=effective_max_tokens,
             request_timeout=effective_timeout,
-            use_responses_api=model_endpoint_type(model) == "responses",
+            use_responses_api=model_endpoint_type(canonical) == "responses",
         )
 
     from langchain_openai import ChatOpenAI
 
-    stripped = model[len("openai-") :] if model.startswith("openai-") else model
+    stripped = canonical[len("openai-") :] if canonical.startswith("openai-") else canonical
     return ChatOpenAI(
         model=stripped,
         temperature=float(temperature),
         max_tokens=effective_max_tokens,
         request_timeout=effective_timeout,
-        use_responses_api=model_endpoint_type(model) == "responses",
+        use_responses_api=model_endpoint_type(canonical) == "responses",
     )
