@@ -118,6 +118,24 @@ class ProviderRegistry:
 
     def __init__(self) -> None:
         self._adapters: dict[str, "ProviderAdapter"] = {}
+        self._initialized = False
+        self._init_lock = threading.Lock()
+
+    def _ensure_initialized(self) -> None:
+        if self._initialized:
+            return
+        with self._init_lock:
+            if self._initialized:
+                return
+
+            from .anthropic_adapter import AnthropicAdapter
+            from .google_adapter import GoogleAdapter
+            from .openai_adapter import OpenAIAdapter
+
+            self.register(AnthropicAdapter())
+            self.register(OpenAIAdapter())
+            self.register(GoogleAdapter())
+            self._initialized = True
 
     def register(self, adapter: "ProviderAdapter") -> None:
         """Register a provider adapter under its provider_name."""
@@ -125,7 +143,7 @@ class ProviderRegistry:
 
     def get_adapter(self, model_id: str) -> "ProviderAdapter | None":
         """Return the adapter for model_id, or None if not in CAPABILITY_REGISTRY."""
-        _ensure_adapters_registered()
+        self._ensure_initialized()
         canonical = resolve_canonical(model_id)
         spec = CAPABILITY_REGISTRY.get(canonical)
         if spec is None:
@@ -137,12 +155,10 @@ class ProviderRegistry:
 
         Returns None if model_id is not in CAPABILITY_REGISTRY or adapter raises NotImplementedError.
         """
-        canonical = resolve_canonical(model_id)
-        _ensure_adapters_registered()
-        spec = CAPABILITY_REGISTRY.get(canonical)
-        adapter = self._adapters.get(spec["provider"]) if spec else None
+        adapter = self.get_adapter(model_id)
         if adapter is None:
             return None
+        canonical = resolve_canonical(model_id)
         try:
             return adapter.create_langchain_llm(
                 canonical, temperature=temperature, max_tokens=max_tokens, timeout=timeout, **kwargs
@@ -152,26 +168,8 @@ class ProviderRegistry:
 
 
 registry = ProviderRegistry()
-_adapters_initialized = False
-_adapters_lock = threading.Lock()
 
 
 def _ensure_adapters_registered() -> None:
-    """Lazy-initialize provider adapters into the module-level registry singleton."""
-    global _adapters_initialized
-    if _adapters_initialized:
-        return
-
-    with _adapters_lock:
-        if _adapters_initialized:
-            return
-
-        from .anthropic_adapter import AnthropicAdapter
-        from .google_adapter import GoogleAdapter
-        from .openai_adapter import OpenAIAdapter
-
-        registry.register(AnthropicAdapter())
-        registry.register(OpenAIAdapter())
-        registry.register(GoogleAdapter())
-
-        _adapters_initialized = True
+    """Backward-compatible shim — delegates to registry._ensure_initialized()."""
+    registry._ensure_initialized()
