@@ -451,7 +451,7 @@ GITHUB_ORG=...                     # GitHub org for generated repos
 
 ## Deployment
 
-**Live: [https://vibedeploy-7tgzk.ondigitalocean.app](https://vibedeploy-7tgzk.ondigitalocean.app)** | [Deployment Status & Troubleshooting](docs/DEPLOYMENT_STATUS.md)
+**Live: [https://vibedeploy-7tgzk.ondigitalocean.app](https://vibedeploy-7tgzk.ondigitalocean.app)** | [Deployment Status](docs/DEPLOYMENT_STATUS.md) | [E2E Verification](docs/E2E_VERIFICATION.md)
 
 ### Step-by-Step Deploy
 
