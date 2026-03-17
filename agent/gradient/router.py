@@ -1,6 +1,9 @@
+import logging
 from dataclasses import dataclass
 
 from agent.gradient.agents import AgentConfig, get_agent, list_agents
+
+logger = logging.getLogger(__name__)
 
 _INTENT_RULES: list[tuple[list[str], str]] = [
     (["market", "competitor", "competition", "trend", "audience"], "scout"),
@@ -29,6 +32,7 @@ class RouterAgent:
                 if kw in lowered:
                     config = get_agent(agent_name)
                     if config is None:
+                        logger.warning("[RouterAgent] Agent '%s' in _INTENT_RULES not found in registry", agent_name)
                         continue
                     return RoutingResult(
                         agent_name=agent_name,
@@ -36,6 +40,8 @@ class RouterAgent:
                         reason=f"Input contains '{kw}' keyword matched to {agent_name} agent.",
                     )
         config = get_agent(_DEFAULT_AGENT)
+        if config is None:
+            raise RuntimeError(f"Default agent '{_DEFAULT_AGENT}' not found in registry.")
         return RoutingResult(
             agent_name=_DEFAULT_AGENT,
             agent_config=config,
