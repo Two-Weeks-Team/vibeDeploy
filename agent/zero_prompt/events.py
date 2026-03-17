@@ -145,11 +145,11 @@ def insight_start_event(video_title: str) -> dict:
     }
 
 
-def insight_complete_event(domain: str, features: int, confidence: float) -> dict:
+def insight_complete_event(domain: str, features_found: int, confidence: float) -> dict:
     return {
         "type": ZP_INSIGHT_COMPLETE,
         "domain": domain,
-        "features_found": features,
+        "features_found": features_found,
         "confidence_score": confidence,
     }
 

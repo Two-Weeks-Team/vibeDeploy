@@ -61,7 +61,7 @@ def _detect_domain(text: str) -> str:
     lower = text.lower()
     scores: dict[str, int] = {}
     for domain, keywords in _DOMAIN_KEYWORDS.items():
-        count = sum(1 for kw in keywords if kw in lower)
+        count = sum(1 for kw in keywords if re.search(rf"\b{re.escape(kw)}", lower))
         if count:
             scores[domain] = count
     if not scores:
@@ -95,7 +95,7 @@ def _compute_confidence(text: str, domain: str) -> float:
     if domain != "general":
         domain_kws = _DOMAIN_KEYWORDS.get(domain, [])
         lower = text.lower()
-        hits = sum(1 for kw in domain_kws if kw in lower)
+        hits = sum(1 for kw in domain_kws if re.search(rf"\b{re.escape(kw)}", lower))
         density_score = min(hits / max(len(domain_kws), 1), 1.0) * 0.4
     else:
         density_score = 0.0
