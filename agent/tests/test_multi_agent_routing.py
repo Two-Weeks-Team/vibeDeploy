@@ -5,9 +5,9 @@ from agent.gradient.router import RouterAgent
 
 
 @pytest.mark.unit
-def test_list_agents_returns_three_agents():
+def test_list_agents_returns_six_agents():
     agents = list_agents()
-    assert len(agents) == 3
+    assert len(agents) == 6
 
 
 @pytest.mark.unit
@@ -21,7 +21,7 @@ def test_list_agents_returns_agent_config_instances():
 def test_list_agents_contains_expected_names():
     agents = list_agents()
     names = {a.name for a in agents}
-    assert names == {"scout", "catalyst", "architect"}
+    assert names == {"scout", "catalyst", "architect", "guardian", "advocate", "strategist"}
 
 
 @pytest.mark.unit

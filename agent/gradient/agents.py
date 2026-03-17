@@ -29,6 +29,24 @@ _REGISTRY: dict[str, AgentConfig] = {
         endpoint_url=os.environ.get("GRADIENT_ARCHITECT_ENDPOINT_URL", ""),
         description="Technical lead evaluating tech stack, complexity, and system architecture.",
     ),
+    "guardian": AgentConfig(
+        agent_id="gradient-guardian-v1",
+        name="guardian",
+        endpoint_url=os.environ.get("GRADIENT_GUARDIAN_ENDPOINT_URL", ""),
+        description="Risk assessor identifying security vulnerabilities, scalability issues, and deployment risks.",
+    ),
+    "advocate": AgentConfig(
+        agent_id="gradient-advocate-v1",
+        name="advocate",
+        endpoint_url=os.environ.get("GRADIENT_ADVOCATE_ENDPOINT_URL", ""),
+        description="UX champion evaluating user experience, accessibility, and interface design quality.",
+    ),
+    "strategist": AgentConfig(
+        agent_id="gradient-strategist-v1",
+        name="strategist",
+        endpoint_url=os.environ.get("GRADIENT_STRATEGIST_ENDPOINT_URL", ""),
+        description="Session lead synthesizing all council perspectives into a final verdict and vibe score.",
+    ),
 }
 
 
