@@ -28,3 +28,20 @@ class PaperMetadata(BaseModel):
     source: Literal["openalex", "arxiv"] = "openalex"
     authors: list[str] = []
     doi: str = ""
+
+
+class SearchResult(BaseModel):
+    title: str
+    url: str
+    snippet: str | None = None
+    source: str
+    confidence: Literal["normal", "high"] = "normal"
+
+
+class MarketAnalysis(BaseModel):
+    market_opportunity_score: int = 0
+    competitors: list[str] = []
+    gaps: list[str] = []
+    differentiation: str = ""
+    saturation_level: Literal["low", "medium", "high"] = "medium"
+    search_confidence: Literal["llm_only", "normal", "high"] = "normal"
