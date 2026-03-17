@@ -18,18 +18,6 @@ class ProviderModelSpec(TypedDict):
     max_output_tokens: int
 
 
-LEGACY_MODEL_ALIASES: dict[str, str] = {
-    "openai-gpt-5.4": "gpt-5.4",
-    "openai-gpt-5.3-codex": "gpt-5.3-codex",
-    "openai-gpt-5.2": "gpt-5.2",
-    "google-gemini-3.1-pro": "gemini-3.1-pro-preview",
-    "google-gemini-3.1-flash-lite-preview": "gemini-3.1-flash-lite-preview",
-    "anthropic-claude-4.6-sonnet": "claude-sonnet-4-6",
-    "anthropic-claude-opus-4.6": "claude-opus-4-6",
-    "openai-gpt-oss-120b": "openai-gpt-oss-120b",
-    "openai-gpt-oss-20b": "openai-gpt-oss-20b",
-}
-
 CAPABILITY_REGISTRY: dict[str, ProviderModelSpec] = {
     # --- OpenAI (doc 17 §4) ---
     "gpt-5.4": {
@@ -101,8 +89,10 @@ CAPABILITY_REGISTRY: dict[str, ProviderModelSpec] = {
 }
 
 
+LEGACY_MODEL_ALIASES: dict[str, str] = {}
+
+
 def resolve_canonical(model_id: str) -> str:
-    """Resolve a legacy or provider-prefixed model ID to its canonical form."""
     return LEGACY_MODEL_ALIASES.get(model_id, model_id)
 
 

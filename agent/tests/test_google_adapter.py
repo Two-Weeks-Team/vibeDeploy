@@ -57,9 +57,9 @@ def test_all_gemini_models_route_to_google():
             assert spec["api_style"] == "google_generate_content"
 
 
-def test_legacy_gemini_alias_resolves():
-    assert resolve_canonical("google-gemini-3.1-pro") == "gemini-3.1-pro-preview"
-    assert resolve_canonical("google-gemini-3.1-flash-lite-preview") == "gemini-3.1-flash-lite-preview"
+def test_resolve_canonical_is_identity_for_gemini():
+    assert resolve_canonical("google-gemini-3.1-pro") == "google-gemini-3.1-pro"
+    assert resolve_canonical("gemini-3.1-pro-preview") == "gemini-3.1-pro-preview"
 
 
 def test_canonical_gemini_id_is_identity():

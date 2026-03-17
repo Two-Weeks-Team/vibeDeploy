@@ -13,6 +13,11 @@ from ..prompts.code_templates import (
 )
 from ..state import VibeDeployState
 
+try:
+    from .seed_data import generate_seed_data
+except ImportError:
+    generate_seed_data = None  # type: ignore[assignment]
+
 logger = logging.getLogger(__name__)
 
 # Minimum expected file counts for validation
@@ -3678,3 +3683,28 @@ def _extract_balanced_json_block(raw: str) -> str | None:
                     return raw[start_index : index + 1]
 
     return None
+
+
+_DOMAIN_KEYWORDS = {
+    "recipe": ["recipe", "food", "cook", "meal", "restaurant", "kitchen", "diet"],
+    "project": ["project", "task", "todo", "kanban", "sprint", "manage", "track"],
+    "analytics": ["analytics", "dashboard", "metric", "chart", "report", "data", "insight"],
+    "social": ["social", "post", "feed", "community", "share", "blog", "comment"],
+    "ecommerce": ["shop", "product", "cart", "order", "payment", "store", "buy", "sell"],
+}
+
+
+def detect_domain(idea_summary: str) -> str:
+    text = idea_summary.lower()
+    scores = {}
+    for domain, keywords in _DOMAIN_KEYWORDS.items():
+        scores[domain] = sum(1 for kw in keywords if kw in text)
+    best = max(scores, key=scores.get)
+    return best if scores[best] > 0 else "project"
+
+
+def get_structured_seed_data(idea_summary: str, count: int = 8) -> list[dict]:
+    domain = detect_domain(idea_summary)
+    if generate_seed_data is not None:
+        return generate_seed_data(domain, count)
+    return [{"id": i + 1, "name": f"Sample {domain} item {i + 1}", "domain": domain} for i in range(count)]
