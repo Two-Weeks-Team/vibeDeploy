@@ -101,6 +101,7 @@ class ZPCard(BaseModel):
         "build_failed",
     ] = "analyzing"
     score: int = 0
+    title: str = ""
     thread_id: str | None = None
 
 

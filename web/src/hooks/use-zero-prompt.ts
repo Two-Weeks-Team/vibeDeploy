@@ -3,7 +3,25 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { getSession, startSession, queueBuild, passCard } from "@/lib/zero-prompt-api";
 import type { ZPSession, ZPAction } from "@/types/zero-prompt";
-import { DASHBOARD_API_URL } from "@/lib/api";
+
+function formatEventMessage(data: Record<string, unknown>): string {
+  const type = String(data.type || "");
+  if (type === "zp.session.start") return `Session started (goal: ${data.goal_go_cards} apps)`;
+  if (type === "zp.transcript.start") return `Extracting transcript for ${data.video_id}...`;
+  if (type === "zp.transcript.complete") return `Transcript: ${data.token_count} tokens (${data.source})`;
+  if (type === "zp.insight.start") return `Analyzing idea from ${data.video_title || data.video_id}...`;
+  if (type === "zp.insight.complete") return `Idea: ${data.domain} domain, ${data.features_found} features (confidence: ${((data.confidence_score as number) * 100).toFixed(0)}%)`;
+  if (type === "zp.paper.search") return `Searching papers: "${data.query}"`;
+  if (type === "zp.paper.found") return `Found ${data.total} papers from ${data.source}`;
+  if (type === "zp.brainstorm.start") return `Brainstorming "${data.idea}" with ${data.paper_count} papers...`;
+  if (type === "zp.brainstorm.complete") return `Brainstorm: ${data.novel_features} features, boost +${((data.novelty_boost as number) * 100).toFixed(0)}%`;
+  if (type === "zp.compete.start") return `Analyzing competition for "${data.query}"...`;
+  if (type === "zp.compete.complete") return `Competition: ${data.competitors_found} found, saturation: ${data.saturation_level}`;
+  if (type === "zp.verdict.go") return `✅ GO (score: ${data.score}) — ${data.reason}`;
+  if (type === "zp.verdict.nogo") return `❌ NO-GO (score: ${data.score}) — ${data.reason}`;
+  if (type === "zp.session.complete") return `Session complete!`;
+  return type;
+}
 
 export function useZeroPrompt() {
   const [session, setSession] = useState<ZPSession | null>(null);
@@ -13,7 +31,6 @@ export function useZeroPrompt() {
   const [error, setError] = useState<string | null>(null);
   
   const sessionIdRef = useRef<string | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
 
   const fetchSession = useCallback(async (id: string) => {
     try {
@@ -36,67 +53,60 @@ export function useZeroPrompt() {
     return () => clearInterval(interval);
   }, [session, fetchSession]);
 
-  const connectSSE = useCallback((id: string) => {
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
-
-    (async () => {
-      try {
-        const res = await fetch(`${DASHBOARD_API_URL}/zero-prompt/${id}/events`, {
-          signal: controller.signal,
-        });
-        if (!res.ok || !res.body) throw new Error("SSE connect failed");
-
-        setIsConnected(true);
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() ?? "";
-
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed || trimmed.startsWith(":")) continue;
-            if (!trimmed.startsWith("data: ")) continue;
-
-            try {
-              const data = JSON.parse(trimmed.slice(6));
-              if (data.type === "action") {
-                setActions((prev) => {
-                  const newActions = [data.action, ...prev];
-                  return newActions.slice(0, 300);
-                });
-              } else if (data.type === "session_update") {
-                setSession(data.session);
-              }
-            } catch {
-            }
-          }
-        }
-      } catch (err) {
-        if (err instanceof DOMException && err.name === "AbortError") return;
-        setIsConnected(false);
-      }
-    })();
-  }, []);
-
   const handleStartSession = async (goal?: number) => {
     setIsLoading(true);
     setError(null);
     try {
-      const { session_id } = await startSession(goal);
-      sessionIdRef.current = session_id;
-      await fetchSession(session_id);
-      connectSSE(session_id);
+      const response = await startSession(goal);
+      if (!response.body) throw new Error("No response body");
+      
+      setIsConnected(true);
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith("data: ")) continue;
+
+          try {
+            const data = JSON.parse(trimmed.slice(6));
+            
+            if (data.type === "zp.session.start" && data.session_id) {
+              sessionIdRef.current = data.session_id;
+            }
+            
+            setActions((prev) => {
+              const action: ZPAction = {
+                type: data.type,
+                timestamp: new Date().toISOString(),
+                message: formatEventMessage(data),
+              };
+              return [action, ...prev].slice(0, 300);
+            });
+
+            if (data.type?.includes("verdict") && sessionIdRef.current) {
+              await fetchSession(sessionIdRef.current);
+            }
+          } catch {}
+        }
+      }
+      
+      if (sessionIdRef.current) {
+        await fetchSession(sessionIdRef.current);
+      }
+      setIsConnected(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to start session");
+      setError(err instanceof Error ? err.message : "Failed to start");
+      setIsConnected(false);
     } finally {
       setIsLoading(false);
     }
@@ -121,12 +131,6 @@ export function useZeroPrompt() {
       console.error("Failed to pass card", err);
     }
   };
-
-  useEffect(() => {
-    return () => {
-      abortRef.current?.abort();
-    };
-  }, []);
 
   return {
     session,

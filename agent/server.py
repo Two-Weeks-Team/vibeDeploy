@@ -14,6 +14,7 @@ Run: python -m agent.server
 import asyncio
 import hmac
 import json
+import logging
 import os
 import re
 import shutil
@@ -40,6 +41,8 @@ from .tools.digitalocean import list_apps as list_digitalocean_apps
 
 _AGENT_DIR = Path(__file__).resolve().parent
 load_dotenv(_AGENT_DIR / ".env.test")
+
+logger = logging.getLogger(__name__)
 
 _store: ResultStore | None = None
 
@@ -1010,14 +1013,51 @@ async def zero_prompt_start(request: ZPStartRequest):
     async def event_stream() -> AsyncGenerator[str, None]:
         yield _fmt(ZP_SESSION_START, start_event)
 
-        video_counter = 0
+        videos = []
+        try:
+            from .zero_prompt.discovery import YouTubeDiscovery
+
+            discovery = YouTubeDiscovery()
+            candidates = await discovery.fetch_candidate_pool(
+                max_results=30, min_views=5000, min_likes=100, min_engagement_rate=0.01
+            )
+            videos = [(c.video_id, c.title, c.description) for c in candidates]
+        except Exception as exc:
+            logger.warning("[ZP] YouTube discovery failed: %s, using fallback", str(exc)[:200])
+
+        if not videos:
+            fallback_topics = [
+                "AI fitness tracker app",
+                "Recipe sharing with AI recommendations",
+                "Smart budget expense tracker",
+                "Language learning spaced repetition",
+                "Pet health monitoring symptom checker",
+                "Project management remote teams",
+                "AI resume builder job matching",
+                "Meditation guided sessions tracker",
+                "Restaurant queue management AI",
+                "Sustainable grocery delivery optimizer",
+                "AI flashcard study assistant",
+                "Social media sentiment dashboard",
+                "AR interior design visualizer",
+                "Code review automation tool",
+                "Handmade crafts marketplace",
+            ]
+            videos = [(f"fallback-{i}", topic, topic) for i, topic in enumerate(fallback_topics)]
+
+        video_idx = 0
         while orch.should_continue_exploring(session_id):
-            video_id = f"auto-discovery-{video_counter}"
-            video_counter += 1
-            step_events = await orch.exploration_step(session_id, video_id)
+            if video_idx >= len(videos):
+                break
+            vid_id, vid_title, vid_desc = videos[video_idx]
+            video_idx += 1
+
+            step_events = await orch.exploration_step(
+                session_id, vid_id, video_title=vid_title, video_description=vid_desc
+            )
             for evt in step_events:
                 yield _fmt(evt.get("type", "zp.step"), evt)
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(0.05)
 
         yield _fmt("zp.session.complete", {"session_id": session_id, "type": "zp.session.complete"})
 
@@ -1026,6 +1066,14 @@ async def zero_prompt_start(request: ZPStartRequest):
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
     )
+
+
+@app.get("/api/zero-prompt/active")
+@app.get("/zero-prompt/active")
+async def zero_prompt_active():
+    orch = _get_zp_orchestrator()
+    sessions = [s.model_dump() for s in orch._sessions.values()]
+    return {"sessions": sessions, "count": len(sessions)}
 
 
 @app.get("/api/zero-prompt/{session_id}")

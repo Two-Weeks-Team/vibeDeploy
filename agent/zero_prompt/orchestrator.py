@@ -148,6 +148,8 @@ class StreamingOrchestrator:
         session_id: str,
         video_id: str,
         *,
+        video_title: str = "",
+        video_description: str = "",
         verdict_fn: VerdictFn | None = None,
     ) -> list[dict]:
         session = self._sessions.get(session_id)
@@ -155,50 +157,106 @@ class StreamingOrchestrator:
             return []
 
         card_id = str(uuid.uuid4())
-        card = ZPCard(
-            card_id=card_id,
-            video_id=video_id,
-            status="analyzing",
-            score=0,
-            thread_id=None,
-        )
+        card = ZPCard(card_id=card_id, video_id=video_id, status="analyzing", score=0)
         session.cards.append(card)
-
         events: list[dict] = []
 
         events.append(transcript_start_event(video_id))
-        events.append(transcript_complete_event(video_id, "auto", 0))
+        try:
+            from agent.zero_prompt.transcript import fetch_transcript_artifact
+
+            transcript = await fetch_transcript_artifact(video_id)
+            transcript_text = transcript.text
+            events.append(transcript_complete_event(video_id, transcript.source, transcript.token_count))
+        except Exception:
+            transcript_text = video_description or video_title or ""
+            events.append(transcript_complete_event(video_id, "error", 0))
 
         events.append(insight_start_event(video_id))
-        events.append(insight_complete_event("unknown", 0, 0.0))
+        try:
+            from agent.zero_prompt.insight_extractor import extract_insight_from_transcript, extract_with_gemini
 
-        events.append(paper_search_event("", ["openalex"]))
-        events.append(paper_found_event(0, "openalex"))
+            idea = await extract_with_gemini(transcript_text)
+            if idea is None:
+                idea = extract_insight_from_transcript(transcript_text, video_title)
+            events.append(insight_complete_event(idea.domain, len(idea.key_features), idea.confidence_score))
+        except Exception:
+            from agent.zero_prompt.schemas import AppIdea
 
-        events.append(brainstorm_start_event("", 0))
-        events.append(brainstorm_complete_event(0, 0, 0.0))
+            idea = AppIdea(name=video_title or video_id, domain="unknown", description="", target_audience="")
+            events.append(insight_complete_event("unknown", 0, 0.0))
 
-        events.append(compete_start_event(""))
-        events.append(compete_complete_event(0, "medium", "normal"))
+        idea_query = f"{idea.name} {idea.domain}" if idea.name else video_title
+        events.append(paper_search_event(idea_query, ["openalex", "arxiv"]))
+        try:
+            from agent.zero_prompt.paper_search import search_papers
+
+            papers = await search_papers(idea_query, max_results=3)
+            events.append(paper_found_event(len(papers), "openalex+arxiv"))
+        except Exception:
+            papers = []
+            events.append(paper_found_event(0, "error"))
+
+        events.append(brainstorm_start_event(idea.name or video_title, len(papers)))
+        try:
+            from agent.zero_prompt.paper_brainstorm import enhance_idea_with_papers
+
+            enhanced = enhance_idea_with_papers(idea.description or idea.name, papers)
+            novelty_boost = enhanced.novelty_boost
+            events.append(
+                brainstorm_complete_event(len(enhanced.novel_features), len(enhanced.unexplored_angles), novelty_boost)
+            )
+        except Exception:
+            novelty_boost = 0.0
+            events.append(brainstorm_complete_event(0, 0, 0.0))
+
+        events.append(compete_start_event(idea.name or video_title))
+        try:
+            from agent.zero_prompt.competitive_analysis import analyze_competition
+
+            market = await analyze_competition(idea.name or video_title)
+            market_opportunity = market.market_opportunity_score
+            events.append(
+                compete_complete_event(len(market.competitors), market.saturation_level, market.search_confidence)
+            )
+        except Exception:
+            market_opportunity = 50
+            events.append(compete_complete_event(0, "medium", "llm_only"))
 
         if verdict_fn is not None:
             try:
                 decision, score, reason, reason_code = await verdict_fn(session_id, video_id, card_id)
             except Exception:
                 card.status = "nogo"
-                card.score = 0
                 events.append(verdict_nogo_event(0, "analysis_error", "verdict_exception"))
                 return events
         else:
-            decision, score, reason, reason_code = "GO", 75, "stub verdict", "high_potential"
+            try:
+                from agent.zero_prompt.verdict import compute_verdict_score, determine_verdict
+
+                confidence = idea.confidence_score if idea else 0.5
+                engagement = 0.5
+                differentiation = 100 - (market_opportunity if market_opportunity > 50 else 30)
+                score = compute_verdict_score(
+                    confidence, engagement, market_opportunity, novelty_boost, differentiation
+                )
+                verdict = determine_verdict(score, market_opportunity, novelty_boost, differentiation)
+                decision = verdict.decision
+                reason = verdict.reason
+                reason_code = verdict.reason_code
+                score = verdict.score
+            except Exception:
+                decision, score, reason, reason_code = "GO", 70, "default verdict", "high_potential"
 
         if decision == "GO":
             card.status = "go_ready"
             card.score = score
+            card.title = idea.name or video_title or video_id
             events.append(verdict_go_event(score, reason, reason_code))
         else:
             card.status = "nogo"
             card.score = score
+            card.title = idea.name or video_title or video_id
             events.append(verdict_nogo_event(score, reason, reason_code))
 
         return events
