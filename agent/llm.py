@@ -5,7 +5,7 @@ import logging
 import os
 from collections.abc import Iterator
 
-from .model_capabilities import model_endpoint_type, selected_runtime_model
+from .model_capabilities import model_endpoint_type
 
 DO_INFERENCE_BASE_URL = "https://inference.do-ai.run/v1"
 DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS = float(os.getenv("LLM_REQUEST_TIMEOUT_SECONDS", "180"))
@@ -17,23 +17,25 @@ _llm_semaphore: asyncio.Semaphore | None = None
 _llm_rate_lock: asyncio.Lock | None = None
 _llm_next_request_at = 0.0
 
-# Text generation defaults are unified on gpt-oss-120b so every LLM stage follows
-# the same runtime profile unless an explicit env override is provided.
 DEFAULT_MODEL_CONFIG = {
-    "council": selected_runtime_model(),
-    "strategist": selected_runtime_model(),
-    "cross_exam": selected_runtime_model(),
-    "code_gen": selected_runtime_model(),
-    "code_gen_frontend": selected_runtime_model(),
-    "code_gen_backend": selected_runtime_model(),
-    "ci_repair": selected_runtime_model(),
-    "doc_gen": selected_runtime_model(),
+    "council": "claude-sonnet-4-6",
+    "strategist": "gpt-5.4",
+    "cross_exam": "claude-sonnet-4-6",
+    "code_gen": "gpt-5.3-codex",
+    "code_gen_frontend": "gpt-5.3-codex",
+    "code_gen_backend": "gpt-5.3-codex",
+    "ci_repair": "gpt-5.2",
+    "doc_gen": "gpt-5.4",
     "image": "fal-ai/flux/schnell",
-    "brainstorm": selected_runtime_model(),
-    "brainstorm_synthesis": selected_runtime_model(),
-    "input": selected_runtime_model(),
-    "decision": selected_runtime_model(),
-    "web_search": selected_runtime_model(),
+    "brainstorm": "gpt-5.4",
+    "brainstorm_synthesis": "gpt-5.4",
+    "input": "claude-sonnet-4-6",
+    "decision": "gpt-5.4",
+    "web_search": "claude-sonnet-4-6",
+    "ui_design": "gemini-3.1-pro-preview",
+    "code_review": "gpt-5.4",
+    "api_contract": "gpt-5.4",
+    "zero_prompt_discovery": "gemini-3.1-flash-lite-preview",
 }
 
 _MODEL_ENV_OVERRIDES = {
@@ -73,6 +75,10 @@ _MODEL_ENV_OVERRIDES = {
     "input": ("VIBEDEPLOY_MODEL_INPUT", "VIBEDEPLOY_MODEL_ALL", "VIBEDEPLOY_MODEL"),
     "decision": ("VIBEDEPLOY_MODEL_DECISION", "VIBEDEPLOY_MODEL_ALL", "VIBEDEPLOY_MODEL"),
     "web_search": ("VIBEDEPLOY_MODEL_WEB_SEARCH", "VIBEDEPLOY_MODEL_ALL", "VIBEDEPLOY_MODEL"),
+    "ui_design": ("VIBEDEPLOY_MODEL_UI_DESIGN", "VIBEDEPLOY_MODEL_ALL", "VIBEDEPLOY_MODEL"),
+    "code_review": ("VIBEDEPLOY_MODEL_CODE_REVIEW", "VIBEDEPLOY_MODEL_ALL", "VIBEDEPLOY_MODEL"),
+    "api_contract": ("VIBEDEPLOY_MODEL_API_CONTRACT", "VIBEDEPLOY_MODEL_ALL", "VIBEDEPLOY_MODEL"),
+    "zero_prompt_discovery": ("VIBEDEPLOY_MODEL_ZERO_PROMPT", "VIBEDEPLOY_MODEL_ALL", "VIBEDEPLOY_MODEL"),
 }
 
 
