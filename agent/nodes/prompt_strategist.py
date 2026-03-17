@@ -34,6 +34,18 @@ _OFFICIAL_MODEL_SOURCES = {
             "url": "https://raw.githubusercontent.com/deepseek-ai/DeepSeek-R1/master/README.md",
         }
     ],
+    "gemini": [
+        {
+            "label": "Gemini Structured Output Guide",
+            "url": "https://ai.google.dev/gemini-api/docs/structured-output",
+        }
+    ],
+    "openai_gpt5": [
+        {
+            "label": "OpenAI Responses API Guide",
+            "url": "https://developers.openai.com/api/docs/guides/migrate-to-responses",
+        }
+    ],
     "generic": [],
 }
 
@@ -58,6 +70,18 @@ _STATIC_MODEL_GUIDANCE = {
         "Place task-critical instructions in the user message because DeepSeek-R1 guidance recommends not relying on a system prompt.",
         "Use a moderate temperature band when DeepSeek is active to avoid repetition and unstable outputs.",
         "Ask for the final JSON/file-map only and do not invite free-form commentary.",
+    ],
+    "gemini": [
+        "Use response_schema with response_mime_type='application/json' to force structured output instead of free-form text.",
+        "Prefer explicit step-by-step instructions over implicit conventions; Gemini follows sequential prompts reliably.",
+        "Leverage native multimodal capability: include screenshots or UI mockups as image input when available.",
+        "Temperature 0.3-0.5 for code generation, 0.7-0.8 for creative design tasks.",
+    ],
+    "openai_gpt5": [
+        "Use the Responses API with structured output (JSON Schema) for guaranteed format compliance.",
+        "Set reasoning.effort to 'medium' for code generation and 'high' for architecture/review tasks.",
+        "For large codebases, leverage the 1M+ context window but beware of 2x pricing above 272K tokens.",
+        "Use tool_search capability for cost optimization in multi-tool agent workflows.",
     ],
     "generic": [
         "Keep the task contract explicit, deterministic, and parseable.",
@@ -98,6 +122,10 @@ def infer_model_family(model: str) -> str:
     normalized = (model or "").strip().lower()
     if "claude" in normalized or normalized.startswith("anthropic"):
         return "anthropic"
+    if "gemini" in normalized:
+        return "gemini"
+    if "gpt-5" in normalized and "oss" not in normalized:
+        return "openai_gpt5"
     if "gpt-oss" in normalized:
         return "openai_gpt_oss"
     if "qwen3" in normalized or "qwen-" in normalized or normalized.startswith("qwen"):
@@ -221,6 +249,16 @@ def _extract_guidance_from_source(family: str, source: str) -> list[str]:
             notes.append(
                 "Allow structured internal reasoning, but still demand a compact final artifact with no extra prose."
             )
+    elif family == "gemini":
+        if "structured output" in normalized.lower() or "response_schema" in normalized.lower():
+            notes.append("Use response_schema for structured JSON output instead of parsing free-form text.")
+        if "grounding" in normalized.lower():
+            notes.append("Enable Google Search grounding for factual verification when available.")
+    elif family == "openai_gpt5":
+        if "responses api" in normalized.lower() or "structured outputs" in normalized.lower():
+            notes.append("Use the Responses API with JSON Schema for guaranteed structured output.")
+        if "reasoning" in normalized.lower():
+            notes.append("Tune reasoning.effort based on task complexity: medium for code, high for architecture.")
 
     return notes
 
