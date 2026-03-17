@@ -30,6 +30,14 @@ class PaperMetadata(BaseModel):
     doi: str = ""
 
 
+class EnhancedIdea(BaseModel):
+    original_idea: str
+    novel_features: list[str] = []
+    scientific_backing: str = ""
+    unexplored_angles: list[str] = []
+    novelty_boost: float = 0.0
+
+
 class SearchResult(BaseModel):
     title: str
     url: str

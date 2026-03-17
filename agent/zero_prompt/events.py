@@ -10,6 +10,9 @@ ZP_COMPETE_START = "zp.compete.start"
 ZP_COMPETE_COMPLETE = "zp.compete.complete"
 ZP_COMPETE_ERROR = "zp.compete.error"
 
+ZP_BRAINSTORM_START = "zp.brainstorm.start"
+ZP_BRAINSTORM_COMPLETE = "zp.brainstorm.complete"
+
 
 def search_start_event(query: str, category: str) -> dict:
     return {
@@ -78,4 +81,21 @@ def compete_error_event(error: str) -> dict:
     return {
         "type": ZP_COMPETE_ERROR,
         "error": error,
+    }
+
+
+def brainstorm_start_event(idea: str, paper_count: int) -> dict:
+    return {
+        "type": ZP_BRAINSTORM_START,
+        "idea": idea,
+        "paper_count": paper_count,
+    }
+
+
+def brainstorm_complete_event(novel_features: int, unexplored_angles: int, novelty_boost: float) -> dict:
+    return {
+        "type": ZP_BRAINSTORM_COMPLETE,
+        "novel_features": novel_features,
+        "unexplored_angles": unexplored_angles,
+        "novelty_boost": novelty_boost,
     }

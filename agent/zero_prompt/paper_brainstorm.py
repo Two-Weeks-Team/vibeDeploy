@@ -4,6 +4,14 @@ import re
 
 from .schemas import EnhancedIdea
 
+_MIN_SENTENCE_LEN = 15
+_FEATURE_TRUNCATE_LEN = 150
+_TITLE_TRUNCATE_LEN = 60
+_GAP_TRUNCATE_LEN = 200
+_CITATION_TITLE_LEN = 80
+_MAX_NOVEL_FEATURES = 5
+_MAX_UNEXPLORED_ANGLES = 3
+
 _NOVELTY_MARKERS = [
     "propose",
     "introduce",
@@ -51,7 +59,7 @@ def _tokenize(text: str) -> set[str]:
 
 def _split_sentences(text: str) -> list[str]:
     sentences = re.split(r"(?<=[.!?])\s+", text.strip())
-    return [s.strip() for s in sentences if len(s.strip()) > 15]
+    return [s.strip() for s in sentences if len(s.strip()) > _MIN_SENTENCE_LEN]
 
 
 def _relevance_score(idea_tokens: set[str], text: str) -> float:
@@ -72,8 +80,8 @@ def _extract_novel_feature(idea_tokens: set[str], abstract: str, title: str) -> 
         sent_tokens = _tokenize(sent)
         overlap = idea_tokens & sent_tokens
         if len(overlap) >= 1:
-            summary = sent[:150].rstrip(",;")
-            return f"{summary} [from: {title[:60]}]"
+            summary = sent[:_FEATURE_TRUNCATE_LEN].rstrip(",;")
+            return f"{summary} [from: {title[:_TITLE_TRUNCATE_LEN]}]"
     return None
 
 
@@ -82,31 +90,33 @@ def _extract_gap_angle(abstract: str) -> str | None:
     for sent in sentences:
         lower = sent.lower()
         if any(marker in lower for marker in _GAP_MARKERS):
-            return sent[:200].rstrip(",;")
+            return sent[:_GAP_TRUNCATE_LEN].rstrip(",;")
     return None
 
 
-def _build_citation(paper: object) -> str:
+def _get_paper_attr(paper: object, key: str, default: object = "") -> object:
+    """Extract an attribute from a paper dict or object."""
     if isinstance(paper, dict):
-        title = paper.get("title", "") or ""
-        year = paper.get("year", 0) or 0
-        authors = paper.get("authors", []) or []
-    else:
-        title = getattr(paper, "title", "") or ""
-        year = getattr(paper, "year", 0) or 0
-        authors = getattr(paper, "authors", []) or []
+        return paper.get(key, default)
+    return getattr(paper, key, default)
+
+
+def _build_citation(paper: object) -> str:
+    title = _get_paper_attr(paper, "title", "")
+    year = _get_paper_attr(paper, "year", 0)
+    authors = _get_paper_attr(paper, "authors", [])
 
     if not title:
         return ""
 
     first_author_last = ""
     if authors:
-        parts = str(authors[0]).split()
+        parts = authors[0].split()
         first_author_last = parts[-1] if parts else ""
 
     year_str = str(year) if year else "n.d."
     author_part = f"{first_author_last} " if first_author_last else ""
-    return f"{author_part}({year_str}): {title[:80]}"
+    return f"{author_part}({year_str}): {title[:_CITATION_TITLE_LEN]}"
 
 
 def enhance_idea_with_papers(idea: str, papers: list) -> EnhancedIdea:
@@ -136,12 +146,8 @@ def enhance_idea_with_papers(idea: str, papers: list) -> EnhancedIdea:
     relevance_scores: list[float] = []
 
     for paper in papers:
-        if isinstance(paper, dict):
-            abstract = paper.get("abstract", "") or ""
-            title = paper.get("title", "") or ""
-        else:
-            abstract = getattr(paper, "abstract", "") or ""
-            title = getattr(paper, "title", "") or ""
+        abstract = _get_paper_attr(paper, "abstract", "")
+        title = _get_paper_attr(paper, "title", "")
 
         rel = _relevance_score(idea_tokens, f"{title} {abstract}")
         relevance_scores.append(rel)
@@ -158,8 +164,8 @@ def enhance_idea_with_papers(idea: str, papers: list) -> EnhancedIdea:
         if citation:
             citations.append(citation)
 
-    novel_features = novel_features[:5]
-    unexplored_angles = unexplored_angles[:3]
+    novel_features = novel_features[:_MAX_NOVEL_FEATURES]
+    unexplored_angles = unexplored_angles[:_MAX_UNEXPLORED_ANGLES]
     scientific_backing = "; ".join(citations)
 
     avg_relevance = sum(relevance_scores) / len(relevance_scores) if relevance_scores else 0.0

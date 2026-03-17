@@ -23,7 +23,9 @@ _ABSTRACT_GAPS = (
 )
 
 
-def _paper(title: str, abstract: str = "", year: int = 2023, citations: int = 10, authors: list | None = None) -> dict:
+def _paper(
+    title: str, abstract: str = "", year: int = 2023, citations: int = 10, authors: list[str] | None = None
+) -> dict:
     return {
         "title": title,
         "abstract": abstract,
