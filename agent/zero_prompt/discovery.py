@@ -32,8 +32,10 @@ def _get_api_key() -> str:
     return key
 
 
-def _cache_key(categories: tuple[str, ...], min_views: int, min_engagement_rate: float) -> str:
-    return f"{','.join(sorted(categories))}|{min_views}|{min_engagement_rate}"
+def _cache_key(
+    categories: tuple[str, ...], min_views: int, min_likes: int, min_engagement_rate: float, max_results: int
+) -> str:
+    return f"{','.join(sorted(categories))}|{min_views}|{min_likes}|{min_engagement_rate}|{max_results}"
 
 
 def _is_cache_valid(key: str) -> bool:
@@ -51,22 +53,22 @@ def _compute_engagement_rate(views: int, likes: int, comments: int) -> float:
 
 async def _http_get(url: str, params: dict) -> dict:
     last_exc: Exception | None = None
-    for attempt in range(_MAX_RETRIES + 1):
-        try:
-            async with httpx.AsyncClient(timeout=_REQUEST_TIMEOUT_SECONDS) as client:
+    async with httpx.AsyncClient(timeout=_REQUEST_TIMEOUT_SECONDS) as client:
+        for attempt in range(_MAX_RETRIES + 1):
+            try:
                 resp = await client.get(url, params=params)
                 resp.raise_for_status()
                 return resp.json()
-        except (httpx.HTTPStatusError, httpx.TimeoutException, httpx.ConnectError) as exc:
-            last_exc = exc
-            if attempt < _MAX_RETRIES:
-                logger.warning(
-                    "[YouTubeDiscovery] Retry %d/%d for %s: %s",
-                    attempt + 1,
-                    _MAX_RETRIES,
-                    url,
-                    str(exc)[:200],
-                )
+            except (httpx.HTTPStatusError, httpx.TimeoutException, httpx.ConnectError) as exc:
+                last_exc = exc
+                if attempt < _MAX_RETRIES:
+                    logger.warning(
+                        "[YouTubeDiscovery] Retry %d/%d for %s: %s",
+                        attempt + 1,
+                        _MAX_RETRIES,
+                        url,
+                        str(exc)[:200],
+                    )
     raise last_exc  # type: ignore[misc]
 
 
@@ -173,7 +175,7 @@ class YouTubeDiscovery:
         if categories is None:
             categories = list(_CATEGORY_QUERIES.keys())
 
-        cache_k = _cache_key(tuple(categories), min_views, min_engagement_rate)
+        cache_k = _cache_key(tuple(categories), min_views, min_likes, min_engagement_rate, max_results)
         if _is_cache_valid(cache_k):
             return _CACHE[cache_k][1]
 
@@ -183,7 +185,7 @@ class YouTubeDiscovery:
             try:
                 ids = await _search_videos(self._api_key, query_params, max_results=max_results)
                 all_video_ids.extend(ids)
-            except Exception:
+            except (httpx.HTTPStatusError, httpx.TimeoutException, httpx.ConnectError):
                 logger.exception("[YouTubeDiscovery] Search failed for category=%s", cat)
 
         all_video_ids = list(dict.fromkeys(all_video_ids))
