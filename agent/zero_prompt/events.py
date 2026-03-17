@@ -24,6 +24,14 @@ ZP_TRANSCRIPT_COMPLETE = "zp.transcript.complete"
 ZP_INSIGHT_START = "zp.insight.start"
 ZP_INSIGHT_COMPLETE = "zp.insight.complete"
 
+ZP_SESSION_PAUSE = "zp.session.pause"
+ZP_SESSION_RESUME = "zp.session.resume"
+ZP_SESSION_ERROR = "zp.session.error"
+ZP_VIDEO_START = "zp.video.start"
+ZP_CARD_PASSED = "zp.card.passed"
+ZP_BUILD_QUEUED = "zp.build.queued"
+ZP_BUILD_START = "zp.build.start"
+
 
 def session_start_event(session_id: str, goal_go_cards: int) -> dict:
     return {
@@ -168,3 +176,31 @@ def transcript_complete_event(video_id: str, source: str, token_count: int) -> d
         "source": source,
         "token_count": token_count,
     }
+
+
+def session_pause_event(session_id: str) -> dict:
+    return {"type": ZP_SESSION_PAUSE, "session_id": session_id}
+
+
+def session_resume_event(session_id: str) -> dict:
+    return {"type": ZP_SESSION_RESUME, "session_id": session_id}
+
+
+def session_error_event(session_id: str, error: str) -> dict:
+    return {"type": ZP_SESSION_ERROR, "session_id": session_id, "error": error}
+
+
+def video_start_event(session_id: str, video_id: str) -> dict:
+    return {"type": ZP_VIDEO_START, "session_id": session_id, "video_id": video_id}
+
+
+def card_passed_event(session_id: str, card_id: str) -> dict:
+    return {"type": ZP_CARD_PASSED, "session_id": session_id, "card_id": card_id}
+
+
+def build_queued_event(session_id: str, card_id: str) -> dict:
+    return {"type": ZP_BUILD_QUEUED, "session_id": session_id, "card_id": card_id}
+
+
+def build_start_event(session_id: str, card_id: str) -> dict:
+    return {"type": ZP_BUILD_START, "session_id": session_id, "card_id": card_id}
