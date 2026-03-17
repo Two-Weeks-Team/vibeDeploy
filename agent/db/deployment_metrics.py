@@ -14,7 +14,7 @@ class DeploymentMetric(BaseModel):
     duration_seconds: float
     deploy_method: str
     error_message: str = ""
-    created_at: str
+    created_at: datetime
 
 
 def compute_success_rate(metrics: list[DeploymentMetric]) -> float:
@@ -47,17 +47,13 @@ class MetricsStore:
     def get_metrics(self, limit: int = 50) -> list[DeploymentMetric]:
         """Return the most recent *limit* metrics (newest first)."""
         with self._lock:
-            return list(reversed(self._metrics[-limit:])) if self._metrics else []
+            return list(reversed(self._metrics[-limit:]))
 
     def get_success_rate(self, window_hours: int = 24) -> float:
         """Return success rate for metrics created within the last *window_hours* hours."""
         with self._lock:
             now = datetime.now(tz=timezone.utc)
-            window_metrics = [
-                m
-                for m in self._metrics
-                if (now - datetime.fromisoformat(m.created_at)).total_seconds() <= window_hours * 3600
-            ]
+            window_metrics = [m for m in self._metrics if (now - m.created_at).total_seconds() <= window_hours * 3600]
         return compute_success_rate(window_metrics)
 
     def get_summary(self) -> dict:
@@ -66,17 +62,27 @@ class MetricsStore:
             metrics = list(self._metrics)
 
         total = len(metrics)
-        success = sum(1 for m in metrics if m.status == "success")
-        failed = sum(1 for m in metrics if m.status == "failed")
-        timeout = sum(1 for m in metrics if m.status == "timeout")
-        success_rate = compute_success_rate(metrics)
-        avg_duration = compute_avg_duration(metrics)
+        if not total:
+            return {"total": 0, "success": 0, "failed": 0, "timeout": 0, "success_rate": 0.0, "avg_duration": 0.0}
+
+        success = 0
+        failed = 0
+        timeout = 0
+        total_duration = 0.0
+        for m in metrics:
+            if m.status == "success":
+                success += 1
+            elif m.status == "failed":
+                failed += 1
+            elif m.status == "timeout":
+                timeout += 1
+            total_duration += m.duration_seconds
 
         return {
             "total": total,
             "success": success,
             "failed": failed,
             "timeout": timeout,
-            "success_rate": success_rate,
-            "avg_duration": avg_duration,
+            "success_rate": success / total,
+            "avg_duration": total_duration / total,
         }

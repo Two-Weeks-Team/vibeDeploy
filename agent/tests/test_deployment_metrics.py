@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 from db.deployment_metrics import DeploymentMetric, MetricsStore, compute_avg_duration, compute_success_rate
+from pydantic import ValidationError
 
 
 def _make_metric(
@@ -40,7 +41,7 @@ def test_metric_fields():
 
 
 def test_metric_invalid_status():
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         DeploymentMetric(
             thread_id="t",
             app_name="a",
