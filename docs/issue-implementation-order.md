@@ -46,7 +46,7 @@
 
 ### 누락 문서
 
-- `18-final-pivot-refactor-plan.md` — `11-architecture-redesign.md`에서 참조하지만 미존재
+- `18-final-pivot-refactor-plan.md` — `11-architecture-redesign.md`에서 참조하지만 미존재 → **리다이렉트 문서 생성됨** (`docs/reference/18-final-pivot-refactor-plan.md`); Pivot [#74 (Master Tracker)](https://github.com/Two-Weeks-Team/vibeDeploy/issues/74)가 실질적 추적 문서
 - Pivot #74 (Master Tracker)가 대체하는 것으로 간주
 
 ---
@@ -310,7 +310,7 @@
 
 ### 누락 문서
 
-- `18-final-pivot-refactor-plan.md` — `11-architecture-redesign.md`에서 참조하지만 미존재
+- `18-final-pivot-refactor-plan.md` — `11-architecture-redesign.md`에서 참조 → **리다이렉트 문서 생성됨** (`docs/reference/18-final-pivot-refactor-plan.md` 참조)
 
 ---
 
