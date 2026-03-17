@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { InputForm } from "@/components/input-form";
 import { Button } from "@/components/ui/button";
+import { Rocket } from "lucide-react";
 
 const COUNCIL_AGENTS = [
   { emoji: "🏗️", name: "Architect", role: "Technical Lead" },
@@ -67,9 +68,26 @@ export default function LandingPage() {
           <motion.p variants={fadeUp} className="text-sm text-muted-foreground/70">
             Describe your app idea. The Vibe Council debates feasibility, then builds and deploys it.
           </motion.p>
+          <motion.div variants={fadeUp} className="flex flex-col items-center gap-3 pt-6">
+            <Link href="/zero-prompt">
+              <Button size="lg" className="h-14 px-8 text-lg font-bold gap-2 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600">
+                <Rocket className="w-5 h-5" />
+                Zero-Prompt Start
+              </Button>
+            </Link>
+            <p className="text-xs text-muted-foreground">Press Start. AI discovers, validates, and deploys apps autonomously.</p>
+          </motion.div>
         </motion.div>
 
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3, duration: 0.5 }}>
+          <div className="relative mb-8">
+            <div className="absolute inset-0 flex items-center" aria-hidden="true">
+              <div className="w-full border-t border-border/50" />
+            </div>
+            <div className="relative flex justify-center">
+              <span className="bg-background px-4 text-sm text-muted-foreground">Or describe your idea</span>
+            </div>
+          </div>
           <InputForm />
         </motion.div>
 
