@@ -245,6 +245,10 @@ async def code_generator(state: VibeDeployState) -> dict:
     frontend_max_attempts = _codegen_max_attempts(frontend_fallback_models)
     backend_max_attempts = _codegen_max_attempts(backend_fallback_models)
 
+    build_attempt = state.get("build_attempt_count", 0)
+    _temp_schedule = [0.1, 0.05, 0.02]
+    temperature = _temp_schedule[min(build_attempt, len(_temp_schedule) - 1)]
+
     frontend_llm = None
     backend_llm = None
     frontend_llm_error = ""
@@ -252,7 +256,7 @@ async def code_generator(state: VibeDeployState) -> dict:
     try:
         frontend_llm = get_llm(
             model=frontend_model,
-            temperature=0.1,
+            temperature=temperature,
             max_tokens=32000,
         )
     except Exception as exc:
@@ -261,7 +265,7 @@ async def code_generator(state: VibeDeployState) -> dict:
     try:
         backend_llm = get_llm(
             model=backend_model,
-            temperature=0.1,
+            temperature=temperature,
             max_tokens=24000,
         )
     except Exception as exc:
