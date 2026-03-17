@@ -247,12 +247,22 @@ def get_rate_limit_fallback_models(model: str) -> list[str]:
     return list(fallbacks.get(model, []))
 
 
+def _trace_llm_if_available(name: str):
+    try:
+        from gradient_adk.tracing import trace_llm
+
+        return trace_llm(name)
+    except (ImportError, Exception):
+        return lambda fn: fn
+
+
 async def _ainvoke_with_semaphore(llm, messages: list[dict]):
     async with _get_llm_semaphore():
         await _wait_for_llm_turn()
         return await llm.ainvoke(messages)
 
 
+@_trace_llm_if_available("ainvoke_with_retry")
 async def ainvoke_with_retry(
     llm,
     messages: list[dict],
