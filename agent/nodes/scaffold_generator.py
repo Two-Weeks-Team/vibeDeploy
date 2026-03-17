@@ -136,15 +136,19 @@ INFERENCE_KEY = os.getenv("DIGITALOCEAN_INFERENCE_KEY", "")
 
 async def call_inference(prompt: str, model: str = "meta-llama/Llama-3.3-70B-Instruct") -> str:
     if not INFERENCE_KEY:
-        return "AI service not configured"
-    async with httpx.AsyncClient(timeout=30.0) as client:
+        raise EnvironmentError("AI service not configured: DIGITALOCEAN_INFERENCE_KEY is not set.")
+    async with httpx.AsyncClient(timeout=90.0) as client:
         resp = await client.post(
             f"{INFERENCE_URL}/chat/completions",
             headers={"Authorization": f"Bearer {INFERENCE_KEY}"},
             json={"model": model, "messages": [{"role": "user", "content": prompt}]},
         )
         resp.raise_for_status()
-        return resp.json()["choices"][0]["message"]["content"]
+        data = resp.json()
+        try:
+            return data["choices"][0]["message"]["content"]
+        except (KeyError, IndexError):
+            return "Error: Received an invalid response from the AI service."
 """
 
 
