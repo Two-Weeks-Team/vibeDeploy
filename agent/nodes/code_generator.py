@@ -12,7 +12,11 @@ from ..prompts.code_templates import (
     FRONTEND_SYSTEM_PROMPT,
 )
 from ..state import VibeDeployState
-from .seed_data import generate_seed_data
+
+try:
+    from .seed_data import generate_seed_data
+except ImportError:
+    generate_seed_data = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 
