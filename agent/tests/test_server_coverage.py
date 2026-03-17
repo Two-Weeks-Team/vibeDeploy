@@ -152,4 +152,4 @@ def test_all_council_prompts_contain_score_instruction():
     )
 
     for prompt in (ARCHITECT_PROMPT, SCOUT_PROMPT, GUARDIAN_PROMPT, CATALYST_PROMPT, ADVOCATE_PROMPT):
-        assert "Score" in prompt or "score" in prompt
+        assert "score" in prompt.lower()
