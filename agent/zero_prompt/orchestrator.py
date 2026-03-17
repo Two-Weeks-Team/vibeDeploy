@@ -234,8 +234,9 @@ class StreamingOrchestrator:
             try:
                 from agent.zero_prompt.verdict import compute_verdict_score, determine_verdict
 
-                confidence = idea.confidence_score if idea else 0.5
-                engagement = 0.5
+                raw_confidence = idea.confidence_score if idea else 0.5
+                confidence = max(raw_confidence, 0.4)
+                engagement = max(0.4, min(1.0, len(papers) * 0.15 + 0.25)) if papers else 0.4
                 differentiation = 100 - (market_opportunity if market_opportunity > 50 else 30)
                 score = compute_verdict_score(
                     confidence, engagement, market_opportunity, novelty_boost, differentiation
