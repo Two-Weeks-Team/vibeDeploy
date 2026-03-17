@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 
-from agent.providers.pricing import PRICING as _PROVIDER_PRICING
+from .providers.pricing import PRICING as SURCHARGE_PRICING
+from .providers.pricing import calculate_cost
 
 PRICING_PER_MILLION = {
     "openai-gpt-oss-120b": (0.10, 0.70),
@@ -36,7 +37,7 @@ PRICING_PER_MILLION = {
     "fal-ai/fast-sdxl": (1.00, 1.00),
 }
 
-for _model_id, _spec in _PROVIDER_PRICING.items():
+for _model_id, _spec in SURCHARGE_PRICING.items():
     if _model_id not in PRICING_PER_MILLION:
         PRICING_PER_MILLION[_model_id] = (_spec["input_per_million"], _spec["output_per_million"])
 
@@ -47,15 +48,36 @@ DB_MONTHLY_COST = 15.15
 class CostTracker:
     entries: list[dict] = field(default_factory=list)
 
-    def record(self, model: str, input_tokens: int, output_tokens: int, step: str = ""):
-        input_price, output_price = PRICING_PER_MILLION.get(model, (0.0, 0.0))
-        cost = (input_tokens * input_price + output_tokens * output_price) / 1_000_000
+    def record(
+        self,
+        model: str,
+        input_tokens: int,
+        output_tokens: int,
+        step: str = "",
+        *,
+        cached_input_tokens: int = 0,
+        surcharge_type: str = "",
+    ):
+        surcharge_spec = SURCHARGE_PRICING.get(model)
+        if surcharge_spec:
+            cost = calculate_cost(
+                model_id=model,
+                input_tokens=input_tokens - cached_input_tokens,
+                output_tokens=output_tokens,
+                cached_input_tokens=cached_input_tokens,
+            )
+        else:
+            input_price, output_price = PRICING_PER_MILLION.get(model, (0.0, 0.0))
+            cost = (input_tokens * input_price + output_tokens * output_price) / 1_000_000
+
         self.entries.append(
             {
                 "model": model,
                 "step": step,
                 "input_tokens": input_tokens,
                 "output_tokens": output_tokens,
+                "cached_input_tokens": cached_input_tokens,
+                "surcharge_type": surcharge_type,
                 "cost_usd": round(cost, 6),
             }
         )
@@ -90,19 +112,19 @@ class CostTracker:
 def estimate_pipeline_cost() -> dict:
     """Estimate cost for a full evaluation pipeline run based on typical token usage."""
     estimates = [
-        ("anthropic-claude-4.6-sonnet", 2000, 3000, "input_processor"),
-        ("anthropic-claude-4.6-sonnet", 2000, 4000, "architect"),
-        ("anthropic-claude-4.6-sonnet", 2000, 4000, "scout"),
-        ("anthropic-claude-4.6-sonnet", 2000, 4000, "guardian"),
-        ("anthropic-claude-4.6-sonnet", 2000, 4000, "catalyst"),
-        ("anthropic-claude-4.6-sonnet", 2000, 4000, "advocate"),
-        ("anthropic-claude-4.6-sonnet", 8000, 6000, "cross_examination"),
-        ("anthropic-claude-4.6-sonnet", 10000, 5000, "strategist_verdict"),
-        ("anthropic-claude-4.6-sonnet", 3000, 8000, "doc_generation"),
-        ("anthropic-claude-4.6-sonnet", 5000, 16000, "code_generation"),
-        ("anthropic-claude-4.6-sonnet", 2500, 4000, "brainstorm"),
-        ("anthropic-claude-4.6-sonnet", 2500, 3500, "brainstorm_synthesis"),
-        ("anthropic-claude-4.6-sonnet", 1500, 2500, "web_search"),
+        ("claude-sonnet-4-6", 2000, 3000, "input_processor"),
+        ("claude-sonnet-4-6", 2000, 4000, "architect"),
+        ("claude-sonnet-4-6", 2000, 4000, "scout"),
+        ("claude-sonnet-4-6", 2000, 4000, "guardian"),
+        ("claude-sonnet-4-6", 2000, 4000, "catalyst"),
+        ("claude-sonnet-4-6", 2000, 4000, "advocate"),
+        ("claude-sonnet-4-6", 8000, 6000, "cross_examination"),
+        ("gpt-5.4", 10000, 5000, "strategist_verdict"),
+        ("gpt-5.4", 3000, 8000, "doc_generation"),
+        ("gpt-5.3-codex", 5000, 16000, "code_generation"),
+        ("gpt-5.4", 2500, 4000, "brainstorm"),
+        ("gpt-5.4", 2500, 3500, "brainstorm_synthesis"),
+        ("claude-sonnet-4-6", 1500, 2500, "web_search"),
         ("fal-ai/flux/schnell", 500, 500, "image_generation"),
     ]
 
