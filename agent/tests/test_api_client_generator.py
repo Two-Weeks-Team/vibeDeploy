@@ -108,7 +108,6 @@ def test_includes_api_error_class():
     spec = _make_spec({})
     result = generate_api_client(spec)
     assert "export class ApiError extends Error" in result
-    assert "if (!res.ok) throw new ApiError(res.status, await res.text());" in result or "ApiError" in result
 
 
 def test_includes_api_base_url_from_env():
@@ -188,10 +187,62 @@ def test_path_parameter_is_typed_and_interpolated_in_url():
     )
     result = generate_api_client(spec)
     assert "export async function getUsersById(id: number): Promise<GetUsersByIdResponse>" in result
-    assert "fetch(`${API_BASE_URL}/users/${id}`)" in result
+    assert 'fetch(`${API_BASE_URL}/users/${id}`, { method: "GET" })' in result
 
 
 def test_invalid_json_returns_error_comment():
     result = generate_api_client("{bad json")
+    assert result.startswith("//")
+    assert "Error" in result
+
+
+def test_patch_accepts_typed_body_param_and_json_body():
+    spec = _make_spec(
+        {
+            "/users/{id}": {
+                "patch": {
+                    "parameters": [{"name": "id", "in": "path", "required": True, "schema": {"type": "integer"}}],
+                    "requestBody": {
+                        "required": True,
+                        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PatchUserRequest"}}},
+                    },
+                    "responses": {"200": {"description": "ok"}},
+                }
+            }
+        }
+    )
+    result = generate_api_client(spec)
+    assert (
+        "export async function patchUsersById(id: number, body: PatchUserRequest): Promise<PatchUsersByIdResponse>"
+        in result
+    )
+    assert 'method: "PATCH"' in result
+    assert "body: JSON.stringify(body)" in result
+
+
+def test_multiple_path_parameters_are_typed_and_interpolated():
+    spec = _make_spec(
+        {
+            "/users/{userId}/posts/{postId}": {
+                "get": {
+                    "parameters": [
+                        {"name": "userId", "in": "path", "required": True, "schema": {"type": "integer"}},
+                        {"name": "postId", "in": "path", "required": True, "schema": {"type": "string"}},
+                    ],
+                    "responses": {"200": {"description": "ok"}},
+                }
+            }
+        }
+    )
+    result = generate_api_client(spec)
+    assert (
+        "export async function getUsersByUseridPostsByPostid(userId: number, postId: string): Promise<GetUsersByUseridPostsByPostidResponse>"
+        in result
+    )
+    assert 'fetch(`${API_BASE_URL}/users/${userId}/posts/${postId}`, { method: "GET" })' in result
+
+
+def test_invalid_spec_structure_returns_error_comment():
+    result = generate_api_client("[]")
     assert result.startswith("//")
     assert "Error" in result

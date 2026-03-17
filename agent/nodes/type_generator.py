@@ -268,7 +268,7 @@ def _build_function_block(
             "  });",
         ]
     else:
-        lines.append(f"  const res = await fetch(`${{API_BASE_URL}}{ts_path}`);")
+        lines.append(f'  const res = await fetch(`${{API_BASE_URL}}{ts_path}`, {{ method: "{method.upper()}" }});')
 
     lines += [
         "  if (!res.ok) throw new ApiError(res.status, await res.text());",
