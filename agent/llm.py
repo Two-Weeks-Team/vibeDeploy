@@ -17,25 +17,33 @@ _llm_semaphore: asyncio.Semaphore | None = None
 _llm_rate_lock: asyncio.Lock | None = None
 _llm_next_request_at = 0.0
 
+MODEL_GPT_5_4 = "gpt-5.4"
+MODEL_GPT_5_3_CODEX = "gpt-5.3-codex"
+MODEL_GPT_5_2 = "gpt-5.2"
+MODEL_CLAUDE_SONNET_4_6 = "claude-sonnet-4-6"
+MODEL_GEMINI_3_1_PRO = "gemini-3.1-pro-preview"
+MODEL_GEMINI_3_1_FLASH = "gemini-3.1-flash-lite-preview"
+MODEL_IMAGE = "fal-ai/flux/schnell"
+
 DEFAULT_MODEL_CONFIG = {
-    "council": "claude-sonnet-4-6",
-    "strategist": "gpt-5.4",
-    "cross_exam": "claude-sonnet-4-6",
-    "code_gen": "gpt-5.3-codex",
-    "code_gen_frontend": "gpt-5.3-codex",
-    "code_gen_backend": "gpt-5.3-codex",
-    "ci_repair": "gpt-5.2",
-    "doc_gen": "gpt-5.4",
-    "image": "fal-ai/flux/schnell",
-    "brainstorm": "gpt-5.4",
-    "brainstorm_synthesis": "gpt-5.4",
-    "input": "claude-sonnet-4-6",
-    "decision": "gpt-5.4",
-    "web_search": "claude-sonnet-4-6",
-    "ui_design": "gemini-3.1-pro-preview",
-    "code_review": "gpt-5.4",
-    "api_contract": "gpt-5.4",
-    "zero_prompt_discovery": "gemini-3.1-flash-lite-preview",
+    "council": MODEL_CLAUDE_SONNET_4_6,
+    "strategist": MODEL_GPT_5_4,
+    "cross_exam": MODEL_CLAUDE_SONNET_4_6,
+    "code_gen": MODEL_GPT_5_3_CODEX,
+    "code_gen_frontend": MODEL_GPT_5_3_CODEX,
+    "code_gen_backend": MODEL_GPT_5_3_CODEX,
+    "ci_repair": MODEL_GPT_5_2,
+    "doc_gen": MODEL_GPT_5_4,
+    "image": MODEL_IMAGE,
+    "brainstorm": MODEL_GPT_5_4,
+    "brainstorm_synthesis": MODEL_GPT_5_4,
+    "input": MODEL_CLAUDE_SONNET_4_6,
+    "decision": MODEL_GPT_5_4,
+    "web_search": MODEL_CLAUDE_SONNET_4_6,
+    "ui_design": MODEL_GEMINI_3_1_PRO,
+    "code_review": MODEL_GPT_5_4,
+    "api_contract": MODEL_GPT_5_4,
+    "zero_prompt_discovery": MODEL_GEMINI_3_1_FLASH,
 }
 
 _MODEL_ENV_OVERRIDES = {
