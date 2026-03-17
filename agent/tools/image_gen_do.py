@@ -51,8 +51,12 @@ class DOImageGenerator:
                 )
                 response.raise_for_status()
                 data = response.json()
-                b64 = data["data"][0]["b64_json"]
-                return base64.b64decode(b64)
+                try:
+                    b64 = data["data"][0]["b64_json"]
+                    return base64.b64decode(b64)
+                except (KeyError, IndexError, TypeError) as exc:
+                    logger.warning("Failed to parse DO Inference image response: %s", exc)
+                    return None
 
         except httpx.HTTPStatusError as exc:
             logger.warning("DO Inference image API error: HTTP %s", exc.response.status_code)
