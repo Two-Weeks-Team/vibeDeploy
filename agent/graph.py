@@ -33,6 +33,14 @@ def route_after_enrich(state):
     return fan_out_analysis(state)
 
 
+def route_after_build(state):
+    if state.get("build_validation", {}).get("passed"):
+        return "deployer"
+    if state.get("build_attempt_count", 0) >= 3:
+        return "__end__"
+    return "code_generator"
+
+
 def merge_dicts(left: dict | None, right: dict | None) -> dict:
     merged = dict(left or {})
     merged.update(right or {})
@@ -110,7 +118,15 @@ def create_graph():
         },
     )
 
-    workflow.add_edge("build_validator", "deployer")
+    workflow.add_conditional_edges(
+        "build_validator",
+        route_after_build,
+        {
+            "deployer": "deployer",
+            "code_generator": "code_generator",
+            "__end__": END,
+        },
+    )
     workflow.add_edge("deployer", END)
 
     return workflow.compile(checkpointer=MemorySaver())
