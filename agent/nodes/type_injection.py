@@ -4,7 +4,7 @@ from agent.nodes.pydantic_generator import generate_pydantic_models
 from agent.nodes.type_generator import generate_api_client, generate_api_dts
 
 _TS_TYPES_KEY = "src/types/api.d.ts"
-_TS_CLIENT_KEY = "src/lib/api-client.ts"
+_TS_CLIENT_KEY = "src/lib/api.ts"
 _PY_SCHEMAS_KEY = "schemas.py"
 
 
