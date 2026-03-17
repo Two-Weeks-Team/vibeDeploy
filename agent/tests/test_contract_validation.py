@@ -246,4 +246,12 @@ class TestValidateContract:
 
     def test_result_contains_all_required_keys(self):
         result = validate_contract("{}", {})
-        assert set(result.keys()) == {"passed", "total_endpoints", "matched", "missing", "extra"}
+        assert set(result.keys()) == {
+            "passed",
+            "total_endpoints",
+            "matched",
+            "missing",
+            "extra",
+            "schema_mismatches",
+            "repair_instructions",
+        }
