@@ -100,7 +100,7 @@ def _merge_and_score(results: list[SearchResult]) -> list[SearchResult]:
             )
         )
 
-    return sorted(merged, key=lambda r: (0 if r.confidence == "high" else 1))
+    return sorted(merged, key=lambda r: 0 if r.confidence == "high" else 1)
 
 
 async def unified_search(query: str, limit: int = 5) -> list[SearchResult]:
