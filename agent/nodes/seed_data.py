@@ -70,6 +70,19 @@ _ECOMMERCE_PRODUCTS = [
     ("엘가토 Stream Deck MK.2", 169000, 78),
 ]
 
+_ECOMMERCE_CATEGORIES = [
+    "오디오",
+    "키보드",
+    "오디오",
+    "태블릿",
+    "마우스",
+    "모니터",
+    "액세서리",
+    "키보드",
+    "오디오",
+    "스트리밍",
+]
+
 
 def _gen_recipe(count: int) -> list[dict]:
     return [
@@ -100,16 +113,19 @@ def _gen_project(count: int) -> list[dict]:
 
 
 def _gen_analytics(count: int) -> list[dict]:
-    return [
-        {
-            "id": str(i + 1),
-            "metric": _ANALYTICS_METRICS[i % len(_ANALYTICS_METRICS)][0],
-            "value": _ANALYTICS_METRICS[i % len(_ANALYTICS_METRICS)][1],
-            "trend": _ANALYTICS_METRICS[i % len(_ANALYTICS_METRICS)][2],
-            "period": "최근 30일",
-        }
-        for i in range(count)
-    ]
+    data = []
+    for i in range(count):
+        metric, value, trend = _ANALYTICS_METRICS[i % len(_ANALYTICS_METRICS)]
+        data.append(
+            {
+                "id": str(i + 1),
+                "metric": metric,
+                "value": value,
+                "trend": trend,
+                "period": "최근 30일",
+            }
+        )
+    return data
 
 
 def _gen_social(count: int) -> list[dict]:
@@ -127,28 +143,20 @@ def _gen_social(count: int) -> list[dict]:
 
 
 def _gen_ecommerce(count: int) -> list[dict]:
-    return [
-        {
-            "id": str(i + 1),
-            "product": _ECOMMERCE_PRODUCTS[i % len(_ECOMMERCE_PRODUCTS)][0],
-            "price": _ECOMMERCE_PRODUCTS[i % len(_ECOMMERCE_PRODUCTS)][1],
-            "stock": _ECOMMERCE_PRODUCTS[i % len(_ECOMMERCE_PRODUCTS)][2],
-            "rating": round(4.0 + (i % 10) * 0.1, 1),
-            "category": [
-                "오디오",
-                "키보드",
-                "오디오",
-                "태블릿",
-                "마우스",
-                "모니터",
-                "액세서리",
-                "키보드",
-                "오디오",
-                "스트리밍",
-            ][i % 10],
-        }
-        for i in range(count)
-    ]
+    data = []
+    for i in range(count):
+        product, price, stock = _ECOMMERCE_PRODUCTS[i % len(_ECOMMERCE_PRODUCTS)]
+        data.append(
+            {
+                "id": str(i + 1),
+                "product": product,
+                "price": price,
+                "stock": stock,
+                "rating": round(4.0 + (i % 10) * 0.1, 1),
+                "category": _ECOMMERCE_CATEGORIES[i % len(_ECOMMERCE_CATEGORIES)],
+            }
+        )
+    return data
 
 
 DOMAIN_GENERATORS = {
