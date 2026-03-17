@@ -138,7 +138,9 @@ class ProviderRegistry:
         Returns None if model_id is not in CAPABILITY_REGISTRY or adapter raises NotImplementedError.
         """
         canonical = resolve_canonical(model_id)
-        adapter = self.get_adapter(canonical)
+        _ensure_adapters_registered()
+        spec = CAPABILITY_REGISTRY.get(canonical)
+        adapter = self._adapters.get(spec["provider"]) if spec else None
         if adapter is None:
             return None
         try:
