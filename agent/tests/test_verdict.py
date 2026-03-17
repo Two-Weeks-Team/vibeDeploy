@@ -21,8 +21,7 @@ def test_score_formula_basic():
         novelty_boost=0.3,
         differentiation=100,
     )
-    expected = int(round(1.0 * 25 + 1.0 * 20 + (100 / 100) * 25 + min(0.3 / 0.3, 1.0) * 15 + (100 / 100) * 15))
-    assert score == expected == 100
+    assert score == 100
 
 
 def test_score_formula_partial():
@@ -33,8 +32,7 @@ def test_score_formula_partial():
         novelty_boost=0.15,
         differentiation=50,
     )
-    expected = int(round(0.5 * 25 + 0.5 * 20 + (50 / 100) * 25 + min(0.15 / 0.3, 1.0) * 15 + (50 / 100) * 15))
-    assert score == expected
+    assert score == 50
 
 
 def test_reason_code_market_saturated():
@@ -108,5 +106,4 @@ def test_verdict_model_structure():
         "weak_differentiation",
         "low_confidence",
         "weak_paper_backing",
-        "technical_risk",
     )
