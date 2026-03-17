@@ -14,14 +14,16 @@ logger = logging.getLogger(__name__)
 _COUNCIL_LLM_TIMEOUT_SECONDS = 180
 
 
-def _safe_score(value: object, default: int = 0) -> int:
-    """Coerce an LLM-produced score to int, clamped to [0, 100].
+def _safe_score(value: object, default: int = 0, *, clamp: bool = True) -> int:
+    """Coerce an LLM-produced score to int.
 
     LLM responses may return scores as strings (``"85"``), floats, or
     other unexpected types.  This helper guarantees a usable integer.
+    When *clamp* is True (default), the result is clamped to [0, 100].
     """
     try:
-        return max(0, min(100, int(float(value))))
+        result = int(float(value))
+        return max(0, min(100, result)) if clamp else result
     except (TypeError, ValueError):
         return default
 
@@ -258,11 +260,7 @@ async def score_axis(input: dict) -> dict:
         if isinstance(debate, dict):
             score_adjustments = debate.get("score_adjustments", {})
             if isinstance(score_adjustments, dict):
-                raw_adj = score_adjustments.get(agent_name, 0)
-                try:
-                    adjustment += int(float(raw_adj))
-                except (TypeError, ValueError):
-                    pass
+                adjustment += _safe_score(score_adjustments.get(agent_name, 0), clamp=False)
 
     adjustment = max(-10, adjustment)
     final_score = max(0, min(100, base_score + adjustment))
