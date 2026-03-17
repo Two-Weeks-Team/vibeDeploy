@@ -62,7 +62,7 @@ def test_valid_contract_injects_three_files():
     assert "frontend_code" in result
     assert "backend_code" in result
     assert "src/types/api.d.ts" in result["frontend_code"]
-    assert "src/lib/api-client.ts" in result["frontend_code"]
+    assert "src/lib/api.ts" in result["frontend_code"]
     assert "schemas.py" in result["backend_code"]
 
 
@@ -94,7 +94,7 @@ def test_frontend_code_key_is_ts_types():
 
 def test_frontend_code_key_is_api_client():
     result = inject_types_into_state({"api_contract": MINIMAL_SPEC})
-    client = result["frontend_code"]["src/lib/api-client.ts"]
+    client = result["frontend_code"]["src/lib/api.ts"]
     assert "ApiError" in client
     assert "fetch" in client
 
@@ -128,7 +128,7 @@ def test_generated_ts_types_contains_header():
 
 def test_generated_ts_client_has_api_base_url():
     result = inject_types_into_state({"api_contract": MINIMAL_SPEC})
-    client = result["frontend_code"]["src/lib/api-client.ts"]
+    client = result["frontend_code"]["src/lib/api.ts"]
     assert "API_BASE_URL" in client
 
 
@@ -162,11 +162,11 @@ def test_no_existing_backend_code_starts_empty():
 
 def test_ts_client_has_get_function():
     result = inject_types_into_state({"api_contract": MINIMAL_SPEC})
-    client = result["frontend_code"]["src/lib/api-client.ts"]
+    client = result["frontend_code"]["src/lib/api.ts"]
     assert "getItems" in client
 
 
 def test_ts_client_has_post_function():
     result = inject_types_into_state({"api_contract": MINIMAL_SPEC})
-    client = result["frontend_code"]["src/lib/api-client.ts"]
+    client = result["frontend_code"]["src/lib/api.ts"]
     assert "postItems" in client
