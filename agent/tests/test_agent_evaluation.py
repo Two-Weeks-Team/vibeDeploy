@@ -55,7 +55,7 @@ def test_evaluate_correctness_passes_with_result():
     response = {"result": {"idea": "todo app"}, "scoring": {"final_score": 75}}
     result = evaluate_response(tc, response)
     assert result.passed is True
-    assert result.score >= 80.0
+    assert result.score == 90.0
 
 
 def test_evaluate_correctness_fails_with_error():

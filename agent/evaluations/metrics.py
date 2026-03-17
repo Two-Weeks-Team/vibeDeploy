@@ -67,25 +67,24 @@ def compute_summary(results: list[EvalResult]) -> EvalSummary:
 
     total = len(results)
     passed = sum(1 for r in results if r.passed)
-    scores = [r.score for r in results if r.score > 0]
+    scores = [r.score for r in results]
 
     by_criteria: dict[str, dict] = {}
-    for r in results:
-        key = r.quality_criteria
-        if key not in by_criteria:
-            by_criteria[key] = {"total": 0, "passed": 0}
-        by_criteria[key]["total"] += 1
-        if r.passed:
-            by_criteria[key]["passed"] += 1
-
     by_category: dict[str, dict] = {}
     for r in results:
-        key = r.category
-        if key not in by_category:
-            by_category[key] = {"total": 0, "passed": 0}
-        by_category[key]["total"] += 1
+        crit_key = r.quality_criteria
+        if crit_key not in by_criteria:
+            by_criteria[crit_key] = {"total": 0, "passed": 0}
+        by_criteria[crit_key]["total"] += 1
         if r.passed:
-            by_category[key]["passed"] += 1
+            by_criteria[crit_key]["passed"] += 1
+
+        cat_key = r.category
+        if cat_key not in by_category:
+            by_category[cat_key] = {"total": 0, "passed": 0}
+        by_category[cat_key]["total"] += 1
+        if r.passed:
+            by_category[cat_key]["passed"] += 1
 
     return EvalSummary(
         total=total,

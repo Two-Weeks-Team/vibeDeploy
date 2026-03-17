@@ -5,6 +5,15 @@ from .metrics import EvalResult, EvalSummary, TestCase, compute_summary, load_te
 
 logger = logging.getLogger(__name__)
 
+# Scoring constants for _evaluate_correctness
+SCORE_RESULT_PRESENT = 80.0
+SCORE_HAS_SCORING = 90.0
+SCORE_DEPLOYED = 100.0
+CORRECTNESS_PASS_THRESHOLD = 60.0
+
+# Scoring constants for _evaluate_context_quality
+CONTEXT_QUALITY_PASS_THRESHOLD = 50.0
+
 _LATEST_SUMMARY: EvalSummary | None = None
 
 
@@ -33,17 +42,17 @@ def _evaluate_correctness(test_case: TestCase, response: dict) -> EvalResult:
 
     score = 0.0
     if has_result and not has_error:
-        score = 80.0
+        score = SCORE_RESULT_PRESENT
         if response.get("scoring", {}).get("final_score", 0) > 0:
-            score = 90.0
+            score = SCORE_HAS_SCORING
         if response.get("deploy_result", {}).get("status") == "deployed":
-            score = 100.0
+            score = SCORE_DEPLOYED
 
     return EvalResult(
         test_case_id=test_case.id,
         category=test_case.category,
         quality_criteria="correctness",
-        passed=score >= 60.0,
+        passed=score >= CORRECTNESS_PASS_THRESHOLD,
         score=score,
         details=f"Result present: {has_result}, Error: {has_error}",
     )
@@ -55,14 +64,15 @@ def _evaluate_context_quality(test_case: TestCase, response: dict) -> EvalResult
     has_features = bool(idea.get("features") or idea.get("key_features"))
     has_domain = bool(idea.get("domain") or idea.get("category"))
 
-    quality_signals = sum([has_summary, has_features, has_domain])
-    score = quality_signals / 3.0 * 100.0
+    signals = [has_summary, has_features, has_domain]
+    quality_signals = sum(signals)
+    score = quality_signals / len(signals) * 100.0
 
     return EvalResult(
         test_case_id=test_case.id,
         category=test_case.category,
         quality_criteria="context_quality",
-        passed=score >= 50.0,
+        passed=score >= CONTEXT_QUALITY_PASS_THRESHOLD,
         score=round(score, 1),
         details=f"Summary: {has_summary}, Features: {has_features}, Domain: {has_domain}",
     )
