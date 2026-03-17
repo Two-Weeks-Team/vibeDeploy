@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ast
 import json
+import keyword
 import re
 from typing import Any
 
@@ -35,6 +36,8 @@ def _safe_identifier(name: str) -> str:
     clean = re.sub(r"[^a-zA-Z0-9_]", "_", name)
     if clean and clean[0].isdigit():
         clean = "_" + clean
+    if keyword.iskeyword(clean) or keyword.issoftkeyword(clean):
+        clean = clean + "_"
     return clean or "_Field"
 
 
