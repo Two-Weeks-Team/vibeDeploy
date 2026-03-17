@@ -361,6 +361,11 @@ async def test_local_fallback_deploy_reports_local_app_dir(tmp_path, monkeypatch
 
     monkeypatch.setattr(deployer_module, "_spawn_background_process", _fake_spawn)
 
+    async def _fake_wait_for_http(*args, **kwargs):
+        return True
+
+    monkeypatch.setattr(deployer_module, "_wait_for_http_service", _fake_wait_for_http)
+
     result = await deployer_module._local_fallback_deploy(
         "creator-batch-studio-test",
         {
