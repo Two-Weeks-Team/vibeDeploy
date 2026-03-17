@@ -81,6 +81,14 @@ CAPABILITY_REGISTRY: dict[str, ProviderModelSpec] = {
         "max_context_tokens": 1_000_000,
         "max_output_tokens": 65_536,
     },
+    "gemini-3.1-pro-preview-customtools": {
+        "provider": "google",
+        "model_id": "gemini-3.1-pro-preview-customtools",
+        "api_style": "google_generate_content",
+        "supports_tools": True,
+        "max_context_tokens": 1_000_000,
+        "max_output_tokens": 65_536,
+    },
     "gemini-3.1-flash-lite-preview": {
         "provider": "google",
         "model_id": "gemini-3.1-flash-lite-preview",
