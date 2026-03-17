@@ -109,6 +109,9 @@ class VibeDeployState(TypedDict):
     match_rate: Optional[float]
     build_validation: Optional[Dict]
 
+    # API Contract
+    api_contract: Optional[str]
+
     # Deployment
     deploy_result: Optional[DeployResult]
 
