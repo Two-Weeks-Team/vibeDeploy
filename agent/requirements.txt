@@ -1,11 +1,15 @@
 # === DO Gradient ADK & LangGraph ===
 gradient-adk>=0.2.11
 gradient>=3.11.0
+# NOTE: langchain-gradient==0.1.24 declares langchain-core<0.4.0 in its metadata,
+# but langchain-core 1.x is a non-breaking graduation from 0.3.x and has been
+# verified compatible through testing. CI installs langchain-gradient with --no-deps
+# to bypass this resolver conflict. See PR #88 for details.
 langchain-gradient>=0.1.24
-langchain-core>=0.3.81,<0.4.0
-langchain-openai>=0.3.0,<1.0.0
-langchain-anthropic>=0.3.0,<0.4.0
-langgraph>=1.0.0,<1.1.0
+langchain-core>=1.2.11
+langchain-openai>=1.1.9
+langchain-anthropic>=1.0.0
+langgraph>=1.0.0
 
 # === 외부 LLM SDK (직접 호출 — ADR-A0) ===
 openai>=1.60.0,<2.0.0
