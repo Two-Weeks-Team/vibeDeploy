@@ -3705,4 +3705,6 @@ def detect_domain(idea_summary: str) -> str:
 
 def get_structured_seed_data(idea_summary: str, count: int = 8) -> list[dict]:
     domain = detect_domain(idea_summary)
-    return generate_seed_data(domain, count)
+    if generate_seed_data is not None:
+        return generate_seed_data(domain, count)
+    return [{"id": i + 1, "name": f"Sample {domain} item {i + 1}", "domain": domain} for i in range(count)]
