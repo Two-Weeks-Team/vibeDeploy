@@ -2,10 +2,10 @@
 gradient-adk>=0.2.11
 gradient>=3.11.0
 langchain-gradient>=0.1.24
-langchain-core>=0.3.81,<0.4.0
-langchain-openai>=0.3.0,<1.0.0
-langchain-anthropic>=0.3.0,<0.4.0
-langgraph>=1.0.0,<1.1.0
+langchain-core>=1.2.11
+langchain-openai>=1.1.9
+langchain-anthropic>=1.0.0
+langgraph>=1.0.0
 
 # === 외부 LLM SDK (직접 호출 — ADR-A0) ===
 openai>=1.60.0,<3.0.0
