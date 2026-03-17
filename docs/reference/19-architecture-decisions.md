@@ -17,21 +17,31 @@ DigitalOcean Gradient™ AI Hackathon 공식 규칙 기준:
 | **공개 레포 + OSI 라이선스** | 코드 공개 필수 | GitHub public repo + LICENSE 파일 |
 | **데모 영상 3분 이내** | 기능 시연 영상 | 별도 제작 |
 
-### DO Gradient 활용 정책
+### ADR-A0: 외부 API 직접 호출 + DO Gradient 풀스택 활용 정책
+
+**결정**: 외부 LLM API (Gemini, OpenAI, Anthropic)는 **직접 호출**. DO Gradient는 **LLM 외 전체 기능 활용**.
 
 ```
-[핵심 빌드 lane]  — DO Gradient AI 필수
-  Council, Code Gen, Code Eval, Deploy → DO Inference (claude-sonnet-4-6, gpt-5.4 등)
+[외부 LLM API — 직접 호출]
+  Google Gemini  → google-genai SDK 직접 (Zero-Prompt 탐색)
+  OpenAI         → openai SDK 직접 (코드 생성/계획)
+  Anthropic      → anthropic SDK 직접 (코드 생성)
+  ※ DO Inference 경유하지 않음 (서브스크립션 레벨 제약)
 
-[Zero-Prompt 탐색 lane]  — 외부 API 허용 (비용 최적화)
-  아이디어 추출, 논문 브레인스톰, 경쟁 분석 → gemini-3.1-flash-lite-preview (직접)
-  GO 판정 → gemini-3.1-flash-lite-preview (직접)
-
-[Provider adapter]  — 양쪽 모두 라우팅
-  DO Inference + Google AI + Anthropic Direct + OpenAI Direct
+[DO Gradient AI Platform — 풀스택 활용]
+  ├── ADK Agent Runtime          — @entrypoint, gradient agent deploy
+  ├── Knowledge Base (RAG)       — 아이디어 발굴용 KB, 프레임워크 패턴 KB
+  ├── Agent Evaluation           — 생성 앱 품질 평가 메트릭
+  ├── Agent Guardrails           — 입력 필터링, 콘텐츠 안전
+  ├── Agent Tracing              — @trace_tool, @trace_llm 관측성
+  ├── Multi-Agent Routing        — Council 에이전트 DO Agent 배포
+  ├── A2A Protocol               — Zero-Prompt → Build Agent 전달
+  ├── App Platform               — vibeDeploy + 생성 앱 배포
+  ├── Spaces Object Storage      — 생성 앱 아티팩트 저장
+  └── Image Generation           — GPT-image-1 via DO Inference (유일한 Inference 활용)
 ```
 
-**근거**: Zero-Prompt은 탐색/분석 전용으로 비용 효율이 핵심. 실제 앱 빌드/배포는 DO Gradient를 "thoroughly" 활용. 심사 시 DO Gradient 활용도는 빌드 파이프라인에서 충분히 입증됨.
+**근거**: DO Inference의 서브스크립션 레벨 제약으로 외부 LLM은 직접 호출이 안정적. DO Gradient의 진정한 차별화는 LLM 호출이 아니라 **에이전트 개발/배포/평가/관측 플랫폼 기능**에 있으며, 이를 "thoroughly" 활용하는 것이 심사 점수를 극대화한다.
 
 ---
 
