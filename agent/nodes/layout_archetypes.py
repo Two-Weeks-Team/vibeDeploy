@@ -232,7 +232,7 @@ export default function NotebookLayout({ children }: { children: React.ReactNode
   grid-template-areas:
     "topbar topbar"
     "sidebar cells"
-    "topbar  footer";
+    "footer  footer";
   min-height: 100vh;
 }
 
