@@ -1,6 +1,9 @@
 from dataclasses import dataclass, field
 
+from .providers.registry import LEGACY_MODEL_ALIASES
+
 PRICING_PER_MILLION = {
+    # --- DO Inference models (no canonical alias) ---
     "openai-gpt-oss-120b": (0.10, 0.70),
     "openai-gpt-oss-20b": (0.05, 0.45),
     "llama3.3-70b-instruct": (0.65, 0.65),
@@ -22,16 +25,13 @@ PRICING_PER_MILLION = {
     "anthropic-claude-4.1-opus": (15.00, 75.00),
     "anthropic-claude-4.5-sonnet": (3.00, 15.00),
     "anthropic-claude-opus-4.5": (5.00, 25.00),
-    "openai-gpt-5.2": (1.75, 14.00),
     "openai-gpt-5.1-codex-max": (1.25, 10.00),
     "openai-gpt-5-2-pro": (21.00, 168.00),
     "anthropic-claude-4.5-haiku": (1.00, 5.00),
-    "anthropic-claude-opus-4.6": (5.00, 25.00),
-    "anthropic-claude-4.6-sonnet": (3.00, 15.00),
-    "openai-gpt-5.3-codex": (1.75, 14.00),
     "openai-gpt-image-1": (5.00, 40.00),
     "fal-ai/flux/schnell": (3.00, 3.00),
     "fal-ai/fast-sdxl": (1.00, 1.00),
+    # --- Canonical IDs (single source of truth per model) ---
     "gpt-5.4": (2.50, 15.00),
     "gpt-5.3-codex": (1.75, 14.00),
     "gpt-5.2": (1.75, 14.00),
@@ -41,6 +41,15 @@ PRICING_PER_MILLION = {
     "gemini-3.1-flash-lite-preview": (0.25, 1.50),
 }
 
+
+def _resolve_price(model: str) -> tuple[float, float]:
+    price = PRICING_PER_MILLION.get(model)
+    if price is not None:
+        return price
+    canonical = LEGACY_MODEL_ALIASES.get(model, model)
+    return PRICING_PER_MILLION.get(canonical, (0.0, 0.0))
+
+
 DB_MONTHLY_COST = 15.15
 
 
@@ -49,7 +58,7 @@ class CostTracker:
     entries: list[dict] = field(default_factory=list)
 
     def record(self, model: str, input_tokens: int, output_tokens: int, step: str = ""):
-        input_price, output_price = PRICING_PER_MILLION.get(model, (0.0, 0.0))
+        input_price, output_price = _resolve_price(model)
         cost = (input_tokens * input_price + output_tokens * output_price) / 1_000_000
         self.entries.append(
             {
