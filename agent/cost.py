@@ -1,5 +1,7 @@
 from dataclasses import dataclass, field
 
+from agent.providers.pricing import PRICING as _PROVIDER_PRICING
+
 PRICING_PER_MILLION = {
     "openai-gpt-oss-120b": (0.10, 0.70),
     "openai-gpt-oss-20b": (0.05, 0.45),
@@ -32,14 +34,11 @@ PRICING_PER_MILLION = {
     "openai-gpt-image-1": (5.00, 40.00),
     "fal-ai/flux/schnell": (3.00, 3.00),
     "fal-ai/fast-sdxl": (1.00, 1.00),
-    "gpt-5.4": (2.50, 15.00),
-    "gpt-5.3-codex": (1.75, 14.00),
-    "gpt-5.2": (1.75, 14.00),
-    "claude-sonnet-4-6": (3.00, 15.00),
-    "claude-opus-4-6": (5.00, 25.00),
-    "gemini-3.1-pro-preview": (2.00, 12.00),
-    "gemini-3.1-flash-lite-preview": (0.25, 1.50),
 }
+
+for _model_id, _spec in _PROVIDER_PRICING.items():
+    if _model_id not in PRICING_PER_MILLION:
+        PRICING_PER_MILLION[_model_id] = (_spec["input_per_million"], _spec["output_per_million"])
 
 DB_MONTHLY_COST = 15.15
 

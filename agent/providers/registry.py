@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 from typing import TYPE_CHECKING, TypedDict
 
 if TYPE_CHECKING:
@@ -124,6 +125,7 @@ class ProviderRegistry:
 
     def get_adapter(self, model_id: str) -> "ProviderAdapter | None":
         """Return the adapter for model_id, or None if not in CAPABILITY_REGISTRY."""
+        _ensure_adapters_registered()
         canonical = resolve_canonical(model_id)
         spec = CAPABILITY_REGISTRY.get(canonical)
         if spec is None:
@@ -135,10 +137,12 @@ class ProviderRegistry:
 
         Returns None if model_id is not in CAPABILITY_REGISTRY or adapter raises NotImplementedError.
         """
-        adapter = self.get_adapter(model_id)
+        canonical = resolve_canonical(model_id)
+        _ensure_adapters_registered()
+        spec = CAPABILITY_REGISTRY.get(canonical)
+        adapter = self._adapters.get(spec["provider"]) if spec else None
         if adapter is None:
             return None
-        canonical = resolve_canonical(model_id)
         try:
             return adapter.create_langchain_llm(
                 canonical, temperature=temperature, max_tokens=max_tokens, timeout=timeout, **kwargs
@@ -149,6 +153,7 @@ class ProviderRegistry:
 
 registry = ProviderRegistry()
 _adapters_initialized = False
+_adapters_lock = threading.Lock()
 
 
 def _ensure_adapters_registered() -> None:
@@ -157,12 +162,16 @@ def _ensure_adapters_registered() -> None:
     if _adapters_initialized:
         return
 
-    from .anthropic_adapter import AnthropicAdapter
-    from .google_adapter import GoogleAdapter
-    from .openai_adapter import OpenAIAdapter
+    with _adapters_lock:
+        if _adapters_initialized:
+            return
 
-    registry.register(AnthropicAdapter())
-    registry.register(OpenAIAdapter())
-    registry.register(GoogleAdapter())
+        from .anthropic_adapter import AnthropicAdapter
+        from .google_adapter import GoogleAdapter
+        from .openai_adapter import OpenAIAdapter
 
-    _adapters_initialized = True
+        registry.register(AnthropicAdapter())
+        registry.register(OpenAIAdapter())
+        registry.register(GoogleAdapter())
+
+        _adapters_initialized = True

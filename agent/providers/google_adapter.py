@@ -9,6 +9,8 @@ from langchain_core.language_models.chat_models import BaseChatModel
 
 
 class GoogleAdapter:
+    _client = None
+
     @property
     def provider_name(self) -> str:
         return "google"
@@ -27,12 +29,15 @@ class GoogleAdapter:
         )
 
     def get_client(self):
+        if self._client is not None:
+            return self._client
         import google.genai as genai
 
         api_key = os.environ.get("GEMINI_API_KEY", "") or os.environ.get("GOOGLE_API_KEY", "")
         if not api_key:
             raise ValueError("GEMINI_API_KEY or GOOGLE_API_KEY environment variable is required")
-        return genai.Client(api_key=api_key)
+        self._client = genai.Client(api_key=api_key)
+        return self._client
 
     async def generate_content(
         self,
