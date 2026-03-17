@@ -1,8 +1,10 @@
-import traceback
+import logging
 from collections.abc import AsyncGenerator
 
 from .cost import estimate_pipeline_cost
 from .sse import NODE_EVENTS, format_sse
+
+logger = logging.getLogger(__name__)
 
 _AGENT_NODE_IDS = {
     "architect": "architect",
@@ -524,20 +526,20 @@ async def _stream_evaluation(
             },
         )
     except Exception as exc:
+        logger.exception("Evaluate pipeline error (thread=%s)", thread_id)
+        error_msg = str(exc)[:500]
         error_payload = {
             "type": "session.error",
             "action": "evaluate",
             "thread_id": thread_id,
-            "error": str(exc)[:500],
-            "traceback": traceback.format_exc()[:1000],
+            "error": error_msg,
         }
         yield format_sse("session.error", error_payload)
         yield format_sse(
             "council.error",
             {
                 "type": "council.error",
-                "error": error_payload["error"],
-                "traceback": error_payload["traceback"],
+                "error": error_msg,
             },
         )
 
@@ -651,20 +653,20 @@ async def _stream_resume(thread_id: str, action: str) -> AsyncGenerator[str, Non
             },
         )
     except Exception as exc:
+        logger.exception("Resume pipeline error (thread=%s)", thread_id)
+        error_msg = str(exc)[:500]
         error_payload = {
             "type": "session.error",
             "action": "resume",
             "thread_id": thread_id,
-            "error": str(exc)[:500],
-            "traceback": traceback.format_exc()[:1000],
+            "error": error_msg,
         }
         yield format_sse("session.error", error_payload)
         yield format_sse(
             "council.error",
             {
                 "type": "council.error",
-                "error": error_payload["error"],
-                "traceback": error_payload["traceback"],
+                "error": error_msg,
             },
         )
 
@@ -788,20 +790,20 @@ async def _stream_brainstorm(
             },
         )
     except Exception as exc:
+        logger.exception("Brainstorm pipeline error (thread=%s)", thread_id)
+        error_msg = str(exc)[:500]
         error_payload = {
             "type": "session.error",
             "action": "brainstorm",
             "thread_id": thread_id,
-            "error": str(exc)[:500],
-            "traceback": traceback.format_exc()[:1000],
+            "error": error_msg,
         }
         yield format_sse("session.error", error_payload)
         yield format_sse(
             "brainstorm.error",
             {
                 "type": "brainstorm.error",
-                "error": error_payload["error"],
-                "traceback": error_payload["traceback"],
+                "error": error_msg,
             },
         )
 
