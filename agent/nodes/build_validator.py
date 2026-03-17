@@ -1,4 +1,5 @@
 import ast
+import asyncio
 import logging
 import tempfile
 from pathlib import Path
@@ -6,6 +7,8 @@ from pathlib import Path
 from ..state import VibeDeployState
 
 logger = logging.getLogger(__name__)
+
+_DOCKER_BUILD_TIMEOUT_SECONDS = 120
 
 
 def _write_files_to_tmpdir(files: dict, tmpdir: str) -> None:
@@ -36,17 +39,22 @@ async def _run_docker_backend(backend_code: dict, docker_client) -> tuple[bool, 
     with tempfile.TemporaryDirectory(prefix="vibedeploy-build-backend-") as tmpdir:
         _write_files_to_tmpdir(backend_code, tmpdir)
         try:
-            docker_client.containers.run(
-                "python:3.12-slim",
-                "pip install -r requirements.txt && python -c 'import main'",
-                volumes={tmpdir: {"bind": "/app", "mode": "rw"}},
-                working_dir="/app",
-                mem_limit="512m",
-                network_mode="none",
-                remove=True,
-                command="sh -c 'pip install -r requirements.txt && python -c \"import main\"'",
+            await asyncio.wait_for(
+                asyncio.to_thread(
+                    docker_client.containers.run,
+                    "python:3.12-slim",
+                    command="sh -c 'pip install -r requirements.txt && python -c \"import main\"'",
+                    volumes={tmpdir: {"bind": "/app", "mode": "rw"}},
+                    working_dir="/app",
+                    mem_limit="512m",
+                    network_mode="none",
+                    remove=True,
+                ),
+                timeout=_DOCKER_BUILD_TIMEOUT_SECONDS,
             )
             return True, ""
+        except asyncio.TimeoutError:
+            return False, f"backend build timed out after {_DOCKER_BUILD_TIMEOUT_SECONDS}s"
         except Exception as exc:
             stderr = getattr(exc, "stderr", b"") or b""
             if isinstance(stderr, bytes):
@@ -58,17 +66,22 @@ async def _run_docker_frontend(frontend_code: dict, docker_client) -> tuple[bool
     with tempfile.TemporaryDirectory(prefix="vibedeploy-build-frontend-") as tmpdir:
         _write_files_to_tmpdir(frontend_code, tmpdir)
         try:
-            docker_client.containers.run(
-                "node:20-slim",
-                "npm install && npm run build",
-                volumes={tmpdir: {"bind": "/app", "mode": "rw"}},
-                working_dir="/app",
-                mem_limit="512m",
-                network_mode="none",
-                remove=True,
-                command="sh -c 'npm install && npm run build'",
+            await asyncio.wait_for(
+                asyncio.to_thread(
+                    docker_client.containers.run,
+                    "node:20-slim",
+                    command="sh -c 'npm install && npm run build'",
+                    volumes={tmpdir: {"bind": "/app", "mode": "rw"}},
+                    working_dir="/app",
+                    mem_limit="512m",
+                    network_mode="none",
+                    remove=True,
+                ),
+                timeout=_DOCKER_BUILD_TIMEOUT_SECONDS,
             )
             return True, ""
+        except asyncio.TimeoutError:
+            return False, f"frontend build timed out after {_DOCKER_BUILD_TIMEOUT_SECONDS}s"
         except Exception as exc:
             stderr = getattr(exc, "stderr", b"") or b""
             if isinstance(stderr, bytes):
