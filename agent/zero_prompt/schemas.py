@@ -100,5 +100,5 @@ class ZPSession(BaseModel):
     cards: list[ZPCard] = []
     build_queue: list[str] = []
     active_build: str | None = None
-    goal_go_cards: int = 3
+    goal_go_cards: int = 10
     created_at: str

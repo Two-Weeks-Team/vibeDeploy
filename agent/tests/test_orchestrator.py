@@ -11,7 +11,7 @@ class TestSessionManagerCreate:
         assert session.cards == []
         assert session.build_queue == []
         assert session.active_build is None
-        assert session.goal_go_cards == 3
+        assert session.goal_go_cards == 10
         assert session.created_at
 
     def test_create_session_custom_goal(self):

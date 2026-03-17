@@ -2,7 +2,8 @@ import asyncio
 import logging
 import os
 import re
-from collections import defaultdict
+import time
+from collections import OrderedDict, defaultdict
 
 import httpx
 
@@ -14,6 +15,14 @@ _BRAVE_SEARCH_URL = "https://api.search.brave.com/res/v1/web/search"
 _EXA_TOKEN_URL = "https://exa.ai/api/token/issue"
 _EXA_SEARCH_URL = "https://exa.ai/api/search"
 _REQUEST_TIMEOUT = 15.0
+
+_CACHE: OrderedDict[str, tuple[float, list[SearchResult]]] = OrderedDict()
+_CACHE_TTL_SECONDS = 43200  # 12 hours per spec §2.5
+_CACHE_MAX_SIZE = 128
+
+
+def _cache_key(query: str, limit: int) -> str:
+    return f"{query.strip().lower()}:{limit}"
 
 
 def _normalize_url(url: str) -> str:
@@ -104,6 +113,14 @@ def _merge_and_score(results: list[SearchResult]) -> list[SearchResult]:
 
 
 async def unified_search(query: str, limit: int = 5) -> list[SearchResult]:
+    key = _cache_key(query, limit)
+    if key in _CACHE:
+        cached_at, cached_results = _CACHE[key]
+        if (time.time() - cached_at) < _CACHE_TTL_SECONDS:
+            _CACHE.move_to_end(key)
+            return cached_results
+        del _CACHE[key]
+
     brave_task = asyncio.create_task(_search_brave(query, limit))
     exa_task = asyncio.create_task(_search_exa(query, limit))
 
@@ -117,4 +134,11 @@ async def unified_search(query: str, limit: int = 5) -> list[SearchResult]:
         exa_results = []
 
     all_results = brave_results + exa_results
-    return _merge_and_score(all_results)
+    result = _merge_and_score(all_results)
+
+    _CACHE[key] = (time.time(), result)
+    _CACHE.move_to_end(key)
+    while len(_CACHE) > _CACHE_MAX_SIZE:
+        _CACHE.popitem(last=False)
+
+    return result
