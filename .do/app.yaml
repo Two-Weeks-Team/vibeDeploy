@@ -28,6 +28,16 @@ ingress:
       match:
         path:
           prefix: /health
+    - component:
+        name: api
+      match:
+        path:
+          prefix: /zero-prompt
+    - component:
+        name: api
+      match:
+        path:
+          prefix: /dashboard
     # Everything else → frontend (Next.js handles its own routing)
     - component:
         name: web
