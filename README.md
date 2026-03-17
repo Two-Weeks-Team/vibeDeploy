@@ -23,8 +23,8 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/python-3.12-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python 3.12"/>
-  <img src="https://img.shields.io/badge/next.js-15-000000?style=flat-square&logo=next.js&logoColor=white" alt="Next.js 15"/>
-  <img src="https://img.shields.io/badge/Gradient%20ADK-0.0.8-0080FF?style=flat-square&logo=digitalocean" alt="Gradient ADK"/>
+  <img src="https://img.shields.io/badge/next.js-16.1-000000?style=flat-square&logo=next.js&logoColor=white" alt="Next.js 16"/>
+  <img src="https://img.shields.io/badge/Gradient%20ADK-0.2.11-0080FF?style=flat-square&logo=digitalocean" alt="Gradient ADK"/>
   <img src="https://img.shields.io/badge/LangGraph-StateGraph-7C3AED?style=flat-square" alt="LangGraph"/>
   <img src="https://img.shields.io/badge/Docker%20SDK-Build%20Validation-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker SDK"/>
   <img src="https://img.shields.io/badge/DO%20Gradient%20Features-13-0080FF?style=flat-square&logo=digitalocean" alt="13 Gradient Features"/>
@@ -365,9 +365,9 @@ Browser <-- SSE --->  |  | Next.js 15    |  | FastAPI Gateway  |  |
 
 | Layer | Technology | DO Service |
 |-------|-----------|------------|
-| Frontend | Next.js 15, shadcn/ui, Tailwind CSS, Framer Motion | App Platform |
+| Frontend | Next.js 16.1, Tailwind CSS v4, Framer Motion | App Platform |
 | Backend | Python 3.12, FastAPI, uvicorn, SSE streaming | App Platform |
-| Agent Runtime | Gradient ADK 0.0.8, LangGraph StateGraph | Gradient ADK |
+| Agent Runtime | Gradient ADK 0.2.11, LangGraph StateGraph | Gradient ADK |
 | Database | PostgreSQL 16 (sessions, lineage, Zero-Prompt cards) | Managed PostgreSQL |
 | Storage | S3-compatible (build artifacts, archives) | DO Spaces |
 | Build Validation | Docker SDK (`docker.from_env()`) | Docker on App Platform |
@@ -387,39 +387,64 @@ Browser <-- SSE --->  |  | Next.js 15    |  | FastAPI Gateway  |  |
 ### Local Development
 
 ```bash
-# Clone
+# 1. Clone
 git clone https://github.com/Two-Weeks-Team/vibeDeploy.git
 cd vibeDeploy
 
-# Agent backend
+# 2. Agent backend (Python 3.12+)
 cd agent/
-python -m venv .venv && source .venv/bin/activate
+python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env    # Add your API keys
-python run_server.py    # Starts on :8080
+cp .env.example .env              # Fill in your API keys (see below)
+python run_server.py              # Starts FastAPI on :8080
 
-# Frontend (new terminal)
+# 3. Frontend (Node.js 20+, new terminal)
 cd web/
-npm install
+npm ci
 NEXT_PUBLIC_AGENT_URL=http://localhost:8080 npm run dev
-# http://localhost:3000
+# Open http://localhost:3000
+```
+
+### Verify Everything Works
+
+```bash
+# Agent: lint + 1285 tests
+cd agent/
+ruff check . && ruff format --check .
+pytest tests/ -v --tb=short       # Expect: 1285 passed
+
+# Web: lint + 8 tests + build
+cd web/
+npx eslint .
+npm test                          # Expect: 8 passed
+NEXT_PUBLIC_AGENT_URL=http://localhost:8080 npm run build
 ```
 
 ### Environment Variables
 
-```bash
-# Required
-GOOGLE_GENAI_API_KEY=...           # Gemini for Zero-Prompt
-ANTHROPIC_API_KEY=...              # Claude for Council
-DIGITALOCEAN_API_TOKEN=...         # DO API for deployment
-GITHUB_TOKEN=...                   # Repo creation
-DATABASE_URL=...                   # PostgreSQL
+Copy `agent/.env.example` to `agent/.env` and fill in:
 
-# Optional
-GRADIENT_MODEL_ACCESS_KEY=...      # DO Inference
-DO_KNOWLEDGE_BASE_ID=...           # RAG KB
-BRAVE_API_KEY=...                  # Competitive analysis
-EXA_API_KEY=...                    # Competitive analysis
+```bash
+# === Required (core pipeline) ===
+DIGITALOCEAN_API_TOKEN=...         # DO API — deploy generated apps
+DIGITALOCEAN_INFERENCE_KEY=...     # DO Inference — LLM calls via Provider Registry
+GOOGLE_API_KEY=...                 # Gemini — Zero-Prompt idea extraction
+ANTHROPIC_API_KEY=...              # Claude — Vibe Council debate
+OPENAI_API_KEY=...                 # GPT — code generation + strategist
+GITHUB_TOKEN=...                   # GitHub — repo creation for deploys
+DATABASE_URL=...                   # PostgreSQL connection string
+
+# === Required (Zero-Prompt) ===
+YOUTUBE_DATA_API_KEY=...           # YouTube Data API v3 — video discovery
+BRAVE_API_KEY=...                  # Brave Search — competitive analysis
+
+# === Optional ===
+GRADIENT_MODEL_ACCESS_KEY=...      # Alias for DIGITALOCEAN_INFERENCE_KEY
+DO_KNOWLEDGE_BASE_ID=...           # DO Knowledge Base for RAG
+SPACES_ACCESS_KEY_ID=...           # DO Spaces — artifact storage
+SPACES_SECRET_ACCESS_KEY=...       # DO Spaces secret
+EXA_API_KEY=...                    # Exa Search — parallel competitive analysis
+GITHUB_ORG=...                     # GitHub org for generated repos
 ```
 
 ---
@@ -428,19 +453,45 @@ EXA_API_KEY=...                    # Competitive analysis
 
 **Live: [https://vibedeploy-7tgzk.ondigitalocean.app](https://vibedeploy-7tgzk.ondigitalocean.app)**
 
-```bash
-# Gradient ADK (orchestration core)
-cd agent && gradient agent deploy
+### Step-by-Step Deploy
 
-# App Platform (gateway + web)
+```bash
+# Prerequisites: gradient CLI, doctl CLI, DIGITALOCEAN_API_TOKEN set
+# See: https://docs.digitalocean.com/products/gradient-ai-platform/getting-started/
+
+# 1. Deploy Gradient ADK agent (orchestration core)
+cd agent
+gradient secret set DIGITALOCEAN_INFERENCE_KEY="$DIGITALOCEAN_INFERENCE_KEY"
+gradient secret set DIGITALOCEAN_API_TOKEN="$DIGITALOCEAN_API_TOKEN"
+gradient secret set GITHUB_TOKEN="$GITHUB_TOKEN"
+gradient agent deploy
+# Note the Agent URL from output (e.g., https://agents.do-ai.run/...)
+
+# 2. Deploy App Platform (gateway + web + DB)
+cd ..
 doctl apps create --spec .do/app.yaml
-# Or: push to main -> auto-deploy
+# Or use auto-deploy: push to main branch triggers deploy
+
+# 3. Verify
+curl https://YOUR_APP_URL/health    # Should return {"status": "ok"}
+curl https://YOUR_APP_URL/api/models # Should list available models
 ```
 
+### One-Command Deploy (via script)
+
 ```bash
-# Observability
-gradient agent logs
-gradient agent traces
+# Sets secrets, deploys ADK agent, renders app spec, updates App Platform
+export DIGITALOCEAN_API_TOKEN=...
+export DIGITALOCEAN_INFERENCE_KEY=...
+export GITHUB_TOKEN=...
+cd agent && bash scripts/deploy.sh
+```
+
+### Observability
+
+```bash
+gradient agent logs                  # Live agent logs
+gradient agent traces                # Distributed tracing
 ```
 
 ---
@@ -480,7 +531,7 @@ vibeDeploy/
 |   |-- gradient/                   # A2A, MCP, versioning, router
 |   |-- evaluations/                # Quality evaluation (25 test cases)
 |   |-- db/                         # PostgreSQL store + lineage + metrics
-|   +-- tests/                      # 69 test files
+|   +-- tests/                      # 77 test files, 1285+ tests
 |-- web/                            # Next.js Frontend -> App Platform
 |   |-- src/app/                    # Routes: landing, meeting, brainstorm, zero-prompt, dashboard
 |   |-- src/components/zero-prompt/ # Kanban board, action feed, idea cards
@@ -505,7 +556,7 @@ vibeDeploy/
 | Pipeline nodes | 20+ |
 | Zero-Prompt agents | 9 |
 | Vibe Council agents | 6 |
-| Test files | 69 |
+| Test files | 77 |
 | Architecture docs | 35+ |
 | DO Gradient features | 13 |
 | Deploy success rate (post-pivot) | ~90-95% |
