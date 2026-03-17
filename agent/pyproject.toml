@@ -15,6 +15,14 @@ ignore = ["E501"]
 [tool.ruff.format]
 quote-style = "double"
 
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+no_implicit_optional = true
+warn_unreachable = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
