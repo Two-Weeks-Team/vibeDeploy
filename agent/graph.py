@@ -4,6 +4,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
 
 from .nodes.blueprint import blueprint_generator
+from .nodes.build_validator import build_validator
 from .nodes.code_evaluator import code_evaluator, route_code_eval
 from .nodes.code_generator import code_generator
 from .nodes.decision_gate import decision_gate, route_decision
@@ -56,6 +57,7 @@ def create_graph():
     workflow.add_node("prompt_strategist", prompt_strategist)
     workflow.add_node("code_generator", code_generator)
     workflow.add_node("code_evaluator", code_evaluator)
+    workflow.add_node("build_validator", build_validator)
     workflow.add_node("deployer", deployer)
 
     workflow.set_entry_point("input_processor")
@@ -93,11 +95,12 @@ def create_graph():
         "code_evaluator",
         route_code_eval,
         {
-            "deployer": "deployer",
+            "deployer": "build_validator",
             "code_generator": "code_generator",
         },
     )
 
+    workflow.add_edge("build_validator", "deployer")
     workflow.add_edge("deployer", END)
 
     return workflow.compile(checkpointer=MemorySaver())

@@ -14,6 +14,7 @@ NODE_EVENTS = {
     "prompt_strategist": {"phase": "prompt_strategy", "message": "Building model-aware prompt strategy..."},
     "code_generator": {"phase": "code_generation", "message": "Generating code..."},
     "code_evaluator": {"phase": "code_evaluation", "message": "Evaluating code quality..."},
+    "build_validator": {"phase": "build_validation", "message": "Validating build in Docker..."},
     "deployer": {"phase": "deployment", "message": "Deploying to DigitalOcean..."},
     "feedback_generator": {"phase": "feedback", "message": "Generating feedback..."},
     "conditional_review": {"phase": "conditional_review", "message": "Waiting for your decision..."},
