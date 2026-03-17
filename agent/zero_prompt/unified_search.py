@@ -52,6 +52,7 @@ async def _search_exa(query: str, limit: int = 5) -> list[SearchResult]:
             headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
         else:
             token_resp = await client.post(_EXA_TOKEN_URL, headers={"Content-Type": "application/json"}, json={})
+            token_resp.raise_for_status()
             token = token_resp.json().get("token")
             if not token:
                 return []
@@ -115,5 +116,5 @@ async def unified_search(query: str, limit: int = 5) -> list[SearchResult]:
         logger.warning("[UnifiedSearch] Exa failed: %s", str(exa_results)[:200])
         exa_results = []
 
-    all_results = list(brave_results or []) + list(exa_results or [])
+    all_results = brave_results + exa_results
     return _merge_and_score(all_results)

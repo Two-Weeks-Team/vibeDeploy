@@ -48,19 +48,21 @@ def _determine_search_confidence(results: list[SearchResult]) -> str:
     return "high" if has_high else "normal"
 
 
+_GAP_SIGNALS = [
+    ("no mobile app", "Mobile app version is missing in current solutions"),
+    ("limited api", "API access is limited or unavailable"),
+    ("no free tier", "Free tier or freemium model is absent"),
+    ("complex setup", "Setup complexity creates opportunity for simpler solutions"),
+    ("slow", "Performance issues in existing solutions"),
+]
+
+
 def _identify_gaps(results: list[SearchResult]) -> list[str]:
     gaps: list[str] = []
     snippets = [r.snippet or "" for r in results if r.snippet]
     all_text = " ".join(snippets).lower()
 
-    gap_signals = [
-        ("no mobile app", "Mobile app version is missing in current solutions"),
-        ("limited api", "API access is limited or unavailable"),
-        ("no free tier", "Free tier or freemium model is absent"),
-        ("complex setup", "Setup complexity creates opportunity for simpler solutions"),
-        ("slow", "Performance issues in existing solutions"),
-    ]
-    for signal, gap_description in gap_signals:
+    for signal, gap_description in _GAP_SIGNALS:
         if signal in all_text:
             gaps.append(gap_description)
 

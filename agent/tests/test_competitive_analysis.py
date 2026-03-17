@@ -92,13 +92,13 @@ def test_estimate_saturation_low():
 def test_compute_opportunity_score_low_saturation():
     results = [_make_result() for _ in range(2)]
     score = _compute_opportunity_score(results, "low")
-    assert score >= 70
+    assert score == 80
 
 
 def test_compute_opportunity_score_high_saturation():
     results = [_make_result() for _ in range(10)]
     score = _compute_opportunity_score(results, "high")
-    assert score <= 40
+    assert score == 40
 
 
 def test_determine_search_confidence_no_results():
@@ -118,7 +118,7 @@ def test_determine_search_confidence_high():
 def test_identify_gaps_few_players():
     results = [_make_result() for _ in range(3)]
     gaps = _identify_gaps(results)
-    assert len(gaps) >= 1
+    assert gaps == ["Market has few established players — early mover advantage possible"]
 
 
 def test_market_analysis_model():
