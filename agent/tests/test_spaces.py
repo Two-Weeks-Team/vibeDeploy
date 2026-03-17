@@ -1,5 +1,6 @@
 import io
 import tarfile
+from datetime import datetime
 from unittest.mock import MagicMock, patch
 
 from agent.tools.spaces import SpacesClient
@@ -78,7 +79,7 @@ class TestUploadFile:
         call_kwargs = client._client.put_object.call_args.kwargs
         assert call_kwargs["Key"] == "test/file.json"
         assert call_kwargs["ContentType"] == "application/json"
-        assert b'{"key": "value"}' in call_kwargs["Body"] or call_kwargs["Body"] == b'{"key": "value"}'
+        assert call_kwargs["Body"] == b'{"key": "value"}'
         assert "test/file.json" in url
 
     def test_upload_file_missing_credentials_returns_empty(self, monkeypatch):
@@ -142,8 +143,6 @@ class TestUploadArchive:
 
 class TestListArtifacts:
     def test_list_artifacts_returns_objects(self):
-        from datetime import datetime
-
         client = _make_client()
         last_mod = datetime(2026, 3, 17, 12, 0, 0)
         client._client.list_objects_v2.return_value = {
@@ -156,12 +155,11 @@ class TestListArtifacts:
         assert len(results) == 2
         assert results[0]["key"] == "myapp/myapp.tar.gz"
         assert results[0]["size"] == 1024
+        assert results[0]["last_modified"] == last_mod.isoformat()
         assert "myapp/myapp.tar.gz" in results[0]["url"]
         assert results[1]["key"] == "myapp/spec.json"
 
     def test_list_artifacts_empty_prefix_returns_all(self):
-        from datetime import datetime
-
         client = _make_client()
         client._client.list_objects_v2.return_value = {
             "Contents": [

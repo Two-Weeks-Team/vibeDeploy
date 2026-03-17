@@ -13,10 +13,12 @@ class SpacesClient:
         self,
         bucket_name: str | None = None,
         endpoint: str | None = None,
+        acl: str | None = None,
     ) -> None:
         self.bucket_name = bucket_name or os.getenv("DO_SPACES_BUCKET", "vibedeploy-artifacts")
         region = os.getenv("DO_SPACES_REGION", "nyc3")
         self.endpoint = endpoint or f"https://{region}.digitaloceanspaces.com"
+        self.acl = acl or os.getenv("DO_SPACES_ACL", "private")
 
         key = os.getenv("DO_SPACES_KEY")
         secret = os.getenv("DO_SPACES_SECRET")
@@ -28,7 +30,12 @@ class SpacesClient:
 
         try:
             import boto3
+        except ImportError:
+            logger.warning("boto3 is not installed; Spaces operations will be no-ops")
+            self._client = None
+            return
 
+        try:
             self._client = boto3.client(
                 "s3",
                 region_name=region,
@@ -64,7 +71,7 @@ class SpacesClient:
                 Key=key,
                 Body=buf.read(),
                 ContentType="application/gzip",
-                ACL="public-read",
+                ACL=self.acl,
             )
             return self.get_download_url(key)
         except Exception as exc:
@@ -85,7 +92,7 @@ class SpacesClient:
                 Key=key,
                 Body=data,
                 ContentType=content_type,
-                ACL="public-read",
+                ACL=self.acl,
             )
             return self.get_download_url(key)
         except Exception as exc:
@@ -114,7 +121,7 @@ class SpacesClient:
                     {
                         "key": k,
                         "size": obj.get("Size", 0),
-                        "last_modified": str(obj.get("LastModified", "")),
+                        "last_modified": obj.get("LastModified").isoformat() if obj.get("LastModified") else "",
                         "url": self.get_download_url(k),
                     }
                 )
