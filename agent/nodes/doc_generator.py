@@ -3,7 +3,7 @@ import re
 
 import yaml
 
-from ..llm import MODEL_CONFIG, ainvoke_with_retry, get_llm, get_rate_limit_fallback_models
+from ..llm import MODEL_CONFIG, ainvoke_with_retry, content_to_str, get_llm, get_rate_limit_fallback_models
 from ..prompts.doc_templates import (
     API_SPEC_SYSTEM_PROMPT,
     APP_SPEC_SYSTEM_PROMPT,
@@ -14,6 +14,7 @@ from ..prompts.doc_templates import (
 )
 from ..state import VibeDeployState
 from ..tools.digitalocean import build_app_spec
+from ..utils.json_utils import parse_json_response
 
 
 async def doc_generator(state: VibeDeployState) -> dict:
@@ -141,7 +142,7 @@ async def _generate_markdown_doc(
             ],
             fallback_models=fallback_models,
         )
-        parsed = _parse_json_response(response.content, {"content": ""})
+        parsed = parse_json_response(content_to_str(response.content), {"content": ""})
         content = parsed.get("content", "")
         if isinstance(content, str) and content.strip():
             return content
@@ -179,7 +180,7 @@ async def _generate_app_spec_yaml_doc(llm, context: str, idea: dict, fallback_mo
             ],
             fallback_models=fallback_models,
         )
-        parsed = _parse_json_response(response.content, {"content": ""})
+        parsed = parse_json_response(content_to_str(response.content), {"content": ""})
         content = parsed.get("content", "")
         if isinstance(content, str) and content.strip():
             return content
@@ -236,26 +237,3 @@ def _slugify(value: str) -> str:
     clean = re.sub(r"[\s_]+", "-", clean)
     clean = re.sub(r"-+", "-", clean)
     return clean or "vibedeploy-app"
-
-
-def _parse_json_response(content, default: dict) -> dict:
-    from ..llm import content_to_str
-
-    content = content_to_str(content).strip()
-    if content.startswith("```"):
-        content = re.sub(r"^```(?:json)?\n?", "", content)
-        content = re.sub(r"\n?```$", "", content)
-
-    try:
-        return json.loads(content)
-    except json.JSONDecodeError:
-        json_match = re.search(r"\{[\s\S]*\}", content)
-        if json_match:
-            try:
-                return json.loads(json_match.group())
-            except json.JSONDecodeError:
-                pass
-
-        result = dict(default)
-        result["raw_response"] = content[:500]
-        return result

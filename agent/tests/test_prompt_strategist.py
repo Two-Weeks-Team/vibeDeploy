@@ -6,6 +6,11 @@ from agent.nodes.prompt_strategist import infer_model_family, prompt_strategist
 def test_infer_model_family_classifies_supported_codegen_families():
     assert infer_model_family("anthropic-claude-4.6-sonnet") == "anthropic"
     assert infer_model_family("anthropic-claude-opus-4.6") == "anthropic"
+    assert infer_model_family("google-gemini-pro") == "gemini"
+    assert infer_model_family("gemini-2.5-flash") == "gemini"
+    assert infer_model_family("openai-gpt-5.4") == "openai_gpt5"
+    assert infer_model_family("gpt-5-turbo") == "openai_gpt5"
+    assert infer_model_family("openai-gpt-5-oss-model") == "generic"  # gpt-5 with "oss" excluded
     assert infer_model_family("openai-gpt-oss-120b") == "openai_gpt_oss"
     assert infer_model_family("alibaba-qwen3-32b") == "qwen3"
     assert infer_model_family("deepseek-r1-distill-llama-70b") == "deepseek_r1"

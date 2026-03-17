@@ -5,7 +5,7 @@ import logging
 import os
 from collections.abc import Iterator
 
-from .model_capabilities import model_endpoint_type, selected_runtime_model
+from .model_capabilities import model_endpoint_type
 
 DO_INFERENCE_BASE_URL = "https://inference.do-ai.run/v1"
 DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS = float(os.getenv("LLM_REQUEST_TIMEOUT_SECONDS", "180"))
@@ -17,23 +17,33 @@ _llm_semaphore: asyncio.Semaphore | None = None
 _llm_rate_lock: asyncio.Lock | None = None
 _llm_next_request_at = 0.0
 
-# Text generation defaults are unified on gpt-oss-120b so every LLM stage follows
-# the same runtime profile unless an explicit env override is provided.
+MODEL_GPT_5_4 = "gpt-5.4"
+MODEL_GPT_5_3_CODEX = "gpt-5.3-codex"
+MODEL_GPT_5_2 = "gpt-5.2"
+MODEL_CLAUDE_SONNET_4_6 = "claude-sonnet-4-6"
+MODEL_GEMINI_3_1_PRO = "gemini-3.1-pro-preview"
+MODEL_GEMINI_3_1_FLASH = "gemini-3.1-flash-lite-preview"
+MODEL_IMAGE = "fal-ai/flux/schnell"
+
 DEFAULT_MODEL_CONFIG = {
-    "council": selected_runtime_model(),
-    "strategist": selected_runtime_model(),
-    "cross_exam": selected_runtime_model(),
-    "code_gen": selected_runtime_model(),
-    "code_gen_frontend": selected_runtime_model(),
-    "code_gen_backend": selected_runtime_model(),
-    "ci_repair": selected_runtime_model(),
-    "doc_gen": selected_runtime_model(),
-    "image": "fal-ai/flux/schnell",
-    "brainstorm": selected_runtime_model(),
-    "brainstorm_synthesis": selected_runtime_model(),
-    "input": selected_runtime_model(),
-    "decision": selected_runtime_model(),
-    "web_search": selected_runtime_model(),
+    "council": MODEL_CLAUDE_SONNET_4_6,
+    "strategist": MODEL_GPT_5_4,
+    "cross_exam": MODEL_CLAUDE_SONNET_4_6,
+    "code_gen": MODEL_GPT_5_3_CODEX,
+    "code_gen_frontend": MODEL_GPT_5_3_CODEX,
+    "code_gen_backend": MODEL_GPT_5_3_CODEX,
+    "ci_repair": MODEL_GPT_5_2,
+    "doc_gen": MODEL_GPT_5_4,
+    "image": MODEL_IMAGE,
+    "brainstorm": MODEL_GPT_5_4,
+    "brainstorm_synthesis": MODEL_GPT_5_4,
+    "input": MODEL_CLAUDE_SONNET_4_6,
+    "decision": MODEL_GPT_5_4,
+    "web_search": MODEL_CLAUDE_SONNET_4_6,
+    "ui_design": MODEL_GEMINI_3_1_PRO,
+    "code_review": MODEL_GPT_5_4,
+    "api_contract": MODEL_GPT_5_4,
+    "zero_prompt_discovery": MODEL_GEMINI_3_1_FLASH,
 }
 
 _MODEL_ENV_OVERRIDES = {
@@ -73,6 +83,10 @@ _MODEL_ENV_OVERRIDES = {
     "input": ("VIBEDEPLOY_MODEL_INPUT", "VIBEDEPLOY_MODEL_ALL", "VIBEDEPLOY_MODEL"),
     "decision": ("VIBEDEPLOY_MODEL_DECISION", "VIBEDEPLOY_MODEL_ALL", "VIBEDEPLOY_MODEL"),
     "web_search": ("VIBEDEPLOY_MODEL_WEB_SEARCH", "VIBEDEPLOY_MODEL_ALL", "VIBEDEPLOY_MODEL"),
+    "ui_design": ("VIBEDEPLOY_MODEL_UI_DESIGN", "VIBEDEPLOY_MODEL_ALL", "VIBEDEPLOY_MODEL"),
+    "code_review": ("VIBEDEPLOY_MODEL_CODE_REVIEW", "VIBEDEPLOY_MODEL_ALL", "VIBEDEPLOY_MODEL"),
+    "api_contract": ("VIBEDEPLOY_MODEL_API_CONTRACT", "VIBEDEPLOY_MODEL_ALL", "VIBEDEPLOY_MODEL"),
+    "zero_prompt_discovery": ("VIBEDEPLOY_MODEL_ZERO_PROMPT", "VIBEDEPLOY_MODEL_ALL", "VIBEDEPLOY_MODEL"),
 }
 
 
@@ -355,12 +369,11 @@ def get_llm(
     request_timeout: float | None = None,
 ):
     """Route LLM calls through the provider adapter registry, then DO Inference, then direct OpenAI."""
-    from .providers.registry import _ensure_adapters_registered, registry, resolve_canonical
+    from .providers.registry import registry, resolve_canonical
 
     effective_max_tokens = max(256, max_tokens)
     effective_timeout = request_timeout or DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS
 
-    _ensure_adapters_registered()
     canonical = resolve_canonical(model)
     result = registry.get_llm(
         canonical,
@@ -377,22 +390,22 @@ def get_llm(
         from langchain_openai import ChatOpenAI
 
         return ChatOpenAI(
-            model=model,
+            model=canonical,
             api_key=inference_key,
             base_url=DO_INFERENCE_BASE_URL,
             temperature=float(temperature),
             max_tokens=effective_max_tokens,
             request_timeout=effective_timeout,
-            use_responses_api=model_endpoint_type(model) == "responses",
+            use_responses_api=model_endpoint_type(canonical) == "responses",
         )
 
     from langchain_openai import ChatOpenAI
 
-    stripped = model[len("openai-") :] if model.startswith("openai-") else model
+    stripped = canonical[len("openai-") :] if canonical.startswith("openai-") else canonical
     return ChatOpenAI(
         model=stripped,
         temperature=float(temperature),
         max_tokens=effective_max_tokens,
         request_timeout=effective_timeout,
-        use_responses_api=model_endpoint_type(model) == "responses",
+        use_responses_api=model_endpoint_type(canonical) == "responses",
     )
