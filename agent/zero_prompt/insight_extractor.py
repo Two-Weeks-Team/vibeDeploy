@@ -1,3 +1,5 @@
+import asyncio
+import json
 import logging
 import os
 import re
@@ -159,12 +161,66 @@ def extract_insight_from_transcript(transcript_text: str, video_title: str = "")
     )
 
 
+def _parse_appidea_from_text(raw: str) -> AppIdea:
+    text = raw.strip()
+    if "```json" in text:
+        text = text.split("```json", 1)[1].split("```", 1)[0].strip()
+    elif "```" in text:
+        text = text.split("```", 1)[1].split("```", 1)[0].strip()
+    data = json.loads(text)
+    return AppIdea(**data)
+
+
 async def extract_with_gemini(transcript_text: str) -> AppIdea | None:
-    api_key = os.environ.get("GOOGLE_GENAI_API_KEY", "").strip()
+    api_key = (os.environ.get("GOOGLE_GENAI_API_KEY", "") or os.environ.get("GEMINI_API_KEY", "")).strip()
     if not api_key:
         logger.debug("GOOGLE_GENAI_API_KEY not set — skipping Gemini extraction")
         return None
-    # TODO: wire real Gemini call — import google.generativeai, configure with api_key,
-    #       call model.generate_content(transcript_text[:4000]), parse response into AppIdea.
-    logger.info("GOOGLE_GENAI_API_KEY present — Gemini stub reached (not yet implemented)")
-    return None
+
+    try:
+        from google import genai  # noqa: PLC0415
+
+        client = genai.Client(api_key=api_key)
+
+        prompt = (
+            "Analyze this video transcript and extract an app idea.\n"
+            "Return JSON with fields: name, domain, description, "
+            "key_features (list), target_audience, confidence_score (0.0-1.0).\n\n"
+            f"Transcript:\n{transcript_text[:3000]}"
+        )
+
+        response = await asyncio.to_thread(
+            client.models.generate_content,
+            model="gemini-2.0-flash-lite",
+            contents=prompt,
+        )
+
+        raw = response.text or ""
+        try:
+            return _parse_appidea_from_text(raw)
+        except Exception as parse_err:
+            logger.warning("Gemini first parse failed (%s) — attempting self-repair", parse_err)
+
+            repair_prompt = (
+                "Your previous response failed to parse as a valid JSON AppIdea.\n"
+                f"Error: {parse_err}\n\n"
+                "Return ONLY valid JSON with exactly these fields:\n"
+                "  name (string), domain (string), description (string),\n"
+                "  key_features (list of strings), target_audience (string),\n"
+                "  confidence_score (float 0.0-1.0).\n\n"
+                f"Transcript:\n{transcript_text[:3000]}"
+            )
+            repair_response = await asyncio.to_thread(
+                client.models.generate_content,
+                model="gemini-2.0-flash-lite",
+                contents=repair_prompt,
+            )
+            try:
+                return _parse_appidea_from_text(repair_response.text or "")
+            except Exception:
+                logger.warning("Gemini self-repair failed — caller will use rule-based fallback")
+                return None
+
+    except Exception:
+        logger.warning("Gemini extraction failed — caller will use rule-based fallback", exc_info=True)
+        return None
