@@ -12,7 +12,7 @@ class AgentVersion(BaseModel):
 
     version: str
     agent_name: str
-    created_at: str
+    created_at: datetime
     config_hash: str
     metrics: dict = Field(default_factory=dict)
     is_active: bool = False
@@ -37,7 +37,7 @@ class VersionManager:
         agent_version = AgentVersion(
             version=version,
             agent_name=agent_name,
-            created_at=datetime.now(tz=timezone.utc).isoformat(),
+            created_at=datetime.now(tz=timezone.utc),
             config_hash=config_hash,
         )
         versions.append(agent_version)
@@ -45,10 +45,7 @@ class VersionManager:
 
     def get_active_version(self, agent_name: str) -> AgentVersion | None:
         """Return the currently active version, or None if none is active."""
-        for v in self._store.get(agent_name, []):
-            if v.is_active:
-                return v
-        return None
+        return next((v for v in self._store.get(agent_name, []) if v.is_active), None)
 
     def list_versions(self, agent_name: str) -> list[AgentVersion]:
         """Return all versions for an agent sorted by created_at descending."""
@@ -82,7 +79,8 @@ class VersionManager:
         if active_index is None or active_index == 0:
             return None
         previous = sorted_versions[active_index - 1]
-        self.activate_version(agent_name, previous.version)
+        for v in versions:
+            v.is_active = v.version == previous.version
         return previous
 
     def compare_versions(self, agent_name: str, v1: str, v2: str) -> dict:

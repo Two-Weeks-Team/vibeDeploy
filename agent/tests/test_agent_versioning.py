@@ -41,7 +41,9 @@ def test_activate_version_sets_active_and_deactivates_others():
     assert active is not None
     assert active.version == "1.0.0"
     manager.activate_version("bot", "2.0.0")
-    assert manager.get_active_version("bot").version == "2.0.0"
+    active_v2 = manager.get_active_version("bot")
+    assert active_v2 is not None
+    assert active_v2.version == "2.0.0"
     versions = manager.list_versions("bot")
     inactive = next(v for v in versions if v.version == "1.0.0")
     assert inactive.is_active is False
@@ -63,7 +65,9 @@ def test_rollback_activates_previous_version():
     previous = manager.rollback("bot")
     assert previous is not None
     assert previous.version == "1.0.0"
-    assert manager.get_active_version("bot").version == "1.0.0"
+    active = manager.get_active_version("bot")
+    assert active is not None
+    assert active.version == "1.0.0"
 
 
 @pytest.mark.unit
