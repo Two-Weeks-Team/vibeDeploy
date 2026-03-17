@@ -1,5 +1,6 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 
 from agent.nodes.deployer import _check_deploy_health, get_deploy_gate_status
@@ -80,7 +81,7 @@ async def test_check_deploy_health_returns_unhealthy_on_non_200():
 @pytest.mark.asyncio
 async def test_check_deploy_health_returns_unreachable_on_connection_error():
     mock_async_context = AsyncMock()
-    mock_async_context.__aenter__ = AsyncMock(side_effect=ConnectionError("Connection refused"))
+    mock_async_context.__aenter__ = AsyncMock(side_effect=httpx.ConnectError("Connection refused"))
     mock_async_context.__aexit__ = AsyncMock(return_value=None)
 
     with patch("httpx.AsyncClient", return_value=mock_async_context):
@@ -133,7 +134,7 @@ async def test_check_deploy_health_error_message_truncated_at_200():
     long_error = "x" * 500
 
     mock_async_context = AsyncMock()
-    mock_async_context.__aenter__ = AsyncMock(side_effect=RuntimeError(long_error))
+    mock_async_context.__aenter__ = AsyncMock(side_effect=httpx.ConnectError(long_error))
     mock_async_context.__aexit__ = AsyncMock(return_value=None)
 
     with patch("httpx.AsyncClient", return_value=mock_async_context):

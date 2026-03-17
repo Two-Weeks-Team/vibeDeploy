@@ -1722,7 +1722,7 @@ async def _check_deploy_health(live_url: str, timeout: int = 30) -> dict:
             if resp.status_code == 200:
                 return {"status": "healthy", "url": health_url, "status_code": 200}
             return {"status": "unhealthy", "url": health_url, "status_code": resp.status_code}
-    except Exception as exc:
+    except httpx.HTTPError as exc:
         return {"status": "unreachable", "url": health_url, "error": str(exc)[:200]}
 
 
