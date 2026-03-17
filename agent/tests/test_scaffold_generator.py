@@ -24,7 +24,7 @@ def test_package_json_default_app_name():
     assert pkg["name"] == "vibe-app"
 
 
-def test_scaffold_returns_all_eight_files():
+def test_scaffold_returns_all_nine_files():
     files = generate_scaffold({})
     expected_paths = {
         "web/package.json",
@@ -34,6 +34,7 @@ def test_scaffold_returns_all_eight_files():
         "web/src/app/globals.css",
         "agent/main.py",
         "agent/models.py",
+        "agent/ai_service.py",
         "agent/requirements.txt",
     }
     assert set(files.keys()) == expected_paths
