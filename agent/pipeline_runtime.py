@@ -6,6 +6,18 @@ from .sse import NODE_EVENTS, format_sse
 
 logger = logging.getLogger(__name__)
 
+
+def _yield_error_events(exc: Exception, *, action: str, thread_id: str, event_prefix: str = "council") -> list[str]:
+    logger.exception("%s pipeline error (thread=%s)", action.capitalize(), thread_id)
+    error_msg = str(exc)[:500]
+    return [
+        format_sse(
+            "session.error", {"type": "session.error", "action": action, "thread_id": thread_id, "error": error_msg}
+        ),
+        format_sse(f"{event_prefix}.error", {"type": f"{event_prefix}.error", "error": error_msg}),
+    ]
+
+
 _AGENT_NODE_IDS = {
     "architect": "architect",
     "scout": "scout",
@@ -526,22 +538,8 @@ async def _stream_evaluation(
             },
         )
     except Exception as exc:
-        logger.exception("Evaluate pipeline error (thread=%s)", thread_id)
-        error_msg = str(exc)[:500]
-        error_payload = {
-            "type": "session.error",
-            "action": "evaluate",
-            "thread_id": thread_id,
-            "error": error_msg,
-        }
-        yield format_sse("session.error", error_payload)
-        yield format_sse(
-            "council.error",
-            {
-                "type": "council.error",
-                "error": error_msg,
-            },
-        )
+        for event in _yield_error_events(exc, action="evaluate", thread_id=thread_id):
+            yield event
 
 
 async def _stream_resume(thread_id: str, action: str) -> AsyncGenerator[str, None]:
@@ -653,22 +651,8 @@ async def _stream_resume(thread_id: str, action: str) -> AsyncGenerator[str, Non
             },
         )
     except Exception as exc:
-        logger.exception("Resume pipeline error (thread=%s)", thread_id)
-        error_msg = str(exc)[:500]
-        error_payload = {
-            "type": "session.error",
-            "action": "resume",
-            "thread_id": thread_id,
-            "error": error_msg,
-        }
-        yield format_sse("session.error", error_payload)
-        yield format_sse(
-            "council.error",
-            {
-                "type": "council.error",
-                "error": error_msg,
-            },
-        )
+        for event in _yield_error_events(exc, action="resume", thread_id=thread_id):
+            yield event
 
 
 async def _stream_brainstorm(
@@ -790,22 +774,8 @@ async def _stream_brainstorm(
             },
         )
     except Exception as exc:
-        logger.exception("Brainstorm pipeline error (thread=%s)", thread_id)
-        error_msg = str(exc)[:500]
-        error_payload = {
-            "type": "session.error",
-            "action": "brainstorm",
-            "thread_id": thread_id,
-            "error": error_msg,
-        }
-        yield format_sse("session.error", error_payload)
-        yield format_sse(
-            "brainstorm.error",
-            {
-                "type": "brainstorm.error",
-                "error": error_msg,
-            },
-        )
+        for event in _yield_error_events(exc, action="brainstorm", thread_id=thread_id, event_prefix="brainstorm"):
+            yield event
 
 
 async def stream_action_session(payload: dict) -> AsyncGenerator[str, None]:
