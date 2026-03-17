@@ -112,6 +112,9 @@ class VibeDeployState(TypedDict):
     build_errors: Optional[str]
     build_repair_prompt: Optional[str]
 
+    # API Contract
+    api_contract: Optional[str]
+
     # Deployment
     deploy_result: Optional[DeployResult]
 
