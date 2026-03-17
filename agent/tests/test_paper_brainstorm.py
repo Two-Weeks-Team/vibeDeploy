@@ -1,10 +1,14 @@
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
 from agent.zero_prompt.events import (
     ZP_BRAINSTORM_COMPLETE,
     ZP_BRAINSTORM_START,
     brainstorm_complete_event,
     brainstorm_start_event,
 )
-from agent.zero_prompt.paper_brainstorm import enhance_idea_with_papers
+from agent.zero_prompt.paper_brainstorm import enhance_idea_with_papers, paper_brainstorm_llm
 from agent.zero_prompt.schemas import EnhancedIdea, PaperMetadata
 
 _IDEA_ML = "build a machine learning model for image classification"
@@ -137,3 +141,129 @@ def test_unexplored_angles_capped_at_three():
     papers = [_paper(f"Gap Paper {i}", _ABSTRACT_GAPS) for i in range(10)]
     result = enhance_idea_with_papers("language model for text", papers)
     assert len(result.unexplored_angles) <= 3
+
+
+_LLM_JSON_RESPONSE = """{
+    "novel_features": ["Adaptive pooling layers for small datasets", "Real-time inference optimization"],
+    "scientific_backing": "Smith (2023): CNN Image Classifier",
+    "unexplored_angles": ["Transfer learning on medical imaging"],
+    "novelty_boost": 0.2
+}"""
+
+
+def _make_mock_llm_response(content: str) -> MagicMock:
+    resp = MagicMock()
+    resp.content = content
+    return resp
+
+
+@pytest.mark.asyncio
+async def test_paper_brainstorm_llm_returns_enhanced_idea():
+    papers = [_paper("CNN Image Classifier", _ABSTRACT_ML)]
+    mock_response = _make_mock_llm_response(_LLM_JSON_RESPONSE)
+
+    with (
+        patch("agent.zero_prompt.paper_brainstorm.get_llm"),
+        patch("agent.zero_prompt.paper_brainstorm.ainvoke_with_retry", new=AsyncMock(return_value=mock_response)),
+    ):
+        events, result = await paper_brainstorm_llm(_IDEA_ML, papers)
+
+    assert isinstance(result, EnhancedIdea)
+    assert result.original_idea == _IDEA_ML
+    assert result.novel_features == ["Adaptive pooling layers for small datasets", "Real-time inference optimization"]
+    assert result.scientific_backing == "Smith (2023): CNN Image Classifier"
+    assert result.unexplored_angles == ["Transfer learning on medical imaging"]
+    assert result.novelty_boost == 0.2
+
+
+@pytest.mark.asyncio
+async def test_paper_brainstorm_llm_emits_start_and_complete_events():
+    papers = [_paper("CNN Image Classifier", _ABSTRACT_ML)]
+    mock_response = _make_mock_llm_response(_LLM_JSON_RESPONSE)
+
+    with (
+        patch("agent.zero_prompt.paper_brainstorm.get_llm"),
+        patch("agent.zero_prompt.paper_brainstorm.ainvoke_with_retry", new=AsyncMock(return_value=mock_response)),
+    ):
+        events, result = await paper_brainstorm_llm(_IDEA_ML, papers)
+
+    event_types = [e["type"] for e in events]
+    assert ZP_BRAINSTORM_START in event_types
+    assert ZP_BRAINSTORM_COMPLETE in event_types
+
+
+@pytest.mark.asyncio
+async def test_paper_brainstorm_llm_start_event_contains_paper_count():
+    papers = [_paper("Paper A", _ABSTRACT_ML), _paper("Paper B", _ABSTRACT_GAPS)]
+    mock_response = _make_mock_llm_response(_LLM_JSON_RESPONSE)
+
+    with (
+        patch("agent.zero_prompt.paper_brainstorm.get_llm"),
+        patch("agent.zero_prompt.paper_brainstorm.ainvoke_with_retry", new=AsyncMock(return_value=mock_response)),
+    ):
+        events, _ = await paper_brainstorm_llm(_IDEA_ML, papers)
+
+    start = next(e for e in events if e["type"] == ZP_BRAINSTORM_START)
+    assert start["paper_count"] == 2
+    assert start["idea"] == _IDEA_ML
+
+
+@pytest.mark.asyncio
+async def test_paper_brainstorm_llm_novelty_boost_bounded():
+    over_boost_json = '{"novel_features": [], "scientific_backing": "", "unexplored_angles": [], "novelty_boost": 0.99}'
+    mock_response = _make_mock_llm_response(over_boost_json)
+
+    with (
+        patch("agent.zero_prompt.paper_brainstorm.get_llm"),
+        patch("agent.zero_prompt.paper_brainstorm.ainvoke_with_retry", new=AsyncMock(return_value=mock_response)),
+    ):
+        _, result = await paper_brainstorm_llm(_IDEA_ML, [_paper("X", _ABSTRACT_ML)])
+
+    assert 0.0 <= result.novelty_boost <= 0.3
+
+
+@pytest.mark.asyncio
+async def test_paper_brainstorm_llm_falls_back_on_llm_error():
+    papers = [_paper("CNN Image Classifier", _ABSTRACT_ML)]
+
+    with (
+        patch("agent.zero_prompt.paper_brainstorm.get_llm"),
+        patch(
+            "agent.zero_prompt.paper_brainstorm.ainvoke_with_retry", new=AsyncMock(side_effect=RuntimeError("LLM down"))
+        ),
+    ):
+        events, result = await paper_brainstorm_llm(_IDEA_ML, papers)
+
+    assert isinstance(result, EnhancedIdea)
+    assert result.original_idea == _IDEA_ML
+    event_types = [e["type"] for e in events]
+    assert ZP_BRAINSTORM_START in event_types
+    assert ZP_BRAINSTORM_COMPLETE in event_types
+
+
+@pytest.mark.asyncio
+async def test_paper_brainstorm_llm_falls_back_on_invalid_json():
+    papers = [_paper("CNN Image Classifier", _ABSTRACT_ML)]
+    mock_response = _make_mock_llm_response("not valid json {{{{")
+
+    with (
+        patch("agent.zero_prompt.paper_brainstorm.get_llm"),
+        patch("agent.zero_prompt.paper_brainstorm.ainvoke_with_retry", new=AsyncMock(return_value=mock_response)),
+    ):
+        events, result = await paper_brainstorm_llm(_IDEA_ML, papers)
+
+    assert isinstance(result, EnhancedIdea)
+    assert result.original_idea == _IDEA_ML
+
+
+@pytest.mark.asyncio
+async def test_paper_brainstorm_llm_empty_papers_skips_llm():
+    with patch("agent.zero_prompt.paper_brainstorm.ainvoke_with_retry") as mock_invoke:
+        events, result = await paper_brainstorm_llm("my idea", [])
+
+    mock_invoke.assert_not_called()
+    assert result.original_idea == "my idea"
+    assert result.novelty_boost == 0.0
+    event_types = [e["type"] for e in events]
+    assert ZP_BRAINSTORM_START in event_types
+    assert ZP_BRAINSTORM_COMPLETE in event_types

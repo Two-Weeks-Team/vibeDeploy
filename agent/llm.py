@@ -44,6 +44,7 @@ DEFAULT_MODEL_CONFIG = {
     "code_review": MODEL_GPT_5_4,
     "api_contract": MODEL_GPT_5_4,
     "zero_prompt_discovery": MODEL_GEMINI_3_1_FLASH,
+    "zero_prompt_brainstorm": MODEL_GEMINI_3_1_FLASH,
 }
 
 _MODEL_ENV_OVERRIDES = {
@@ -87,6 +88,12 @@ _MODEL_ENV_OVERRIDES = {
     "code_review": ("VIBEDEPLOY_MODEL_CODE_REVIEW", "VIBEDEPLOY_MODEL_ALL", "VIBEDEPLOY_MODEL"),
     "api_contract": ("VIBEDEPLOY_MODEL_API_CONTRACT", "VIBEDEPLOY_MODEL_ALL", "VIBEDEPLOY_MODEL"),
     "zero_prompt_discovery": ("VIBEDEPLOY_MODEL_ZERO_PROMPT", "VIBEDEPLOY_MODEL_ALL", "VIBEDEPLOY_MODEL"),
+    "zero_prompt_brainstorm": (
+        "VIBEDEPLOY_MODEL_ZERO_PROMPT_BRAINSTORM",
+        "VIBEDEPLOY_MODEL_ZERO_PROMPT",
+        "VIBEDEPLOY_MODEL_ALL",
+        "VIBEDEPLOY_MODEL",
+    ),
 }
 
 
