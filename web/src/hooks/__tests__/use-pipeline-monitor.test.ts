@@ -37,14 +37,5 @@ describe("usePipelineMonitor", () => {
     expect(result.current).toHaveProperty("connected");
   });
 
-  it("returns exactly four properties", () => {
-    const { result } = renderHook(() => usePipelineMonitor());
-    const keys = Object.keys(result.current);
-
-    expect(keys).toContain("activePipelines");
-    expect(keys).toContain("events");
-    expect(keys).toContain("nodeStatuses");
-    expect(keys).toContain("connected");
-  });
 });
 
