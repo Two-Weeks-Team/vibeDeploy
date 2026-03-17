@@ -1,4 +1,5 @@
 import uuid
+from collections import deque
 from datetime import datetime, timezone
 
 from agent.zero_prompt.schemas import ZPCard, ZPSession
@@ -25,8 +26,10 @@ class SessionManager:
     def get_session(self, session_id: str) -> ZPSession | None:
         return self._sessions.get(session_id)
 
-    def add_card(self, session_id: str, video_id: str) -> ZPCard:
-        session = self._sessions[session_id]
+    def add_card(self, session_id: str, video_id: str) -> ZPCard | None:
+        session = self._sessions.get(session_id)
+        if session is None:
+            return None
         card = ZPCard(
             card_id=str(uuid.uuid4()),
             video_id=video_id,
@@ -62,7 +65,9 @@ class SessionManager:
         session = self._sessions.get(session_id)
         if session is None or not session.build_queue:
             return None
-        card_id = session.build_queue.pop(0)
+        bq = deque(session.build_queue)
+        card_id = bq.popleft()
+        session.build_queue = list(bq)
         session.active_build = card_id
         return card_id
 

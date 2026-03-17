@@ -7,7 +7,8 @@ class BuildQueue:
         self._active: str | None = None
 
     def enqueue(self, card_id: str) -> None:
-        self._queue.append(card_id)
+        if card_id not in self._queue:
+            self._queue.append(card_id)
 
     def dequeue(self) -> str | None:
         if self._active is not None or not self._queue:
