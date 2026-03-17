@@ -79,3 +79,66 @@ def compete_error_event(error: str) -> dict:
         "type": ZP_COMPETE_ERROR,
         "error": error,
     }
+
+
+ZP_GO = "zp.verdict.go"
+ZP_NOGO = "zp.verdict.nogo"
+
+
+def verdict_go_event(score: int, reason: str, reason_code: str) -> dict:
+    return {
+        "type": ZP_GO,
+        "score": score,
+        "reason": reason,
+        "reason_code": reason_code,
+    }
+
+
+def verdict_nogo_event(score: int, reason: str, reason_code: str) -> dict:
+    return {
+        "type": ZP_NOGO,
+        "score": score,
+        "reason": reason,
+        "reason_code": reason_code,
+    }
+
+
+ZP_BRAINSTORM_START = "zp.brainstorm.start"
+ZP_BRAINSTORM_COMPLETE = "zp.brainstorm.complete"
+
+
+def brainstorm_start_event(idea: str, paper_count: int) -> dict:
+    return {
+        "type": ZP_BRAINSTORM_START,
+        "idea": idea,
+        "paper_count": paper_count,
+    }
+
+
+def brainstorm_complete_event(novel_features: int, unexplored_angles: int, novelty_boost: float) -> dict:
+    return {
+        "type": ZP_BRAINSTORM_COMPLETE,
+        "novel_features": novel_features,
+        "unexplored_angles": unexplored_angles,
+        "novelty_boost": novelty_boost,
+    }
+
+
+ZP_TRANSCRIPT_START = "zp.transcript.start"
+ZP_TRANSCRIPT_COMPLETE = "zp.transcript.complete"
+
+
+def transcript_start_event(video_id: str) -> dict:
+    return {
+        "type": ZP_TRANSCRIPT_START,
+        "video_id": video_id,
+    }
+
+
+def transcript_complete_event(video_id: str, source: str, token_count: int) -> dict:
+    return {
+        "type": ZP_TRANSCRIPT_COMPLETE,
+        "video_id": video_id,
+        "source": source,
+        "token_count": token_count,
+    }
