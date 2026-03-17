@@ -25,10 +25,10 @@ from pathlib import Path
 import httpx
 import uvicorn
 from dotenv import load_dotenv
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from starlette.responses import StreamingResponse
+from starlette.responses import JSONResponse, StreamingResponse
 
 from .cost import estimate_pipeline_cost
 from .db.store import ResultStore
@@ -970,6 +970,56 @@ async def dashboard_evaluations():
     if summary is None:
         return {"status": "no_evaluation_run", "total": 0}
     return summary.model_dump()
+
+
+from .zero_prompt.orchestrator import SessionManager  # noqa: E402
+
+_zp_sessions = SessionManager()
+
+
+@app.get("/api/zero-prompt/active")
+@app.get("/zero-prompt/active")
+async def zp_active():
+    return {"sessions": []}
+
+
+@app.post("/api/zero-prompt/start")
+@app.post("/zero-prompt/start")
+async def zp_start(request: Request):
+    body = await request.json()
+    goal = body.get("goal", 3)
+    session = _zp_sessions.create_session(goal=goal)
+    return session.model_dump()
+
+
+@app.get("/api/zero-prompt/{session_id}")
+@app.get("/zero-prompt/{session_id}")
+async def zp_get_session(session_id: str):
+    session = _zp_sessions.get_session(session_id)
+    if not session:
+        return JSONResponse({"error": "session not found"}, status_code=404)
+    return session.model_dump()
+
+
+@app.post("/api/zero-prompt/{session_id}/actions")
+@app.post("/zero-prompt/{session_id}/actions")
+async def zp_action(session_id: str, request: Request):
+    body = await request.json()
+    action = body.get("action")
+    card_id = body.get("card_id", "")
+    if action == "queue_build":
+        ok = _zp_sessions.queue_build(session_id, card_id)
+    elif action == "pass_card":
+        ok = _zp_sessions.update_card_status(session_id, card_id, "passed")
+    elif action == "delete_card":
+        ok = _zp_sessions.update_card_status(session_id, card_id, "deleted")
+    elif action == "pause":
+        ok = _zp_sessions.pause_session(session_id)
+    elif action == "resume":
+        ok = _zp_sessions.resume_session(session_id)
+    else:
+        return JSONResponse({"error": f"unknown action: {action}"}, status_code=400)
+    return {"ok": ok, "action": action}
 
 
 if __name__ == "__main__":
