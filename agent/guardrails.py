@@ -45,10 +45,49 @@ def redact_pii(text: str) -> tuple[str, list[str]]:
     return redacted, found_types
 
 
+CONTENT_MODERATION_PATTERNS = [
+    re.compile(r"(?i)\b(?:hack|exploit|attack)\s+(?:a|the|this)\s+(?:website|server|system|database)\b"),
+    re.compile(r"(?i)\b(?:create|build|make)\s+(?:a\s+)?(?:malware|virus|ransomware|trojan|keylogger)\b"),
+    re.compile(r"(?i)\b(?:ddos|sql\s*injection|xss|cross-site)\b"),
+    re.compile(r"(?i)\b(?:phishing|credential\s*harvest|social\s*engineer)\b"),
+    re.compile(r"(?i)\b(?:steal|scrape)\s+(?:personal|user|customer)\s+(?:data|info|information)\b"),
+]
+
+JAILBREAK_PATTERNS = [
+    re.compile(r"(?i)pretend\s+(?:you\s+are|to\s+be)\s+(?:an?\s+)?(?:unrestricted|unfiltered|evil)"),
+    re.compile(r"(?i)(?:DAN|do\s+anything\s+now)\s+mode"),
+    re.compile(r"(?i)roleplay\s+as\s+(?:an?\s+)?(?:hacker|attacker|malicious)"),
+    re.compile(r"(?i)bypass\s+(?:your|all|any)\s+(?:safety|content|ethical)\s+(?:filter|guardrail|restriction)"),
+    re.compile(r"(?i)respond\s+without\s+(?:any\s+)?(?:filter|restriction|limitation|safety)"),
+]
+
+
+def check_content_moderation(prompt: str) -> tuple[bool, str]:
+    for pattern in CONTENT_MODERATION_PATTERNS:
+        if pattern.search(prompt):
+            return False, "Content blocked: request involves harmful or malicious activity"
+    return True, ""
+
+
+def check_jailbreak(prompt: str) -> tuple[bool, str]:
+    for pattern in JAILBREAK_PATTERNS:
+        if pattern.search(prompt):
+            return False, "Content blocked: jailbreak attempt detected"
+    return True, ""
+
+
 def sanitize_input(prompt: str) -> tuple[str, bool, str, list[str]]:
     valid, error = validate_prompt(prompt)
     if not valid:
         return prompt, False, error, []
+
+    safe, moderation_error = check_content_moderation(prompt)
+    if not safe:
+        return prompt, False, moderation_error, []
+
+    safe, jailbreak_error = check_jailbreak(prompt)
+    if not safe:
+        return prompt, False, jailbreak_error, []
 
     sanitized, pii_found = redact_pii(prompt)
     return sanitized, True, "", pii_found
