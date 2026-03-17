@@ -43,11 +43,8 @@ PRICING_PER_MILLION = {
 
 
 def _resolve_price(model: str) -> tuple[float, float]:
-    price = PRICING_PER_MILLION.get(model)
-    if price is not None:
-        return price
     canonical = LEGACY_MODEL_ALIASES.get(model, model)
-    return PRICING_PER_MILLION.get(canonical, (0.0, 0.0))
+    return PRICING_PER_MILLION.get(canonical, PRICING_PER_MILLION.get(model, (0.0, 0.0)))
 
 
 DB_MONTHLY_COST = 15.15
