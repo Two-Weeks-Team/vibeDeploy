@@ -25,15 +25,9 @@ async def fetch_transcript_artifact(video_id: str) -> TranscriptArtifact:
         text = await extract_youtube_transcript(url)
     except Exception as exc:
         logger.warning("Transcript extraction raised for %s: %s", video_id, str(exc)[:200])
-        return TranscriptArtifact(
-            video_id=video_id,
-            text="",
-            source="error",
-            language=None,
-            token_count=0,
-        )
+        text = ""
 
-    if text.startswith("[Error:"):
+    if not text or text.startswith("[Error:"):
         return TranscriptArtifact(
             video_id=video_id,
             text="",
