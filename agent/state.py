@@ -111,6 +111,9 @@ class VibeDeployState(TypedDict):
     # Deployment
     deploy_result: Optional[DeployResult]
 
+    # Control flags
+    skip_council: bool
+
     # Meta
     phase: str  # 현재 단계
     error: Optional[str]

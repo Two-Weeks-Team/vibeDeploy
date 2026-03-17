@@ -101,6 +101,7 @@ def normalize_action_payload(body: dict | None) -> dict:
         "constraints": str(payload.get("constraints") or "").strip(),
         "selected_flagship": str(payload.get("selected_flagship") or "").strip(),
         "flagship_contract": flagship_contract,
+        "skip_council": bool(payload.get("skip_council")),
     }
 
 
@@ -785,6 +786,7 @@ async def stream_action_session(payload: dict) -> AsyncGenerator[str, None]:
     initial_state = {
         "selected_flagship": action_payload.get("selected_flagship") or None,
         "flagship_contract": action_payload.get("flagship_contract") or None,
+        "skip_council": action_payload.get("skip_council", False),
     }
     if action == "brainstorm":
         async for chunk in _stream_brainstorm(

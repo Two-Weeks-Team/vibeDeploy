@@ -569,6 +569,7 @@ def _request_to_action_payload(request: "RunRequest", *, action: str) -> dict:
         "constraints": request.constraints,
         "selected_flagship": request.selected_flagship,
         "flagship_contract": request.flagship_contract or {},
+        "skip_council": request.skip_council,
     }
 
 
@@ -642,6 +643,7 @@ class RunRequest(BaseModel):
     constraints: str = ""
     selected_flagship: str = ""
     flagship_contract: dict | None = None
+    skip_council: bool = False
 
 
 class ShowcaseAppInput(BaseModel):
