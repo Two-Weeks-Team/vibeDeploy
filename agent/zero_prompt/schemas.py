@@ -89,7 +89,17 @@ class AppIdea(BaseModel):
 class ZPCard(BaseModel):
     card_id: str
     video_id: str
-    status: Literal["processing", "go_ready", "nogo", "building", "built", "passed", "deleted"] = "processing"
+    status: Literal[
+        "processing",
+        "go_ready",
+        "build_queued",
+        "nogo",
+        "building",
+        "built",
+        "passed",
+        "deleted",
+        "build_failed",
+    ] = "processing"
     score: int = 0
     thread_id: str | None = None
 
