@@ -56,7 +56,7 @@ services:
     http_port: 8080
     instance_count: 1
     instance_size_slug: professional-xs
-    build_command: pip install -r requirements.txt
+    build_command: pip install langchain-gradient>=0.1.24 --no-deps && grep -v '^langchain-gradient' requirements.txt > /tmp/req-filtered.txt && pip install -r /tmp/req-filtered.txt
     run_command: python run_server.py
     envs:
       - key: DATABASE_URL
