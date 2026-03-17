@@ -5,7 +5,17 @@ import re
 from typing import Optional
 
 import requests
-from gradient_adk.tracing import trace_tool
+
+try:
+    from gradient_adk.tracing import trace_tool
+except ImportError:
+
+    def trace_tool(name):
+        def _noop(fn):
+            return fn
+
+        return _noop
+
 
 logger = logging.getLogger(__name__)
 

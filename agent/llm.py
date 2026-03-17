@@ -252,7 +252,7 @@ def _trace_llm_if_available(name: str):
         from gradient_adk.tracing import trace_llm
 
         return trace_llm(name)
-    except (ImportError, Exception):
+    except ImportError:
         return lambda fn: fn
 
 
