@@ -8,7 +8,7 @@
 |------|----------|-------|
 | Meeting start/resume | `api.ts` | creates thread ids and POSTs `/run` / `/resume` |
 | Brainstorm start/result | `api.ts` | brainstorm equivalents |
-| Dashboard data fetches | `api.ts` | stats, results, brainstorms, deployments |
+| Dashboard data fetches | `dashboard-api.ts` | stats, results, brainstorms, deployments |
 | URL normalization | `api.ts` | `AGENT_URL` vs `DASHBOARD_API_URL` |
 | Streaming helper | `sse-client.ts` | shared SSE parsing/client utilities |
 | UI helpers | `utils.ts` | shared class-name / utility helpers |
@@ -27,7 +27,7 @@
 ## NOTES
 - `MeetingResult` includes optional deploy metadata such as CI status and local URLs; many screens tolerate partial deployment data.
 - This directory is small but high-leverage: tiny shape changes fan out across the whole web runtime.
-- `api.ts` is the contract-heavy file here; `sse-client.ts` and `utils.ts` are lighter-weight support modules.
+- `api.ts` is the contract-heavy file for meeting/brainstorm flows; `dashboard-api.ts` handles operational dashboard fetches; `sse-client.ts` and `utils.ts` are lighter-weight support modules.
 
 ## COMMANDS
 ```bash

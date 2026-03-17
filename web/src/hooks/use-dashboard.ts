@@ -7,7 +7,7 @@ import {
   getDashboardResults,
   getDashboardBrainstorms,
   getDashboardDeployments,
-} from "@/lib/api";
+} from "@/lib/dashboard-api";
 import type {
   DashboardStats,
   MeetingResultFull,

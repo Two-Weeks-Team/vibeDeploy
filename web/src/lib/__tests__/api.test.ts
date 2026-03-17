@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { startMeeting, checkHealth, getMeetingResult, DASHBOARD_API_URL } from "../api";
+import { startMeeting, getMeetingResult, DASHBOARD_API_URL } from "../api";
+import { checkHealth } from "../dashboard-api";
 
 describe("api.ts", () => {
   beforeEach(() => {
