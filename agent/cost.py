@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 
-from agent.providers.pricing import PRICING as _PROVIDER_PRICING
+from .providers.pricing import PRICING as SURCHARGE_PRICING
+from .providers.pricing import calculate_cost
 
 PRICING_PER_MILLION = {
     "openai-gpt-oss-120b": (0.10, 0.70),
@@ -36,7 +37,7 @@ PRICING_PER_MILLION = {
     "fal-ai/fast-sdxl": (1.00, 1.00),
 }
 
-for _model_id, _spec in _PROVIDER_PRICING.items():
+for _model_id, _spec in SURCHARGE_PRICING.items():
     if _model_id not in PRICING_PER_MILLION:
         PRICING_PER_MILLION[_model_id] = (_spec["input_per_million"], _spec["output_per_million"])
 
@@ -57,15 +58,14 @@ class CostTracker:
         cached_input_tokens: int = 0,
         surcharge_type: str = "",
     ):
-        from .providers.pricing import PRICING as SURCHARGE_PRICING
-
         surcharge_spec = SURCHARGE_PRICING.get(model)
-        if surcharge_spec and cached_input_tokens > 0 and surcharge_spec.get("cached_input_per_million") is not None:
-            billable_input = input_tokens - cached_input_tokens
-            cached_cost = cached_input_tokens * surcharge_spec["cached_input_per_million"] / 1_000_000
-            regular_cost = billable_input * surcharge_spec["input_per_million"] / 1_000_000
-            output_cost = output_tokens * surcharge_spec["output_per_million"] / 1_000_000
-            cost = cached_cost + regular_cost + output_cost
+        if surcharge_spec:
+            cost = calculate_cost(
+                model_id=model,
+                input_tokens=input_tokens - cached_input_tokens,
+                output_tokens=output_tokens,
+                cached_input_tokens=cached_input_tokens,
+            )
         else:
             input_price, output_price = PRICING_PER_MILLION.get(model, (0.0, 0.0))
             cost = (input_tokens * input_price + output_tokens * output_price) / 1_000_000
