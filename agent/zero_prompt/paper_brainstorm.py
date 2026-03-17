@@ -176,7 +176,8 @@ def enhance_idea_with_papers(idea: str, papers: list) -> EnhancedIdea:
     scientific_backing = "; ".join(citations)
 
     avg_relevance = sum(relevance_scores) / len(relevance_scores) if relevance_scores else 0.0
-    novelty_boost = round(min(avg_relevance * 0.6, 0.3), 4)
+    paper_presence_bonus = min(len(papers) * 0.04, 0.12)
+    novelty_boost = round(min(avg_relevance * 0.6 + paper_presence_bonus, 0.3), 4)
 
     return EnhancedIdea(
         original_idea=idea,
