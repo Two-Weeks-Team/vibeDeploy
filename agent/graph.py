@@ -72,7 +72,7 @@ def create_graph():
     workflow.add_conditional_edges(
         "enrich_idea",
         route_after_enrich,
-        {"doc_generator": "doc_generator", "run_council_agent": "run_council_agent"},
+        ["doc_generator", "run_council_agent"],
     )
 
     workflow.add_edge("run_council_agent", "cross_examination")
