@@ -14,7 +14,7 @@ TEMPERATURE_SCHEDULE = [0.1, 0.05, 0.02]
 MAX_BUILD_ATTEMPTS = 3
 
 
-def _trim_build_errors(stderr: str) -> str:
+def _trim_build_errors(stderr: str | None) -> str:
     if not stderr:
         return "Unknown build error"
     lines = stderr.splitlines()
@@ -117,13 +117,19 @@ async def build_validator(state: VibeDeployState) -> dict:
         syntax_errors = _ast_check_python_files(backend_code)
         if syntax_errors:
             logger.warning("[BUILD_VALIDATOR] Python syntax errors detected: %s", syntax_errors)
+            combined_stderr = "\n".join(syntax_errors)
+            trimmed = _trim_build_errors(combined_stderr)
+            repair_prompt = _build_repair_prompt(trimmed, backend_code)
             return {
                 "build_validation": {
                     "passed": False,
                     "backend_ok": False,
                     "frontend_ok": None,
                     "errors": syntax_errors,
-                }
+                },
+                "build_errors": trimmed,
+                "build_repair_prompt": repair_prompt,
+                "build_attempt_count": state.get("build_attempt_count", 0) + 1,
             }
 
     try:
@@ -180,11 +186,23 @@ async def build_validator(state: VibeDeployState) -> dict:
             }
         }
 
+    combined_stderr = "\n".join(errors)
+    trimmed = _trim_build_errors(combined_stderr)
+    failing_files: dict[str, str] = {}
+    if not backend_ok:
+        failing_files.update(backend_code)
+    if not frontend_ok:
+        failing_files.update(frontend_code)
+    repair_prompt = _build_repair_prompt(trimmed, failing_files)
+
     return {
         "build_validation": {
             "passed": False,
             "backend_ok": backend_ok,
             "frontend_ok": frontend_ok,
             "errors": errors,
-        }
+        },
+        "build_errors": trimmed,
+        "build_repair_prompt": repair_prompt,
+        "build_attempt_count": state.get("build_attempt_count", 0) + 1,
     }
