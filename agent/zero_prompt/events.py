@@ -1,3 +1,5 @@
+ZP_SESSION_START = "zp.session.start"
+
 ZP_SEARCH_START = "zp.search.start"
 ZP_SEARCH_COMPLETE = "zp.search.complete"
 ZP_SEARCH_ERROR = "zp.search.error"
@@ -18,6 +20,17 @@ ZP_NOGO = "zp.verdict.nogo"
 
 ZP_TRANSCRIPT_START = "zp.transcript.start"
 ZP_TRANSCRIPT_COMPLETE = "zp.transcript.complete"
+
+ZP_INSIGHT_START = "zp.insight.start"
+ZP_INSIGHT_COMPLETE = "zp.insight.complete"
+
+
+def session_start_event(session_id: str, goal_go_cards: int) -> dict:
+    return {
+        "type": ZP_SESSION_START,
+        "session_id": session_id,
+        "goal_go_cards": goal_go_cards,
+    }
 
 
 def search_start_event(query: str, category: str) -> dict:
@@ -122,6 +135,22 @@ def brainstorm_complete_event(novel_features: int, unexplored_angles: int, novel
         "novel_features": novel_features,
         "unexplored_angles": unexplored_angles,
         "novelty_boost": novelty_boost,
+    }
+
+
+def insight_start_event(video_title: str) -> dict:
+    return {
+        "type": ZP_INSIGHT_START,
+        "video_title": video_title,
+    }
+
+
+def insight_complete_event(domain: str, features: int, confidence: float) -> dict:
+    return {
+        "type": ZP_INSIGHT_COMPLETE,
+        "domain": domain,
+        "features_found": features,
+        "confidence_score": confidence,
     }
 
 

@@ -75,3 +75,30 @@ class TranscriptArtifact(BaseModel):
     source: Literal["manual", "auto", "metadata_fallback", "error"]
     language: str | None = None
     token_count: int
+
+
+class AppIdea(BaseModel):
+    name: str
+    domain: str
+    description: str
+    key_features: list[str] = []
+    target_audience: str
+    confidence_score: float = Field(default=0.0, ge=0.0, le=1.0)
+
+
+class ZPCard(BaseModel):
+    card_id: str
+    video_id: str
+    status: Literal["processing", "go_ready", "nogo", "building", "built", "passed", "deleted"] = "processing"
+    score: int = 0
+    thread_id: str | None = None
+
+
+class ZPSession(BaseModel):
+    session_id: str
+    status: Literal["exploring", "paused", "completed"] = "exploring"
+    cards: list[ZPCard] = []
+    build_queue: list[str] = []
+    active_build: str | None = None
+    goal_go_cards: int = 3
+    created_at: str
