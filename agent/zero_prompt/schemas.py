@@ -90,16 +90,16 @@ class ZPCard(BaseModel):
     card_id: str
     video_id: str
     status: Literal[
-        "processing",
+        "analyzing",
         "go_ready",
         "build_queued",
         "nogo",
         "building",
-        "built",
+        "deployed",
         "passed",
         "deleted",
         "build_failed",
-    ] = "processing"
+    ] = "analyzing"
     score: int = 0
     thread_id: str | None = None
 

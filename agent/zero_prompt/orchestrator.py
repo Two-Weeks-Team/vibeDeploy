@@ -52,7 +52,7 @@ class SessionManager:
         card = ZPCard(
             card_id=str(uuid.uuid4()),
             video_id=video_id,
-            status="processing",
+            status="analyzing",
             score=0,
             thread_id=None,
         )
@@ -158,7 +158,7 @@ class StreamingOrchestrator:
         card = ZPCard(
             card_id=card_id,
             video_id=video_id,
-            status="processing",
+            status="analyzing",
             score=0,
             thread_id=None,
         )
@@ -182,7 +182,13 @@ class StreamingOrchestrator:
         events.append(compete_complete_event(0, "medium", "normal"))
 
         if verdict_fn is not None:
-            decision, score, reason, reason_code = await verdict_fn(session_id, video_id, card_id)
+            try:
+                decision, score, reason, reason_code = await verdict_fn(session_id, video_id, card_id)
+            except Exception:
+                card.status = "nogo"
+                card.score = 0
+                events.append(verdict_nogo_event(0, "analysis_error", "verdict_exception"))
+                return events
         else:
             decision, score, reason, reason_code = "GO", 75, "stub verdict", "high_potential"
 
@@ -232,6 +238,10 @@ class StreamingOrchestrator:
 
         if card_id in session.build_queue:
             session.build_queue.remove(card_id)
+
+        bq = self._build_queues.get(session_id)
+        if bq:
+            bq.remove(card_id)
 
         card.status = "passed"
         return {"type": "zp.action.pass_card", "card_id": card_id}
@@ -311,7 +321,7 @@ class StreamingOrchestrator:
 
         for card in session.cards:
             if card.card_id == card_id:
-                card.status = "built" if success else "build_failed"
+                card.status = "deployed" if success else "build_failed"
                 if thread_id is not None:
                     card.thread_id = thread_id
                 break

@@ -991,19 +991,35 @@ class ZPStartRequest(BaseModel):
 class ZPActionRequest(BaseModel):
     action: str
     card_id: str = ""
+    success: bool | None = None
+    thread_id: str | None = None
 
 
 @app.post("/api/zero-prompt/start")
 @app.post("/zero-prompt/start")
 async def zero_prompt_start(request: ZPStartRequest):
+    import asyncio
+
     from .sse import format_sse as _fmt
     from .zero_prompt.events import ZP_SESSION_START
 
     orch = _get_zp_orchestrator()
-    _session, start_event = orch.create_session(goal=request.goal)
+    session, start_event = orch.create_session(goal=request.goal)
+    session_id = session.session_id
 
     async def event_stream() -> AsyncGenerator[str, None]:
         yield _fmt(ZP_SESSION_START, start_event)
+
+        video_counter = 0
+        while orch.should_continue_exploring(session_id):
+            video_id = f"auto-discovery-{video_counter}"
+            video_counter += 1
+            step_events = await orch.exploration_step(session_id, video_id)
+            for evt in step_events:
+                yield _fmt(evt.get("type", "zp.step"), evt)
+            await asyncio.sleep(0.1)
+
+        yield _fmt("zp.session.complete", {"session_id": session_id, "type": "zp.session.complete"})
 
     return StreamingResponse(
         event_stream(),
@@ -1043,6 +1059,11 @@ async def zero_prompt_action(session_id: str, request: ZPActionRequest):
         result = orch.pause(session_id)
     elif action == "resume":
         result = orch.resume(session_id)
+    elif action == "start_next_build":
+        built_card = orch.start_next_build(session_id)
+        result = {"type": "zp.build.started", "card_id": built_card} if built_card else {"type": "zp.build.empty"}
+    elif action == "finish_build":
+        result = orch.finish_build(session_id, card_id, success=request.success or False, thread_id=request.thread_id)
     else:
         raise HTTPException(status_code=400, detail="unknown_action")
 

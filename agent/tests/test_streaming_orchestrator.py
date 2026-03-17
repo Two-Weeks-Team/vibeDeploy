@@ -347,7 +347,7 @@ class TestFinishBuild:
         orch.start_next_build(session.session_id)
         result = orch.finish_build(session.session_id, card.card_id, success=True, thread_id="thread-123")
         assert result["type"] == "zp.build.complete"
-        assert card.status == "built"
+        assert card.status == "deployed"
         assert card.thread_id == "thread-123"
         assert session.active_build is None
 
