@@ -265,6 +265,12 @@ class TestMergeAndScore:
 
 
 class TestUnifiedSearch:
+    @pytest.fixture(autouse=True)
+    def _clear_cache(self):
+        from agent.zero_prompt.unified_search import _CACHE
+
+        _CACHE.clear()
+
     @pytest.mark.asyncio
     async def test_unified_search_both_succeed(self, monkeypatch):
         """unified_search merges results from both brave and exa."""

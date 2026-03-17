@@ -9,7 +9,7 @@ class SessionManager:
     def __init__(self) -> None:
         self._sessions: dict[str, ZPSession] = {}
 
-    def create_session(self, goal: int = 3) -> ZPSession:
+    def create_session(self, goal: int = 10) -> ZPSession:
         session_id = str(uuid.uuid4())
         session = ZPSession(
             session_id=session_id,
