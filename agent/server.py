@@ -961,6 +961,17 @@ async def dashboard_events():
     )
 
 
+@app.get("/dashboard/evaluations")
+@app.get("/evaluations")
+async def dashboard_evaluations():
+    from .evaluations.runner import get_latest_summary
+
+    summary = get_latest_summary()
+    if summary is None:
+        return {"status": "no_evaluation_run", "total": 0}
+    return summary.model_dump()
+
+
 if __name__ == "__main__":
     uvicorn.run(
         "agent.server:app",
