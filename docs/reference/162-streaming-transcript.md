@@ -3,42 +3,60 @@
 의존성: 161
 
 ## 1. 태스크 정의
-v2에서는 대량 배치가 아닌, 한 영상씩 스트리밍 방식으로 트랜스크립트를 추출합니다. `youtube-transcript-api`를 기본으로 사용하며, 실패 시 `yt-dlp` 메타데이터 폴백을 지원합니다. 추출 완료 시 SSE 이벤트를 발행하여 실시간 피드에 표시합니다.
 
-## 2. 수용 기준 (Acceptance Criteria)
-- [ ] AC-1: 단일 영상 ID에 대해 트랜스크립트(텍스트)를 성공적으로 추출함.
-- [ ] AC-2: 추출 시작(`zp.transcript.start`) 및 완료(`zp.transcript.complete`) 시 SSE 이벤트를 발행함.
-- [ ] AC-3: IP 차단 또는 자막 부재 시 `yt-dlp`를 통해 제목/설명 메타데이터만이라도 추출하는 폴백 로직 구현.
-- [ ] AC-4: 추출된 텍스트의 토큰 수를 계산하여 로그에 포함함.
+`transcript_fetcher` 에이전트가 후보 영상 1개를 입력받아 자막 또는 메타데이터 컨텍스트를 추출한다. 기존 `agent/tools/youtube.py`의 기능을 재사용하되, Zero-Prompt용 이벤트와 결과 타입을 감싸는 어댑터를 만든다.
 
-## 3. 변경 대상 파일
-- `agent/tools/youtube_transcript.py` (v2 업데이트)
-- `agent/sse.py` (이벤트 타입 확인)
+## 2. 담당 에이전트와 페르소나
 
-## 4. 상세 구현
+- Agent ID: `transcript_fetcher`
+- Persona: 기록 담당 조사원
+- 원칙: 텍스트를 최대한 잃지 않고 수집하고, 실패 시에도 빈 문자열 대신 설명 가능한 폴백을 남긴다.
 
-### Streaming Transcript Extractor (agent/tools/youtube_transcript.py)
+## 3. 수용 기준 (Acceptance Criteria)
+
+- [ ] AC-1: 단일 `video_id` 또는 URL에 대해 텍스트를 추출한다.
+- [ ] AC-2: `zp.transcript.start`, `zp.transcript.complete` 이벤트를 발행한다.
+- [ ] AC-3: 자막 부재나 IP 차단 시 메타데이터 폴백을 반환한다.
+- [ ] AC-4: 토큰 수와 추출 방식(`manual`, `auto`, `metadata_fallback`)을 로그에 남긴다.
+
+## 4. 변경 대상 파일
+
+- `agent/zero_prompt/transcript.py` (신규)
+- `agent/tools/youtube.py` (기존 재사용, 필요한 경우 helper export 추가)
+- `agent/zero_prompt/events.py` (신규)
+- `agent/zero_prompt/schemas.py` (신규)
+
+## 5. 상세 구현
+
 ```python
-from youtube_transcript_api import YouTubeTranscriptApi
-from agent.sse import format_sse
-
-async def extract_transcript_streaming(video_id: str):
-    # 1. zp.transcript.start SSE 발행
-    # 2. YouTubeTranscriptApi.get_transcript(video_id)
-    # 3. 성공 시 텍스트 결합 및 zp.transcript.complete SSE 발행
-    # 4. 실패 시 yt-dlp 폴백 및 메타데이터 반환
-    pass
+class TranscriptArtifact(BaseModel):
+    video_id: str
+    text: str
+    source: Literal["manual", "auto", "metadata_fallback", "error"]
+    language: str | None = None
+    token_count: int = 0
 ```
 
-## 5. 테스트 계획
-- `test_extract_success`: 자막이 있는 영상 ID로 텍스트 추출 성공 확인.
-- `test_extract_fallback`: 자막이 없는 영상에서 메타데이터 폴백 동작 확인.
-- `test_sse_emission`: 추출 과정에서 SSE 이벤트가 올바른 형식으로 발행되는지 확인.
+```python
+async def fetch_transcript_artifact(video_id: str) -> TranscriptArtifact:
+    # 1. zp.transcript.start
+    # 2. 기존 extract_youtube_transcript 재사용
+    # 3. token_count 계산
+    # 4. zp.transcript.complete
+    ...
+```
 
-## 6. 검증 방법
-- `pytest agent/tests/test_youtube_transcript.py` 실행.
-- SSE 로그를 통해 `zp.transcript.complete` 이벤트와 데이터가 일치하는지 확인.
+## 6. 테스트 계획
 
-## 7. 롤백 계획
-- `git checkout docs/reference/162-streaming-transcript.md`
-- `agent/tools/youtube_transcript.py` 변경 사항 취소.
+- `test_fetch_transcript_artifact_success`
+- `test_metadata_fallback_is_returned_when_transcript_missing`
+- `test_token_count_is_recorded`
+- `test_transcript_events_are_emitted`
+
+## 7. 검증 방법
+
+- `pytest agent/tests/test_zero_prompt_transcript.py -v`
+
+## 8. 롤백 계획
+
+- `agent/zero_prompt/transcript.py` 제거

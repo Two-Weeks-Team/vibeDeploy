@@ -1,9 +1,10 @@
 # Task 111: build_validator 노드 구현
 상태: 미구현 | Phase 1 | 예상 시간: 8h
 의존성: 없음
+ADR: A4 — **Docker SDK (컨테이너)** 사용 확정 (`docs/reference/19-architecture-decisions.md`)
 
 ## 1. 태스크 정의
-`build_validator`는 `code_evaluator`와 `deployer` 사이에 위치하여 생성된 코드가 실제 런타임 환경에서 빌드 및 실행 가능한지 검증하는 LangGraph 노드입니다. 기존의 regex 기반 검증을 넘어 실제 컴파일 및 빌드 프로세스를 수행하여 배포 성공률을 획기적으로 높입니다.
+`build_validator`는 `code_evaluator`와 `deployer` 사이에 위치하여 생성된 코드가 실제 런타임 환경에서 빌드 및 실행 가능한지 검증하는 LangGraph 노드입니다. **Docker 컨테이너** 내에서 실제 컴파일 및 빌드 프로세스를 수행하여 DO App Platform과 환경을 일치시키고 배포 성공률을 획기적으로 높입니다.
 
 ## 2. 수용 기준 (Acceptance Criteria)
 - [ ] AC-1: Python 파일에 대한 `ast.parse()`를 통해 구문 에러(Syntax Error)를 100% 감지한다.
@@ -25,16 +26,16 @@
 ```python
 import ast
 import asyncio
-import os
-import shutil
-import subprocess
 import tempfile
 from pathlib import Path
 from typing import Any, Dict, List
 
+import docker
+
 from ..state import VibeDeployState
 
 async def build_validator(state: VibeDeployState) -> Dict[str, Any]:
+    """Docker 컨테이너 내에서 실제 빌드 검증을 수행한다. (ADR-A4)"""
     generated_files = state.get("generated_files", [])
     errors = []
     passed = True
@@ -42,13 +43,13 @@ async def build_validator(state: VibeDeployState) -> Dict[str, Any]:
 
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp_path = Path(tmpdir)
-        
-        # 1. 파일 쓰기 및 AST 검증
+
+        # 0. 파일 쓰기 + AST 사전 검증 (Docker 실행 전, 빠른 필터)
         for file_info in generated_files:
             f_path = tmp_path / file_info["path"]
             f_path.parent.mkdir(parents=True, exist_ok=True)
             f_path.write_text(file_info["content"], encoding="utf-8")
-            
+
             if file_info["path"].endswith(".py"):
                 try:
                     ast.parse(file_info["content"])
@@ -59,28 +60,26 @@ async def build_validator(state: VibeDeployState) -> Dict[str, Any]:
         if not passed:
             return {"build_validation": {"passed": False, "errors": errors[:3], "tier": "syntax"}}
 
-        # 2. 백엔드 검증 (Python)
+        # 1. Docker 클라이언트 초기화
+        client = docker.from_env()
+
+        # 2. 백엔드 검증 (Python 컨테이너)
         tier = "backend_build"
-        backend_path = tmp_path / "agent"
-        if (backend_path / "requirements.txt").exists():
-            success, out = await _run_with_limits(
-                ["pip", "install", "-r", "requirements.txt"], cwd=backend_path
+        if (tmp_path / "requirements.txt").exists():
+            result = _run_docker(
+                client,
+                image="python:3.12-slim",
+                command="sh -c 'pip install -r requirements.txt -q && python -c \"from main import app\"'",
+                volumes={str(tmp_path): {"bind": "/app", "mode": "rw"}},
+                working_dir="/app",
+                mem_limit="512m",
+                timeout=120,
             )
-            if not success:
-                errors.append(f"Backend Pip Install Failed: {_trim_errors(out)}")
+            if not result["success"]:
+                errors.append(f"Backend Build Failed:\n{_trim_errors(result['stderr'])}")
                 passed = False
 
-        if passed and (backend_path / "main.py").exists():
-            success, out = await _run_with_limits(
-                ["python", "-c", "from main import app"], 
-                cwd=backend_path, 
-                env={**os.environ, "PYTHONPATH": str(backend_path)}
-            )
-            if not success:
-                errors.append(f"Backend Import Failed: {_trim_errors(out)}")
-                passed = False
-
-        # 3. 프론트엔드 검증 (Node.js)
+        # 3. 프론트엔드 검증 (Node.js 컨테이너)
         if passed:
             tier = "frontend_build"
             web_path = tmp_path / "web"

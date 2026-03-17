@@ -1,59 +1,29 @@
-# Task 154: 프롬프트 전략 확장
+# 154-prompt-strategy-expansion
 
-## 1. 개요
-vibeDeploy의 프롬프트 전략 엔진(`prompt_strategist.py`)에 Gemini 및 GPT-5 모델 패밀리에 대한 가이던스를 추가하여 모델별 최적의 성능을 끌어낼 수 있도록 합니다.
+**Issue**: #56
+**Status**: Pending
+**Priority**: High
+**Estimate**: 3h
+**Dependencies**: 191
 
-## 2. 상세 작업 내용
+## Summary
+vibeDeploy의 프롬프트 전략을 벤더별 고유 기능에 맞춰 확장합니다. 모델 패밀리를 자동으로 감지하고, 각 벤더의 최신 기능(Gemini 구조화 출력, GPT-5 추론 제어, Claude 확장 사고 등)을 최적으로 활용할 수 있는 가이던스를 시스템 프롬프트에 주입합니다.
 
-### 2.1 _STATIC_MODEL_GUIDANCE 업데이트
-- `agent/nodes/prompt_strategist.py`의 `_STATIC_MODEL_GUIDANCE`에 `gemini` 및 `gpt5` 키 추가:
-  - **Gemini**: 비주얼 이해 활용, 명시적 단계별 지시, temperature 0.3-0.5 권장 등
-  - **GPT-5**: 구성 가능 추론 깊이, 도구 검색, 네이티브 JSON 스키마 활용 등
+## Vendor Strategies
+- **Gemini**: 네이티브 구조화 출력(`response_schema`), 멀티모달 컨텍스트 활용, Temperature 0.3~0.5 권장
+- **GPT-5.4**: `reasoning.effort` 명시적 제어, Responses API 도구 활용, 128K 출력 한도 고려
+- **Claude 4.6**: Extended Thinking(사고 과정 노출) 활용, Tool Use 최적화, Temperature 0.0~1.0 가변 적용
 
-### 2.2 infer_model_family() 수정
-- 모델명에서 `gemini` 또는 `gpt-5` 패턴을 감지하여 각각 `gemini`, `gpt5` 패밀리로 분류하도록 로직 추가
+## Tasks
+- [ ] 모델 패밀리 감지 로직 구현: Canonical model ID에서 provider 및 family 추출 (Registry 경유)
+- [ ] Gemini 가이던스 적용: 구조화 출력 스키마 명시 및 멀티모달 입력 처리 지침 추가
+- [ ] GPT-5 가이던스 적용: 추론 노력(Reasoning Effort) 설정 및 도구 지원 프롬프트 설계
+- [ ] Claude 가이던스 적용: 프롬프트 캐싱 효율화 및 확장 사고(Extended Thinking) 활성화 지침 추가
+- [ ] 기존 4개 패밀리 유지: `generic`, `openai_gpt_oss`, `qwen3`, `deepseek_r1` 전략과의 호환성 유지
 
-### 2.3 _extract_guidance_from_source() 수정
-- `gemini` 및 `gpt5` 패밀리에 대한 소스 기반 가이던스 추출 로직 추가
-
-## 3. 수용 기준 (Acceptance Criteria)
-1. [ ] Gemini 모델에 대해 `gemini` 가이던스가 적용됨
-2. [ ] GPT-5 모델에 대해 `gpt5` 가이던스가 적용됨
-3. [ ] 기존 `anthropic`, `openai_gpt_oss`, `qwen3`, `deepseek_r1` 가이던스가 유지됨
-4. [ ] `infer_model_family()`가 신규 모델들을 올바르게 분류함
-
-## 4. 구현 가이드 (Implementation Details)
-
-```python
-# agent/nodes/prompt_strategist.py 수정 예시
-
-_STATIC_MODEL_GUIDANCE = {
-    # ... 기존 가이던스 ...
-    "gemini": [
-        "Leverage native visual understanding for UI layout decisions.",
-        "Use structured JSON output mode for reliable schema generation.",
-        "Take advantage of 1M token context for full codebase analysis.",
-        "Prefer explicit step-by-step instructions over implicit conventions.",
-    ],
-    "gpt5": [
-        "Use configurable reasoning effort based on task complexity.",
-        "Leverage tool search for cost optimization in agent workflows.",
-        "Use native structured output (JSON Schema) for guaranteed format compliance.",
-        "Enable computer-use when visual verification is needed.",
-    ],
-}
-
-def infer_model_family(model: str) -> str:
-    normalized = (model or "").strip().lower()
-    # ... 기존 로직 ...
-    if "gemini" in normalized or normalized.startswith("google-"):
-        return "gemini"
-    if "gpt-5" in normalized:
-        return "gpt5"
-    return "generic"
-```
-
-## 5. 테스트 계획
-1. `test_gemini_guidance_application`: Gemini 모델 사용 시 `gemini` 가이던스가 포함되는지 확인
-2. `test_gpt5_guidance_application`: GPT-5 모델 사용 시 `gpt5` 가이던스가 포함되는지 확인
-3. `test_family_inference`: 다양한 모델명에 대해 올바른 패밀리가 추론되는지 확인
+## Acceptance Criteria
+- [ ] Gemini 모델 사용 시 `google_gemini` 가이던스가 시스템 프롬프트에 포함됨을 확인
+- [ ] GPT-5 모델 사용 시 `openai_gpt5` 가이던스가 적용되어 추론 제어 지침이 주입됨
+- [ ] Claude 모델 사용 시 `anthropic_claude46` 가이던스가 적용되어 캐싱 및 사고 지침이 주입됨
+- [ ] 모델 ID로부터 올바른 벤더 패밀리를 추출하는 테스트 통과
+- [ ] 각 벤더별 고유 기능(구조화 출력, 도구 사용 등)에 대한 프롬프트 최적화 결과 검증

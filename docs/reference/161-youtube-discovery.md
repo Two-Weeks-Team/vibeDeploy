@@ -3,54 +3,79 @@
 의존성: 없음
 
 ## 1. 태스크 정의
-YouTube Data API v3를 사용하여 트렌딩 및 고인게이지먼트 영상 후보 풀을 구성하는 엔진을 구축합니다. v2에서는 300개 고정 배치가 아닌, 탐색 큐에서 호출되어 후보 ID 풀을 반환하고, GO 대기 슬롯이 10개 미만일 때만 스트리밍 루프의 시작점 역할을 합니다.
 
-## 2. 수용 기준 (Acceptance Criteria)
-- [ ] AC-1: `googleapiclient.discovery`를 사용하여 `search.list(order=viewCount)`와 `videos.list`를 성공적으로 호출함.
-- [ ] AC-2: 지정된 카테고리(Science&Tech, Education, Startup 등)별 검색 및 인게이지먼트 필터(조회수 1만+, 좋아요 200+, 인게이지먼트율 2%+) 적용.
-- [ ] AC-3: 탐색 큐에서 호출 시 50+개의 유효한 후보 영상 ID 리스트를 반환함.
-- [ ] AC-4: 1회 후보 풀 구성 시 YouTube API 쿼터 소비가 606 units 이내여야 함.
-- [ ] AC-5: API 키가 없거나 유효하지 않을 경우 적절한 에러 메시지와 함께 Graceful하게 종료됨.
+`discovery_curator` 에이전트가 YouTube Data API v3를 사용해 후보 영상 풀을 구성한다. 이 단계는 LLM이 아니라 규칙 기반 필터링이 핵심이며, 결과는 Zero-Prompt 오케스트레이터가 한 개씩 소비할 수 있는 `VideoCandidate[]` 이어야 한다.
 
-## 3. 변경 대상 파일
-- `agent/tools/youtube_discovery.py` (v2 업데이트)
-- `agent/state.py` (DiscoveryState 추가)
+## 2. 담당 에이전트와 페르소나
 
-## 4. 상세 구현
+- Agent ID: `discovery_curator`
+- Persona: 트렌드 에디터
+- 원칙: 과장 없이 조회수/좋아요/댓글과 카테고리 적합성으로 후보를 고른다.
 
-### DiscoveryState (agent/state.py)
+## 3. 수용 기준 (Acceptance Criteria)
+
+- [ ] AC-1: `search.list` + `videos.list` 조합으로 후보를 수집한다.
+- [ ] AC-2: 카테고리 필터와 engagement 필터를 적용한다.
+- [ ] AC-3: 1회 호출 시 50개 이상의 유효 후보를 반환한다.
+- [ ] AC-4: 시작/완료 시 `zp.search.start`, `zp.search.complete` 이벤트를 발행한다.
+- [ ] AC-5: API 키가 없으면 명확한 에러를 남기고 세션을 `error`로 전환한다.
+
+## 4. 변경 대상 파일
+
+- `agent/zero_prompt/discovery.py` (신규)
+- `agent/zero_prompt/schemas.py` (신규)
+- `agent/zero_prompt/events.py` (신규)
+
+## 5. 상세 구현
+
+### 5.1 데이터 모델
+
 ```python
-class DiscoveryState(BaseModel):
-    candidate_pool: list[str] = []  # 영상 ID 리스트
-    current_index: int = 0
-    is_paused: bool = False
+class VideoCandidate(BaseModel):
+    video_id: str
+    title: str
+    channel_title: str
+    published_at: str
+    view_count: int
+    like_count: int
+    comment_count: int
+    engagement_rate: float
+    category: str
 ```
 
-### YouTube Discovery Engine (agent/tools/youtube_discovery.py)
-```python
-import os
-from googleapiclient.discovery import build
+### 5.2 구현 계약
 
+```python
 class YouTubeDiscovery:
-    def __init__(self):
-        self.api_key = os.getenv("YOUTUBE_DATA_API_KEY")
-        self.youtube = build("youtube", "v3", developerKey=self.api_key)
-
-    async def fetch_candidate_pool(self, queries: list[str]) -> list[str]:
-        # search.list로 후보 ID 수집 (order='viewCount')
-        # videos.list로 상세 스탯 확인 및 필터링
-        # 필터를 통과한 video_id 리스트 반환
-        pass
+    async def fetch_candidate_pool(
+        self,
+        categories: list[str],
+        *,
+        min_views: int = 10_000,
+        min_likes: int = 200,
+        min_engagement_rate: float = 0.02,
+        max_results: int = 60,
+    ) -> list[VideoCandidate]:
+        ...
 ```
 
-## 5. 테스트 계획
-- `test_fetch_candidates`: 실제 API 호출을 통해 필터링된 ID 리스트가 반환되는지 확인.
-- `test_quota_usage`: 쿼터 소비량이 제한 내인지 확인.
+도구 호출 규칙:
+- timeout 20초
+- retry 2회
+- 15분 캐시
+- 중복 `video_id` 제거
 
-## 6. 검증 방법
-- `pytest agent/tests/test_youtube_discovery.py` 실행.
-- 반환된 리스트의 모든 영상이 인게이지먼트 기준을 충족하는지 샘플링 검사.
+## 6. 테스트 계획
 
-## 7. 롤백 계획
-- `git checkout docs/reference/161-youtube-discovery.md`
-- `agent/tools/youtube_discovery.py` 변경 사항 취소.
+- `test_fetch_candidate_pool_returns_filtered_candidates`
+- `test_duplicate_video_ids_are_removed`
+- `test_search_events_are_emitted`
+- `test_missing_api_key_fails_gracefully`
+
+## 7. 검증 방법
+
+- `pytest agent/tests/test_zero_prompt_discovery.py -v`
+
+## 8. 롤백 계획
+
+- `agent/zero_prompt/discovery.py` 제거

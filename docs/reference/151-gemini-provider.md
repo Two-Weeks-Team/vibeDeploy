@@ -1,60 +1,30 @@
-# Task 151: Gemini 프로바이더 추가
+# 151-gemini-provider
 
-## 1. 개요
-vibeDeploy의 LLM 라우팅 엔진(`llm.py`)에 Google Gemini 모델 지원을 추가합니다. `langchain_google_genai` 패키지를 사용하여 Gemini 모델을 호출할 수 있도록 구현합니다.
+**Issue**: #53
+**Status**: Pending
+**Priority**: High
+**Estimate**: 4h
+**Dependencies**: 191
 
-## 2. 상세 작업 내용
+## Summary
+vibeDeploy의 Google Gemini 연동을 `langchain_google_genai`에서 공식 `google-genai` SDK로 전환합니다. ADR-19(A1)에 따라 `agent/providers/google_adapter.py`를 구현하고, 최신 Gemini 3.1 모델의 기능을 네이티브하게 지원합니다.
 
-### 2.1 의존성 추가
-- `agent/requirements.txt`에 `langchain-google-genai` 추가
+## Tasks
+- [ ] `agent/providers/google_adapter.py` 구현: `google.genai.Client`를 사용한 공식 SDK 연동
+- [ ] `generate_content()` 호출 구현: 프로덕션 기본 경로로 설정
+- [ ] 구조화 출력 지원: `response_schema` (Pydantic 모델)를 통한 네이티브 JSON 출력 강제
+- [ ] Context Caching 지원: 긴 컨텍스트 재사용을 위한 캐싱 로직 추가
+- [ ] Batch API 옵션 구현: 대량 작업 처리를 위한 비동기 배치 호출 지원
+- [ ] 모델 ID 정렬: `gemini-3.1-pro-preview`, `gemini-3.1-flash-lite-preview` 공식 ID 사용
 
-### 2.2 llm.py 수정
-- **모델 감지 함수 추가**: `_is_gemini_model(model: str) -> bool`
-  - "gemini" 포함 또는 "google-"로 시작하는 모델명 감지
-- **모델 ID 매핑 함수 추가**: `_gemini_model_id(model: str) -> str`
-  - `google-gemini-3.1-pro` → `gemini-3.1-pro` 등 매핑
-- **get_llm() 분기 추가**:
-  - `GOOGLE_API_KEY` 또는 `GEMINI_API_KEY` 환경변수 확인
-  - `ChatGoogleGenerativeAI` 인스턴스 생성 및 반환
-- **temperature 보정 추가**: `_coerce_temperature_for_model()` 수정
-  - Gemini 모델의 경우 0.0~1.0 범위로 제한 (API는 2.0까지 지원하지만 코드 생성 안정성을 위해 제한)
+## Acceptance Criteria
+- [ ] `google.genai.Client`가 정상적으로 생성되고 인증됨을 확인
+- [ ] `generate_content()`를 통해 텍스트 및 멀티모달 응답을 성공적으로 수신함
+- [ ] Pydantic 모델을 `response_schema`로 전달했을 때 구조화된 JSON 응답이 반환됨
+- [ ] API 키가 설정되지 않은 경우 적절한 에러 핸들링 또는 폴백이 작동함
+- [ ] `gemini-3.1-flash-lite-preview` 모델을 사용한 고속 루프 테스트 통과
 
-## 3. 수용 기준 (Acceptance Criteria)
-1. [ ] Gemini 모델명이 입력되었을 때 `_is_gemini_model`이 `True`를 반환함
-2. [ ] `get_llm()` 호출 시 Gemini 모델에 대해 `ChatGoogleGenerativeAI` 객체가 생성됨
-3. [ ] API 키가 설정되지 않은 경우 다음 프로바이더(OpenAI 폴백 등)로 정상적으로 넘어감
-4. [ ] `requirements.txt`에 필요한 패키지가 명시됨
-
-## 4. 구현 가이드 (Implementation Details)
-
-```python
-# agent/llm.py 수정 예시
-
-def _is_gemini_model(model: str) -> bool:
-    normalized = (model or "").strip().lower()
-    return "gemini" in normalized or normalized.startswith("google-")
-
-def _gemini_model_id(model: str) -> str:
-    mapping = {
-        "google-gemini-3.1-pro": "gemini-3.1-pro",
-        "google-gemini-2.5-flash": "gemini-2.5-flash",
-    }
-    return mapping.get(model.strip().lower(), model)
-
-# get_llm 내부에 추가
-google_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
-if _is_gemini_model(model) and google_key:
-    from langchain_google_genai import ChatGoogleGenerativeAI
-    return ChatGoogleGenerativeAI(
-        model=_gemini_model_id(model),
-        google_api_key=google_key,
-        temperature=_coerce_temperature_for_model(model, temperature),
-        max_output_tokens=effective_max_tokens,
-        timeout=effective_timeout,
-    )
-```
-
-## 5. 테스트 계획
-1. `test_is_gemini_model`: 다양한 Gemini 모델명에 대한 감지 여부 확인
-2. `test_gemini_routing`: API 키가 있을 때 `ChatGoogleGenerativeAI` 반환 확인
-3. `test_gemini_temperature_coercion`: 1.0 이상의 temperature가 1.0으로 보정되는지 확인
+## Implementation Notes
+- `google-genai` SDK는 `response_mime_type="application/json"`과 `response_schema`를 함께 사용하여 강력한 타입 안정성을 제공합니다.
+- Zero-Prompt 탐색 lane에서는 비용 효율적인 `flash-lite` 모델을 우선적으로 사용합니다.
+- 핵심 빌드 lane에서는 `pro-preview` 모델의 긴 컨텍스트와 정교한 추론 능력을 활용합니다.

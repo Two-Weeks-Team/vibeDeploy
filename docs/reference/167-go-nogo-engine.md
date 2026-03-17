@@ -3,53 +3,76 @@
 의존성: 163, 165, 166
 
 ## 1. 태스크 정의
-수집된 모든 데이터(Gemini 인사이트, 논문 브레인스톰, 경쟁사 분석)를 종합하여 아이디어의 최종 점수를 계산하고 GO 또는 NO-GO 판정을 내립니다. 판정 결과에 따라 SSE 이벤트를 발행하고 칸반 보드의 상태를 업데이트합니다.
 
-## 2. 수용 기준 (Acceptance Criteria)
-- [ ] AC-1: 정의된 공식에 따라 종합 점수(0~100)를 정확히 계산함.
-- [ ] AC-2: 점수가 65점 이상이면 GO, 65점 미만이면 NO-GO로 판정함.
-- [ ] AC-3: 판정 결과에 따라 `zp.go` 또는 `zp.nogo` SSE 이벤트를 발행함.
-- [ ] AC-4: NO-GO 판정 시 구체적인 탈락 사유(시장 포화, 기술적 한계 등)를 포함함.
-- [ ] AC-5: 판정 완료 후 칸반 보드의 해당 카드 상태를 `go_ready` 또는 `nogo`로 업데이트함.
+`verdict_judge` 에이전트가 수집된 데이터에서 종합 점수를 계산하고 GO 또는 NO-GO를 판정한다. 이 태스크는 **점수 계산은 결정론적 코드**, **사유 문구는 짧은 LLM 보조**로 분리해 구현한다.
 
-## 3. 변경 대상 파일
-- `agent/nodes/verdict_engine.py` (신규)
-- `agent/state.py` (Verdict 모델 추가)
+## 2. 담당 에이전트와 페르소나
 
-## 4. 상세 구현
+- Agent ID: `verdict_judge`
+- Persona: 투자 심사역
+- 원칙: 점수는 규칙으로, 설명은 사람이 읽기 쉽게.
 
-### 종합 점수 공식
+## 3. 수용 기준 (Acceptance Criteria)
+
+- [ ] AC-1: 종합 점수는 코드로 결정론적으로 계산한다.
+- [ ] AC-2: 65점 이상이면 GO, 미만이면 NO-GO다.
+- [ ] AC-3: `zp.go` 또는 `zp.nogo` 이벤트를 발행한다.
+- [ ] AC-4: 판정 결과는 `score`, `decision`, `reason`, `reason_code`를 포함한다.
+- [ ] AC-5: 카드 상태를 `go_ready` 또는 `nogo`로 갱신한다.
+
+## 4. 변경 대상 파일
+
+- `agent/zero_prompt/verdict.py` (신규)
+- `agent/zero_prompt/schemas.py` (신규)
+- `agent/zero_prompt/events.py` (신규)
+
+## 5. 상세 구현
+
+```python
+class Verdict(BaseModel):
+    score: int
+    decision: Literal["GO", "NO_GO"]
+    reason: str
+    reason_code: Literal[
+        "high_potential",
+        "market_saturated",
+        "weak_differentiation",
+        "low_confidence",
+        "weak_paper_backing",
+        "technical_risk",
+    ]
 ```
+
+```python
+market_opportunity_normalized = market_opportunity_score / 100
+differentiation_normalized = differentiation_score / 100
+novelty_boost_normalized = min(novelty_boost / 0.30, 1.0)
+
 score = (
-    confidence_score × 25 +       # Gemini 추출 품질
-    engagement_normalized × 20 +   # 원본 영상 인기도
-    market_opportunity × 25 +      # 경쟁사 분석 기회
-    paper_novelty_boost × 15 +     # 논문 기반 참신도
-    differentiation_score × 15     # 차별화 가능성
+    confidence_score * 25
+    + engagement_normalized * 20
+    + market_opportunity_normalized * 25
+    + novelty_boost_normalized * 15
+    + differentiation_normalized * 15
 )
 ```
 
-### Verdict Engine (agent/nodes/verdict_engine.py)
-```python
-from agent.state import EnhancedIdea, MarketAnalysis, Verdict
+구현 원칙:
+- `score`와 `decision`은 코드로 계산한다.
+- LLM은 `reason`과 `reason_code` 후보를 짧게 생성하는 용도로만 사용한다.
+- 경계값 근처(60~70)는 판정은 유지하되 `reason`에 불확실성을 명시한다.
 
-async def evaluate_verdict(idea: EnhancedIdea, market: MarketAnalysis) -> Verdict:
-    # 1. 점수 계산 로직 수행
-    # 2. GO (>=65) / NO-GO (<65) 판정
-    # 3. zp.go / zp.nogo SSE 발행
-    # 4. Verdict 객체 반환 (score, decision, reason 포함)
-    pass
-```
+## 6. 테스트 계획
 
-## 5. 테스트 계획
-- `test_score_calculation`: 다양한 입력값에 대해 점수 공식이 올바르게 적용되는지 확인.
-- `test_verdict_threshold`: 65점 경계값에서 GO/NO-GO 판정이 정확한지 확인.
-- `test_sse_verdict_emission`: 판정 결과에 따른 SSE 이벤트 발행 확인.
+- `test_score_calculation_is_deterministic`
+- `test_threshold_boundary_at_65`
+- `test_reason_code_is_from_enum`
+- `test_verdict_events_are_emitted`
 
-## 6. 검증 방법
-- `pytest agent/tests/test_verdict_engine.py` 실행.
-- 로그를 통해 계산된 점수와 판정 결과가 논리적으로 타당한지 확인.
+## 7. 검증 방법
 
-## 7. 롤백 계획
-- `git checkout docs/reference/167-go-nogo-engine.md`
-- `agent/nodes/verdict_engine.py` 삭제.
+- `pytest agent/tests/test_zero_prompt_verdict.py -v`
+
+## 8. 롤백 계획
+
+- `agent/zero_prompt/verdict.py` 제거
