@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import re
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 
 class OpenAPISpec(BaseModel):
@@ -86,8 +86,9 @@ def generate_api_contract(blueprint: dict) -> str:
         request_schema = _build_schema_from_fields(request_body_raw)
         response_schema = _build_schema_from_fields(response_body_raw)
 
-        req_schema_name = _to_schema_name(path, "Request")
-        resp_schema_name = _to_schema_name(path, "Response")
+        method_prefix = method.capitalize()
+        req_schema_name = _to_schema_name(path, f"{method_prefix}Request")
+        resp_schema_name = _to_schema_name(path, f"{method_prefix}Response")
         schemas[req_schema_name] = request_schema
         schemas[resp_schema_name] = response_schema
 
@@ -130,5 +131,5 @@ def validate_openapi_spec(spec_json: str) -> bool:
         data = json.loads(spec_json)
         OpenAPISpec.model_validate(data)
         return True
-    except Exception:
+    except (json.JSONDecodeError, ValidationError):
         return False
