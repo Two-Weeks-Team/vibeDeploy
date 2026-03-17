@@ -27,6 +27,12 @@ from .nodes.vibe_council import (
 from .state import VibeDeployState
 
 
+def route_after_enrich(state):
+    if state.get("skip_council"):
+        return "doc_generator"
+    return fan_out_analysis(state)
+
+
 def merge_dicts(left: dict | None, right: dict | None) -> dict:
     merged = dict(left or {})
     merged.update(right or {})
@@ -65,7 +71,11 @@ def create_graph():
     workflow.add_edge("input_processor", "inspiration_agent")
     workflow.add_edge("inspiration_agent", "experience_agent")
     workflow.add_edge("experience_agent", "enrich_idea")
-    workflow.add_conditional_edges("enrich_idea", fan_out_analysis, ["run_council_agent"])
+    workflow.add_conditional_edges(
+        "enrich_idea",
+        route_after_enrich,
+        ["doc_generator", "run_council_agent"],
+    )
 
     workflow.add_edge("run_council_agent", "cross_examination")
     workflow.add_conditional_edges("cross_examination", fan_out_scoring, ["score_axis"])
