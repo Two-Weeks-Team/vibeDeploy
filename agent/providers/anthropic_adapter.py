@@ -36,6 +36,6 @@ class AnthropicAdapter:
         }
 
         if os.getenv("VIBEDEPLOY_ENABLE_THINKING", "").strip().lower() in {"1", "true", "yes"}:
-            chat_kwargs["model_kwargs"] = {"thinking": {"type": "adaptive"}}
+            chat_kwargs["thinking"] = {"type": "adaptive"}
 
         return ChatAnthropic(**chat_kwargs)

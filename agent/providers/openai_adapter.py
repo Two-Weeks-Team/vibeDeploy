@@ -6,7 +6,7 @@ import os
 
 from langchain_core.language_models.chat_models import BaseChatModel
 
-from .registry import CAPABILITY_REGISTRY, resolve_canonical
+from .registry import CAPABILITY_REGISTRY
 
 
 class OpenAIAdapter:
@@ -26,12 +26,11 @@ class OpenAIAdapter:
         from langchain_openai import ChatOpenAI
 
         api_key = os.environ.get("OPENAI_API_KEY", "")
-        canonical = resolve_canonical(model_id)
-        spec = CAPABILITY_REGISTRY.get(canonical, {})
+        spec = CAPABILITY_REGISTRY.get(model_id, {})
         uses_responses_api = spec.get("api_style") == "openai_responses"
 
         return ChatOpenAI(
-            model=canonical,
+            model=model_id,
             api_key=api_key,
             temperature=float(temperature),
             max_tokens=max(256, max_tokens),
