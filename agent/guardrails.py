@@ -62,18 +62,21 @@ JAILBREAK_PATTERNS = [
 ]
 
 
-def check_content_moderation(prompt: str) -> tuple[bool, str]:
-    for pattern in CONTENT_MODERATION_PATTERNS:
+def _check_patterns(prompt: str, patterns: list[re.Pattern], message: str) -> tuple[bool, str]:
+    for pattern in patterns:
         if pattern.search(prompt):
-            return False, "Content blocked: request involves harmful or malicious activity"
+            return False, message
     return True, ""
+
+
+def check_content_moderation(prompt: str) -> tuple[bool, str]:
+    return _check_patterns(
+        prompt, CONTENT_MODERATION_PATTERNS, "Content blocked: request involves harmful or malicious activity"
+    )
 
 
 def check_jailbreak(prompt: str) -> tuple[bool, str]:
-    for pattern in JAILBREAK_PATTERNS:
-        if pattern.search(prompt):
-            return False, "Content blocked: jailbreak attempt detected"
-    return True, ""
+    return _check_patterns(prompt, JAILBREAK_PATTERNS, "Content blocked: jailbreak attempt detected")
 
 
 def sanitize_input(prompt: str) -> tuple[str, bool, str, list[str]]:
