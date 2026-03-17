@@ -1,8 +1,6 @@
 import asyncio
-import json
 import logging
 import os
-import re
 
 from langgraph.types import Send
 
@@ -317,29 +315,6 @@ async def strategist_verdict(state: VibeDeployState) -> dict:
         },
         "phase": "verdict_delivered",
     }
-
-
-def _parse_json_response(content, default: dict) -> dict:
-    from ..llm import content_to_str
-
-    content = content_to_str(content).strip()
-    if content.startswith("```"):
-        content = re.sub(r"^```(?:json)?\n?", "", content)
-        content = re.sub(r"\n?```$", "", content)
-
-    try:
-        return json.loads(content)
-    except json.JSONDecodeError:
-        json_match = re.search(r"\{[\s\S]*\}", content)
-        if json_match:
-            try:
-                return json.loads(json_match.group())
-            except json.JSONDecodeError:
-                pass
-
-        result = dict(default)
-        result["raw_response"] = content[:500]
-        return result
 
 
 def _fallback_analysis(agent_name: str, reason: str) -> dict:
