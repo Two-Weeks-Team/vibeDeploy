@@ -1,18 +1,22 @@
+from threading import Lock
+
 from agent.gradient.a2a_schemas import A2AMessage, A2AResponse
 
 _MESSAGE_LOG: list[A2AMessage] = []
+_LOG_LOCK = Lock()
 
 _KNOWN_AGENTS = {"scout", "catalyst", "architect", "guardian", "advocate", "strategist"}
 
 _REQUIRED_HANDOFF_FIELDS = {"idea_name", "score"}
 
 
-def validate_handoff(payload: dict) -> bool:
-    return _REQUIRED_HANDOFF_FIELDS.issubset(payload.keys())
+def validate_handoff(payload: dict) -> set[str]:
+    return _REQUIRED_HANDOFF_FIELDS - set(payload.keys())
 
 
 def get_message_log() -> list[A2AMessage]:
-    return list(_MESSAGE_LOG)
+    with _LOG_LOCK:
+        return list(_MESSAGE_LOG)
 
 
 def send_message(message: A2AMessage) -> A2AResponse:
@@ -24,15 +28,15 @@ def send_message(message: A2AMessage) -> A2AResponse:
         )
 
     if message.message_type == "idea_handoff":
-        if not validate_handoff(message.payload):
-            missing = _REQUIRED_HANDOFF_FIELDS - set(message.payload.keys())
+        if missing := validate_handoff(message.payload):
             return A2AResponse(
                 status="rejected",
                 details=f"idea_handoff payload missing required fields: {sorted(missing)}",
                 receiver_agent=message.receiver_agent,
             )
 
-    _MESSAGE_LOG.append(message)
+    with _LOG_LOCK:
+        _MESSAGE_LOG.append(message)
     return A2AResponse(
         status="accepted",
         details=f"Message of type '{message.message_type}' delivered to {message.receiver_agent}",
@@ -41,4 +45,5 @@ def send_message(message: A2AMessage) -> A2AResponse:
 
 
 def clear_message_log() -> None:
-    _MESSAGE_LOG.clear()
+    with _LOG_LOCK:
+        _MESSAGE_LOG.clear()

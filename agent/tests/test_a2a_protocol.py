@@ -93,14 +93,14 @@ def test_message_log_not_updated_on_error():
     assert get_message_log() == []
 
 
-def test_validate_handoff_true_with_required_fields():
-    assert validate_handoff({"idea_name": "App", "score": 90, "extra": "value"}) is True
+def test_validate_handoff_returns_empty_set_with_required_fields():
+    assert validate_handoff({"idea_name": "App", "score": 90, "extra": "value"}) == set()
 
 
-def test_validate_handoff_false_missing_fields():
-    assert validate_handoff({"idea_name": "App"}) is False
-    assert validate_handoff({"score": 70}) is False
-    assert validate_handoff({}) is False
+def test_validate_handoff_returns_missing_fields():
+    assert validate_handoff({"idea_name": "App"}) == {"score"}
+    assert validate_handoff({"score": 70}) == {"idea_name"}
+    assert validate_handoff({}) == {"idea_name", "score"}
 
 
 def test_response_is_a2a_response_instance():
