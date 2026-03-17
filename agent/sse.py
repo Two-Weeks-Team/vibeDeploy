@@ -16,8 +16,10 @@ NODE_EVENTS = {
     "code_evaluator": {"phase": "code_evaluation", "message": "Evaluating code quality..."},
     "build_validator": {"phase": "build_validation", "message": "Validating build in Docker..."},
     "deployer": {"phase": "deployment", "message": "Deploying to DigitalOcean..."},
-    "feedback_generator": {"phase": "feedback", "message": "Generating feedback..."},
-    "conditional_review": {"phase": "conditional_review", "message": "Waiting for your decision..."},
+    "feedback_generator": {
+        "phase": "feedback",
+        "message": "Generating feedback...",
+    },  # COMPAT: remove after 2026-06-01 — no graph node emits this; kept for tests/conftest.py mock fixture
     "run_brainstorm_agent": {"phase": "brainstorming", "message": "Agents brainstorming ideas..."},
     "synthesize_brainstorm": {"phase": "synthesis", "message": "Synthesizing insights..."},
 }
