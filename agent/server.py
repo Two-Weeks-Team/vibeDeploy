@@ -25,10 +25,10 @@ from pathlib import Path
 import httpx
 import uvicorn
 from dotenv import load_dotenv
-from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from starlette.responses import JSONResponse, StreamingResponse
+from starlette.responses import StreamingResponse
 
 from .cost import estimate_pipeline_cost
 from .db.store import ResultStore
@@ -972,54 +972,105 @@ async def dashboard_evaluations():
     return summary.model_dump()
 
 
-from .zero_prompt.orchestrator import SessionManager  # noqa: E402
-
-_zp_sessions = SessionManager()
+_zp_orchestrator = None
 
 
-@app.get("/api/zero-prompt/active")
-@app.get("/zero-prompt/active")
-async def zp_active():
-    return {"sessions": []}
+def _get_zp_orchestrator():
+    global _zp_orchestrator
+    if _zp_orchestrator is None:
+        from .zero_prompt.orchestrator import StreamingOrchestrator as _SO
+
+        _zp_orchestrator = _SO()
+    return _zp_orchestrator
+
+
+class ZPStartRequest(BaseModel):
+    goal: int = 10
+
+
+class ZPActionRequest(BaseModel):
+    action: str
+    card_id: str = ""
+    success: bool | None = None
+    thread_id: str | None = None
 
 
 @app.post("/api/zero-prompt/start")
 @app.post("/zero-prompt/start")
-async def zp_start(request: Request):
-    body = await request.json()
-    goal = body.get("goal", 3)
-    session = _zp_sessions.create_session(goal=goal)
-    return session.model_dump()
+async def zero_prompt_start(request: ZPStartRequest):
+    import asyncio
+
+    from .sse import format_sse as _fmt
+    from .zero_prompt.events import ZP_SESSION_START
+
+    orch = _get_zp_orchestrator()
+    session, start_event = orch.create_session(goal=request.goal)
+    session_id = session.session_id
+
+    async def event_stream() -> AsyncGenerator[str, None]:
+        yield _fmt(ZP_SESSION_START, start_event)
+
+        video_counter = 0
+        while orch.should_continue_exploring(session_id):
+            video_id = f"auto-discovery-{video_counter}"
+            video_counter += 1
+            step_events = await orch.exploration_step(session_id, video_id)
+            for evt in step_events:
+                yield _fmt(evt.get("type", "zp.step"), evt)
+            await asyncio.sleep(0.1)
+
+        yield _fmt("zp.session.complete", {"session_id": session_id, "type": "zp.session.complete"})
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+    )
 
 
 @app.get("/api/zero-prompt/{session_id}")
 @app.get("/zero-prompt/{session_id}")
-async def zp_get_session(session_id: str):
-    session = _zp_sessions.get_session(session_id)
-    if not session:
-        return JSONResponse({"error": "session not found"}, status_code=404)
+async def zero_prompt_get_session(session_id: str):
+    orch = _get_zp_orchestrator()
+    session = orch.get_session(session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="session_not_found")
     return session.model_dump()
 
 
 @app.post("/api/zero-prompt/{session_id}/actions")
 @app.post("/zero-prompt/{session_id}/actions")
-async def zp_action(session_id: str, request: Request):
-    body = await request.json()
-    action = body.get("action")
-    card_id = body.get("card_id", "")
+async def zero_prompt_action(session_id: str, request: ZPActionRequest):
+    orch = _get_zp_orchestrator()
+    session = orch.get_session(session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="session_not_found")
+
+    action = request.action
+    card_id = request.card_id
+
     if action == "queue_build":
-        ok = _zp_sessions.queue_build(session_id, card_id)
+        result = orch.queue_build(session_id, card_id)
     elif action == "pass_card":
-        ok = _zp_sessions.update_card_status(session_id, card_id, "passed")
+        result = orch.pass_card(session_id, card_id)
     elif action == "delete_card":
-        ok = _zp_sessions.update_card_status(session_id, card_id, "deleted")
+        result = orch.delete_card(session_id, card_id)
     elif action == "pause":
-        ok = _zp_sessions.pause_session(session_id)
+        result = orch.pause(session_id)
     elif action == "resume":
-        ok = _zp_sessions.resume_session(session_id)
+        result = orch.resume(session_id)
+    elif action == "start_next_build":
+        built_card = orch.start_next_build(session_id)
+        result = {"type": "zp.build.started", "card_id": built_card} if built_card else {"type": "zp.build.empty"}
+    elif action == "finish_build":
+        result = orch.finish_build(session_id, card_id, success=request.success or False, thread_id=request.thread_id)
     else:
-        return JSONResponse({"error": f"unknown action: {action}"}, status_code=400)
-    return {"ok": ok, "action": action}
+        raise HTTPException(status_code=400, detail="unknown_action")
+
+    if result.get("type") == "zp.action.error":
+        raise HTTPException(status_code=422, detail=result["error"])
+
+    return result
 
 
 if __name__ == "__main__":

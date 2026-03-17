@@ -19,6 +19,12 @@ class BuildQueue:
     def is_building(self) -> bool:
         return self._active is not None
 
+    def remove(self, card_id: str) -> None:
+        try:
+            self._queue.remove(card_id)
+        except ValueError:
+            pass
+
     def mark_complete(self, card_id: str) -> None:
         if self._active == card_id:
             self._active = None

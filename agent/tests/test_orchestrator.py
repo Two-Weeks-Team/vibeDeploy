@@ -46,7 +46,7 @@ class TestSessionManagerCards:
         card = mgr.add_card(session.session_id, "vid_001")
         assert card.card_id
         assert card.video_id == "vid_001"
-        assert card.status == "processing"
+        assert card.status == "analyzing"
         assert card.score == 0
         assert card.thread_id is None
 
