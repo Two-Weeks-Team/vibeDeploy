@@ -32,16 +32,16 @@ _PROJECT_STATUSES = ["진행중", "검토중", "완료", "대기중"]
 _PROJECT_PRIORITIES = ["높음", "중간", "낮음"]
 
 _ANALYTICS_METRICS = [
-    ("일일 활성 사용자", "12,847명", "+12.3%"),
-    ("월간 활성 사용자", "89,234명", "+8.7%"),
-    ("서버 응답 시간", "142ms", "-5.2%"),
-    ("전환율", "3.8%", "+0.4%"),
-    ("이탈률", "28.5%", "-2.1%"),
-    ("세션 지속 시간", "4분 32초", "+15.8%"),
-    ("페이지 뷰", "342,567", "+22.1%"),
-    ("신규 가입", "1,205명", "+18.4%"),
-    ("결제 완료율", "67.3%", "+3.2%"),
-    ("고객 만족도", "4.6/5.0", "+0.2"),
+    ("일일 활성 사용자", 12847, "명", 12.3),
+    ("월간 활성 사용자", 89234, "명", 8.7),
+    ("서버 응답 시간", 142, "ms", -5.2),
+    ("전환율", 3.8, "%", 0.4),
+    ("이탈률", 28.5, "%", -2.1),
+    ("세션 지속 시간", 272, "초", 15.8),
+    ("페이지 뷰", 342567, "", 22.1),
+    ("신규 가입", 1205, "명", 18.4),
+    ("결제 완료율", 67.3, "%", 3.2),
+    ("고객 만족도", 4.6, "/5.0", 0.2),
 ]
 
 _SOCIAL_CONTENTS = [
@@ -58,70 +58,73 @@ _SOCIAL_CONTENTS = [
 ]
 
 _ECOMMERCE_PRODUCTS = [
-    ("소니 WH-1000XM5 무선 헤드폰", 389000, 45),
-    ("로지텍 MX Keys S 키보드", 149000, 128),
-    ("애플 에어팟 프로 2세대", 329000, 67),
-    ("삼성 갤럭시 탭 S9", 899000, 23),
-    ("레이저 DeathAdder V3 마우스", 89000, 234),
-    ("벤큐 SW272U 모니터", 1290000, 12),
-    ("앱스 아이패드 거치대", 45000, 567),
-    ("코세어 K70 RGB 키보드", 179000, 89),
-    ("JBL Charge 5 블루투스 스피커", 189000, 156),
-    ("엘가토 Stream Deck MK.2", 169000, 78),
-]
-
-_ECOMMERCE_CATEGORIES = [
-    "오디오",
-    "키보드",
-    "오디오",
-    "태블릿",
-    "마우스",
-    "모니터",
-    "액세서리",
-    "키보드",
-    "오디오",
-    "스트리밍",
+    ("소니 WH-1000XM5 무선 헤드폰", 389000, 45, "오디오"),
+    ("로지텍 MX Keys S 키보드", 149000, 128, "키보드"),
+    ("애플 에어팟 프로 2세대", 329000, 67, "오디오"),
+    ("삼성 갤럭시 탭 S9", 899000, 23, "태블릿"),
+    ("레이저 DeathAdder V3 마우스", 89000, 234, "마우스"),
+    ("벤큐 SW272U 모니터", 1290000, 12, "모니터"),
+    ("앱스 아이패드 거치대", 45000, 567, "액세서리"),
+    ("코세어 K70 RGB 키보드", 179000, 89, "키보드"),
+    ("JBL Charge 5 블루투스 스피커", 189000, 156, "오디오"),
+    ("엘가토 Stream Deck MK.2", 169000, 78, "스트리밍"),
 ]
 
 
 def _gen_recipe(count: int) -> list[dict]:
-    return [
-        {
-            "id": str(i + 1),
-            "name": _RECIPE_NAMES[i % len(_RECIPE_NAMES)],
-            "difficulty": _RECIPE_DIFFICULTIES[i % len(_RECIPE_DIFFICULTIES)],
-            "time": _RECIPE_TIMES[i % len(_RECIPE_TIMES)],
-            "servings": 2 + (i % 4),
-            "rating": round(4.0 + (i % 10) * 0.1, 1),
-        }
-        for i in range(count)
-    ]
+    n = len(_RECIPE_NAMES)
+    data = []
+    for i in range(count):
+        cycle = i // n
+        name = _RECIPE_NAMES[i % n]
+        suffix = f" (시즌 {cycle + 2})" if cycle > 0 else ""
+        data.append(
+            {
+                "id": str(i + 1),
+                "name": f"{name}{suffix}",
+                "difficulty": _RECIPE_DIFFICULTIES[i % len(_RECIPE_DIFFICULTIES)],
+                "time": _RECIPE_TIMES[i % len(_RECIPE_TIMES)],
+                "servings": 2 + (i % 4),
+                "rating": round(4.0 + (i % 10) * 0.1, 1),
+            }
+        )
+    return data
 
 
 def _gen_project(count: int) -> list[dict]:
-    return [
-        {
-            "id": str(i + 1),
-            "task": _PROJECT_TASKS[i % len(_PROJECT_TASKS)],
-            "status": _PROJECT_STATUSES[i % len(_PROJECT_STATUSES)],
-            "priority": _PROJECT_PRIORITIES[i % len(_PROJECT_PRIORITIES)],
-            "progress": min(100, (i * 15) % 105),
-            "assignee": f"팀원 {chr(65 + i % 8)}",
-        }
-        for i in range(count)
-    ]
+    n = len(_PROJECT_TASKS)
+    data = []
+    for i in range(count):
+        cycle = i // n
+        task = _PROJECT_TASKS[i % n]
+        suffix = f" Phase {cycle + 2}" if cycle > 0 else ""
+        data.append(
+            {
+                "id": str(i + 1),
+                "task": f"{task}{suffix}",
+                "status": _PROJECT_STATUSES[i % len(_PROJECT_STATUSES)],
+                "priority": _PROJECT_PRIORITIES[i % len(_PROJECT_PRIORITIES)],
+                "progress": min(100, (i * 15) % 105),
+                "assignee": f"팀원 {chr(65 + i % 8)}",
+            }
+        )
+    return data
 
 
 def _gen_analytics(count: int) -> list[dict]:
+    n = len(_ANALYTICS_METRICS)
     data = []
     for i in range(count):
-        metric, value, trend = _ANALYTICS_METRICS[i % len(_ANALYTICS_METRICS)]
+        metric, value_raw, unit, trend_pct = _ANALYTICS_METRICS[i % n]
+        multiplier = 1 + (i // n) * 0.05 if i >= n else 1
+        adjusted = round(value_raw * multiplier, 2) if isinstance(value_raw, float) else int(value_raw * multiplier)
         data.append(
             {
                 "id": str(i + 1),
                 "metric": metric,
-                "value": value,
-                "trend": trend,
+                "value_raw": adjusted,
+                "value_display": f"{adjusted:,}{unit}",
+                "trend_pct": round(trend_pct + (i // n) * 0.3, 1),
                 "period": "최근 30일",
             }
         )
@@ -129,31 +132,41 @@ def _gen_analytics(count: int) -> list[dict]:
 
 
 def _gen_social(count: int) -> list[dict]:
-    return [
-        {
-            "id": str(i + 1),
-            "user": f"사용자_{1000 + i}",
-            "content": _SOCIAL_CONTENTS[i % len(_SOCIAL_CONTENTS)],
-            "likes": 5 + i * 7,
-            "comments": 1 + i * 2,
-            "created_at": f"2025-03-{10 + i % 20:02d}T{8 + i % 14:02d}:00:00Z",
-        }
-        for i in range(count)
-    ]
-
-
-def _gen_ecommerce(count: int) -> list[dict]:
+    n = len(_SOCIAL_CONTENTS)
     data = []
     for i in range(count):
-        product, price, stock = _ECOMMERCE_PRODUCTS[i % len(_ECOMMERCE_PRODUCTS)]
+        cycle = i // n
+        day = 10 + i % 20
+        month = 3 + cycle
+        if month > 12:
+            month = ((month - 1) % 12) + 1
         data.append(
             {
                 "id": str(i + 1),
-                "product": product,
-                "price": price,
-                "stock": stock,
+                "user": f"사용자_{1000 + i}",
+                "content": _SOCIAL_CONTENTS[i % n],
+                "likes": 5 + i * 7,
+                "comments": 1 + i * 2,
+                "created_at": f"2025-{month:02d}-{day:02d}T{8 + i % 14:02d}:00:00Z",
+            }
+        )
+    return data
+
+
+def _gen_ecommerce(count: int) -> list[dict]:
+    n = len(_ECOMMERCE_PRODUCTS)
+    data = []
+    for i in range(count):
+        product, base_price, base_stock, category = _ECOMMERCE_PRODUCTS[i % n]
+        price_jitter = (i // n) * 1000 * ((-1) ** i)
+        data.append(
+            {
+                "id": str(i + 1),
+                "product": product if i < n else f"{product} (v{1 + i // n})",
+                "price": max(1000, base_price + price_jitter),
+                "stock": max(0, base_stock - (i // n) * 3),
                 "rating": round(4.0 + (i % 10) * 0.1, 1),
-                "category": _ECOMMERCE_CATEGORIES[i % len(_ECOMMERCE_CATEGORIES)],
+                "category": category,
             }
         )
     return data
