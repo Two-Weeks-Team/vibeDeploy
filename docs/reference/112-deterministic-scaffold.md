@@ -1,4 +1,7 @@
 # Task 112: 결정론적 스캐폴드 분리
+
+> **Implementation Note**: The production scaffold uses Next.js 16.1.6 / React 19.2.3 (updated per issue #35 discussion). The versions below reflect the original spec.
+
 상태: 미구현 | Phase 1 | 예상 시간: 4h
 의존성: 없음
 
