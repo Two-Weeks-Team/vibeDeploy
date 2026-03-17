@@ -10,6 +10,15 @@ ZP_COMPETE_START = "zp.compete.start"
 ZP_COMPETE_COMPLETE = "zp.compete.complete"
 ZP_COMPETE_ERROR = "zp.compete.error"
 
+ZP_BRAINSTORM_START = "zp.brainstorm.start"
+ZP_BRAINSTORM_COMPLETE = "zp.brainstorm.complete"
+
+ZP_GO = "zp.verdict.go"
+ZP_NOGO = "zp.verdict.nogo"
+
+ZP_TRANSCRIPT_START = "zp.transcript.start"
+ZP_TRANSCRIPT_COMPLETE = "zp.transcript.complete"
+
 
 def search_start_event(query: str, category: str) -> dict:
     return {
@@ -81,10 +90,6 @@ def compete_error_event(error: str) -> dict:
     }
 
 
-ZP_GO = "zp.verdict.go"
-ZP_NOGO = "zp.verdict.nogo"
-
-
 def verdict_go_event(score: int, reason: str, reason_code: str) -> dict:
     return {
         "type": ZP_GO,
@@ -103,10 +108,6 @@ def verdict_nogo_event(score: int, reason: str, reason_code: str) -> dict:
     }
 
 
-ZP_BRAINSTORM_START = "zp.brainstorm.start"
-ZP_BRAINSTORM_COMPLETE = "zp.brainstorm.complete"
-
-
 def brainstorm_start_event(idea: str, paper_count: int) -> dict:
     return {
         "type": ZP_BRAINSTORM_START,
@@ -122,10 +123,6 @@ def brainstorm_complete_event(novel_features: int, unexplored_angles: int, novel
         "unexplored_angles": unexplored_angles,
         "novelty_boost": novelty_boost,
     }
-
-
-ZP_TRANSCRIPT_START = "zp.transcript.start"
-ZP_TRANSCRIPT_COMPLETE = "zp.transcript.complete"
 
 
 def transcript_start_event(video_id: str) -> dict:
