@@ -33,6 +33,7 @@ NODE_EVENTS = {
     "contract_validator": {"phase": "contract_validation", "message": "Validating API contract compliance..."},
     "local_runtime_validator": {"phase": "runtime_validation", "message": "Validating local runtime..."},
     "deploy_gate": {"phase": "deploy_gate", "message": "Checking deploy readiness..."},
+    "frontend_file_repairer": {"phase": "frontend_repair", "message": "Repairing failing frontend files..."},
 }
 
 

@@ -1,4 +1,5 @@
 import ast
+import asyncio
 import json
 import logging
 import os
@@ -159,6 +160,50 @@ def per_file_code_generator_node(state: dict) -> dict:
         "backend_code": backend_code,
         "phase": "code_generated",
     }
+
+
+_MAX_PARALLEL_LLM = int(os.environ.get("VIBEDEPLOY_MAX_PARALLEL_LLM", "4"))
+
+
+async def _generate_tier_parallel(
+    specs: list,
+    context: dict,
+    code_store: dict,
+    warnings: list,
+    file_type_filter: set[str],
+    is_frontend: bool,
+) -> None:
+    model_key = "code_gen_frontend" if is_frontend else "code_gen_backend"
+    model = MODEL_CONFIG.get(model_key, MODEL_CONFIG["code_gen"])
+    semaphore = asyncio.Semaphore(_MAX_PARALLEL_LLM)
+
+    async def _generate_one(spec) -> tuple[str, dict[str, str]]:
+        async with semaphore:
+            if _use_llm_per_file_generation() and spec.file_type in file_type_filter:
+                if not llm_credentials_available(model):
+                    warnings.append(f"per_file_llm_unavailable:{model}")
+                    return spec.path, _generate_file_from_spec(spec, context)
+                try:
+                    content = await _generate_file_with_llm(spec, context)
+                    route = llm_auth_route_for_model(model) or "unknown"
+                    target = "frontend" if is_frontend else "backend"
+                    warnings.append(f"per_file_{target}_llm_used:{model}:{route}")
+                    return spec.path, {spec.path: content}
+                except Exception as exc:
+                    target = "frontend" if is_frontend else "backend"
+                    logger.warning("[PER_FILE_LLM] %s fallback for %s: %s", target, spec.path, str(exc)[:200])
+                    warnings.append(f"per_file_{target}_llm_fallback:{spec.path}")
+                    return spec.path, _generate_file_from_spec(spec, context)
+            else:
+                try:
+                    return spec.path, _generate_file_from_spec(spec, context)
+                except Exception:
+                    return spec.path, _generate_file_from_spec(spec, context)
+
+    results = await asyncio.gather(*[_generate_one(spec) for spec in specs])
+    for _, generated in results:
+        code_store.update(generated)
+        context["already_generated"].update(generated)
 
 
 def _build_generation_context(state: dict) -> dict:
@@ -352,6 +397,21 @@ def _parse_single_file_payload(raw: str, path: str) -> str:
     return cleaned
 
 
+def _has_truncated_jsx(content: str, path: str) -> bool:
+    if not path.endswith((".tsx", ".jsx")):
+        return False
+    lines = content.splitlines()
+    if not lines:
+        return True
+    last = lines[-1].strip()
+    if last not in {"}", "};", ")", ");"} and not last.startswith("//"):
+        return True
+    open_tags = content.count("<") - content.count("</") - content.count("/>")
+    if open_tags > 2:
+        return True
+    return False
+
+
 async def _generate_file_with_llm(spec: FileSpec, context: dict) -> str:
     prompt_meta = _prompt_context_for_spec(spec, context)
     target = prompt_meta["target"]
@@ -381,8 +441,21 @@ async def _generate_file_with_llm(spec: FileSpec, context: dict) -> str:
         {"role": "system", "content": system_content},
         {"role": "user", "content": prompt_meta["prompt"]},
     ]
-    response = await ainvoke_with_retry(llm, messages, max_attempts=3)
-    return _parse_single_file_payload(content_to_str(response.content), spec.path)
+    for attempt in range(1, 4):
+        response = await ainvoke_with_retry(llm, messages, max_attempts=1)
+        content = _parse_single_file_payload(content_to_str(response.content), spec.path)
+        if not _has_truncated_jsx(content, spec.path):
+            return content
+        logger.warning("[PER_FILE_LLM] truncated JSX detected in %s (attempt %d), retrying", spec.path, attempt)
+        messages = [
+            {
+                "role": "system",
+                "content": system_content
+                + "\nIMPORTANT: The previous response was truncated. Generate the COMPLETE file without truncation.",
+            },
+            {"role": "user", "content": prompt_meta["prompt"]},
+        ]
+    return content
 
 
 async def backend_generator_node(state: dict, config=None) -> dict:
@@ -461,26 +534,46 @@ async def frontend_generator_node(state: dict, config=None) -> dict:
 
     is_retry = bool(context.get("wiring_missing") or context.get("repair_instructions") or context.get("build_errors"))
     build_errors_text = context.get("build_errors") or ""
+    build_failing_files = list(state.get("build_failing_files") or [])
 
-    specs = sorted(specs, key=lambda s: (1 if _is_page_file(s.path) else 0, s.path))
-
-    for spec in specs:
+    def _should_skip(spec) -> bool:
         if spec.path in frontend_code and _should_preserve_existing_file(spec.path):
-            continue
-        if is_retry and spec.path in frontend_code and spec.path not in build_errors_text:
-            continue
-        if _is_page_file(spec.path):
-            all_frontend = dict(context.get("frontend_code") or {})
-            all_frontend.update(context["already_generated"])
-            component_code = {p: c for p, c in all_frontend.items() if not _is_page_file(p)}
-            exports = _extract_component_exports(component_code)
-            context["available_exports"] = exports
-            logger.info(
-                "[FRONTEND_GEN] page.tsx injection: %d files, api_client=%s, exports=%s",
-                len(component_code),
-                "src/lib/api-client.ts" in component_code,
-                {p: list((v.get("default") or []) + (v.get("named") or [])) for p, v in exports.items()},
-            )
+            return True
+        if is_retry and spec.path in frontend_code:
+            if build_failing_files:
+                normalized = spec.path.replace("./", "").lstrip("/")
+                if not any(normalized in fp or fp in normalized for fp in build_failing_files):
+                    return True
+            elif spec.path not in build_errors_text:
+                return True
+        return False
+
+    specs_to_generate = [s for s in specs if not _should_skip(s)]
+
+    page_specs = [s for s in specs_to_generate if _is_page_file(s.path)]
+    component_specs = [s for s in specs_to_generate if not _is_page_file(s.path)]
+
+    await _generate_tier_parallel(
+        component_specs,
+        context,
+        frontend_code,
+        warnings,
+        file_type_filter={"component", "api", "config", "style"},
+        is_frontend=True,
+    )
+    context["frontend_code"] = dict(frontend_code)
+
+    for spec in page_specs:
+        all_frontend = dict(context.get("frontend_code") or {})
+        all_frontend.update(context["already_generated"])
+        component_code = {p: c for p, c in all_frontend.items() if not _is_page_file(p)}
+        exports = _extract_component_exports(component_code)
+        context["available_exports"] = exports
+        logger.info(
+            "[FRONTEND_GEN] page.tsx injection: %d files, api_client=%s",
+            len(component_code),
+            "src/lib/api-client.ts" in component_code,
+        )
         if _use_llm_per_file_generation() and spec.file_type in {"page", "component", "api"}:
             model = MODEL_CONFIG.get("code_gen_frontend", MODEL_CONFIG["code_gen"])
             if not llm_credentials_available(model):
@@ -492,21 +585,90 @@ async def frontend_generator_node(state: dict, config=None) -> dict:
                     route = llm_auth_route_for_model(model) or "unknown"
                     warnings.append(f"per_file_frontend_llm_used:{model}:{route}")
                 except Exception as exc:
-                    logger.warning("[PER_FILE_LLM] frontend fallback for %s: %s", spec.path, str(exc)[:200])
+                    logger.warning("[PER_FILE_LLM] page fallback for %s: %s", spec.path, str(exc)[:200])
                     warnings.append(f"per_file_frontend_llm_fallback:{spec.path}")
                     generated = _generate_file_from_spec(spec, context)
         else:
-            try:
-                generated = _generate_file_from_spec(spec, context)
-            except Exception:
-                generated = _generate_file_from_spec(spec, context)
+            generated = _generate_file_from_spec(spec, context)
         context["already_generated"].update(generated)
         frontend_code.update(generated)
         context["frontend_code"] = dict(frontend_code)
+
     return {
         "frontend_code": frontend_code,
         "phase": "frontend_generated",
         "code_gen_warnings": warnings,
+    }
+
+
+async def frontend_file_repairer_node(state: dict, config=None) -> dict:
+    build_errors_full = state.get("build_errors_full") or state.get("build_errors") or ""
+    build_failing_files = list(state.get("build_failing_files") or [])
+    frontend_code = dict(state.get("frontend_code") or {})
+    blueprint = state.get("blueprint") if isinstance(state, dict) else {}
+    blueprint = blueprint if isinstance(blueprint, dict) else {}
+    warnings = list(state.get("code_gen_warnings") or [])
+
+    all_specs = {s.path: s for s in extract_file_specs(blueprint) if not _is_backend_path(s.path)}
+
+    context = _build_generation_context(state)
+    context["already_generated"].update(frontend_code)
+    context["build_errors"] = build_errors_full
+
+    target_paths: list[str] = []
+    for fp in build_failing_files:
+        normalized = fp.replace("./", "").lstrip("/")
+        if normalized in all_specs:
+            target_paths.append(normalized)
+        else:
+            for spec_path in all_specs:
+                if normalized in spec_path or spec_path.endswith(normalized.split("/")[-1]):
+                    target_paths.append(spec_path)
+                    break
+
+    if not target_paths:
+        logger.warning("[FILE_REPAIR] No matching specs for failing files: %s", build_failing_files)
+        return {"phase": "frontend_generated", "build_failing_files": []}
+
+    logger.info("[FILE_REPAIR] Repairing %d files: %s", len(target_paths), target_paths)
+
+    specs_to_repair = [all_specs[p] for p in target_paths if p in all_specs]
+    page_repairs = [s for s in specs_to_repair if _is_page_file(s.path)]
+    component_repairs = [s for s in specs_to_repair if not _is_page_file(s.path)]
+
+    await _generate_tier_parallel(
+        component_repairs,
+        context,
+        frontend_code,
+        warnings,
+        file_type_filter={"component", "api", "config", "style", "page"},
+        is_frontend=True,
+    )
+    context["frontend_code"] = dict(frontend_code)
+
+    for spec in page_repairs:
+        all_fe = dict(context.get("frontend_code") or {})
+        all_fe.update(context["already_generated"])
+        component_code = {p: c for p, c in all_fe.items() if not _is_page_file(p)}
+        context["available_exports"] = _extract_component_exports(component_code)
+        if _use_llm_per_file_generation():
+            model = MODEL_CONFIG.get("code_gen_frontend", MODEL_CONFIG["code_gen"])
+            if llm_credentials_available(model):
+                try:
+                    content = await _generate_file_with_llm(spec, context)
+                    frontend_code[spec.path] = content
+                    warnings.append(f"per_file_repair_llm_used:{model}")
+                    continue
+                except Exception as exc:
+                    logger.warning("[FILE_REPAIR] LLM failed for %s: %s", spec.path, exc)
+        generated = _generate_file_from_spec(spec, context)
+        frontend_code.update(generated)
+
+    return {
+        "frontend_code": frontend_code,
+        "phase": "frontend_generated",
+        "code_gen_warnings": warnings,
+        "build_failing_files": [],
     }
 
 
