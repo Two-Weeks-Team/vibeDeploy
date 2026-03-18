@@ -1261,13 +1261,33 @@ async def _trigger_zp_build(orch, session_id: str, card_id: str) -> None:
 
         card.build_step = "done"
         card.status = "deployed"
-        card.thread_id = f"zp-{card_id}"
+        thread_id = f"zp-{card_id}"
+        card.thread_id = thread_id
+
+        live_url = ""
         try:
-            await _zp_store.update_card(card_id, status="deployed", build_step="done", thread_id=f"zp-{card_id}")
-            push_zp_event({"type": "card.update", "card_id": card_id, "status": "deployed", "session_id": session_id})
+            result = await _store.get_result(thread_id) if _store else None
+            if result and isinstance(result, dict):
+                deploy = result.get("deployment", {})
+                if isinstance(deploy, dict):
+                    live_url = deploy.get("liveUrl", "") or deploy.get("live_url", "")
         except Exception:
             pass
-        logger.info("[ZP] Build completed for card %s: %s", card_id, idea_title)
+
+        try:
+            await _zp_store.update_card(card_id, status="deployed", build_step="done", thread_id=live_url or thread_id)
+            push_zp_event(
+                {
+                    "type": "card.update",
+                    "card_id": card_id,
+                    "status": "deployed",
+                    "title": card.title,
+                    "session_id": session_id,
+                }
+            )
+        except Exception:
+            pass
+        logger.info("[ZP] Build completed for card %s: %s (url=%s)", card_id, idea_title, live_url)
     except Exception:
         logger.exception("[ZP] Build failed for card %s", card_id)
         session = orch.get_session(session_id)
