@@ -446,12 +446,20 @@ async def _generate_file_with_llm(spec: FileSpec, context: dict) -> str:
         content = _parse_single_file_payload(content_to_str(response.content), spec.path)
         if not _has_truncated_jsx(content, spec.path):
             return content
-        logger.warning("[PER_FILE_LLM] truncated JSX detected in %s (attempt %d), retrying", spec.path, attempt)
+        logger.warning(
+            "[PER_FILE_LLM] truncated JSX detected in %s (attempt %d), retrying with concise directive",
+            spec.path,
+            attempt,
+        )
         messages = [
             {
                 "role": "system",
-                "content": system_content
-                + "\nIMPORTANT: The previous response was truncated. Generate the COMPLETE file without truncation.",
+                "content": (
+                    system_content + "\nCRITICAL: Previous response was TRUNCATED (output cut off). "
+                    "You MUST generate a COMPLETE, CONCISE file. "
+                    "Use shorter variable names, fewer inline comments, and combine related elements. "
+                    "Every JSX tag MUST be properly closed. The file MUST end with a closing brace or return statement."
+                ),
             },
             {"role": "user", "content": prompt_meta["prompt"]},
         ]
