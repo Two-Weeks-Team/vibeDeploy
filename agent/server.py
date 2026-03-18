@@ -1048,6 +1048,8 @@ class ZPStartRequest(BaseModel):
 class ZPActionRequest(BaseModel):
     action: str
     card_id: str = ""
+    video_id: str = ""
+    title: str = ""
     success: bool | None = None
     thread_id: str | None = None
 
@@ -1180,6 +1182,12 @@ async def zero_prompt_action(session_id: str, request: ZPActionRequest):
         await _zps.update_card(card_id, status="passed")
         push_zp_event({"type": "card.update", "card_id": card_id, "status": "passed", "session_id": session_id})
         result = {"type": "zp.action.pass_card", "card_id": card_id}
+    elif action == "add_video":
+        video_id = request.video_id or card_id
+        title = request.title or video_id
+        new_card_id = await orch.register_card(session_id, video_id, title)
+        asyncio.create_task(_analyze_single(orch, session_id, video_id, title))
+        result = {"type": "zp.action.add_video", "card_id": new_card_id, "video_id": video_id}
     elif action == "queue_build":
         result = orch.queue_build(session_id, card_id)
         asyncio.create_task(_trigger_zp_build(orch, session_id, card_id))
@@ -1199,6 +1207,15 @@ async def zero_prompt_action(session_id: str, request: ZPActionRequest):
         raise HTTPException(status_code=422, detail=result["error"])
 
     return result
+
+
+async def _analyze_single(orch, session_id: str, video_id: str, title: str) -> None:
+    try:
+        step_events = await orch.exploration_step(session_id, video_id, video_title=title, video_description=title)
+        for evt in step_events:
+            push_zp_event(evt)
+    except Exception:
+        logger.exception("[ZP] Analysis failed for video %s", video_id)
 
 
 async def _trigger_zp_build(orch, session_id: str, card_id: str) -> None:
