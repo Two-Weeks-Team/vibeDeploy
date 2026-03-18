@@ -1198,6 +1198,19 @@ async def zero_prompt_action(session_id: str, request: ZPActionRequest):
         new_card_id = await orch.register_card(session_id, video_id, title)
         asyncio.create_task(_analyze_single(orch, session_id, video_id, title))
         result = {"type": "zp.action.add_video", "card_id": new_card_id, "video_id": video_id}
+    elif action == "force_go":
+        from .db import zp_store as _zps
+
+        await _zps.update_card(card_id, status="go_ready", score=75)
+        session = await orch.ensure_session(session_id)
+        if session:
+            for card in session.cards:
+                if card.card_id == card_id:
+                    card.status = "go_ready"
+                    card.score = 75
+                    break
+        push_zp_event({"type": "card.update", "card_id": card_id, "status": "go_ready", "session_id": session_id})
+        result = {"type": "zp.action.force_go", "card_id": card_id}
     elif action == "queue_build":
         result = orch.queue_build(session_id, card_id)
         asyncio.create_task(_trigger_zp_build(orch, session_id, card_id))
