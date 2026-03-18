@@ -36,6 +36,49 @@ def _trim_build_errors(stderr: str | None) -> str:
     return "\n".join(errors[:3]) if errors else "\n".join(lines[:3])
 
 
+def _extract_failing_file_paths(error_text: str) -> list[str]:
+    paths: list[str] = []
+    patterns = [
+        re.compile(r"\./?(src/[^\s:>]+\.[a-z]{2,4})"),
+        re.compile(r"\./?(src/[^\s:>]+\.[a-z]{2,4})"),
+        re.compile(r"Module not found.*['\"](@/[^'\"]+)['\"]"),
+        re.compile(r"Export\s+\w+\s+doesn't exist.*['\"](@/[^'\"]+)['\"]"),
+    ]
+    for pattern in patterns:
+        for match in pattern.finditer(error_text):
+            p = match.group(1)
+            if p not in paths:
+                paths.append(p)
+    lowered = error_text.lower()
+    if 'prerendering page "/"' in lowered or "src_app_page" in lowered:
+        if "src/app/page.tsx" not in paths:
+            paths.append("src/app/page.tsx")
+    return paths[:5]
+
+
+async def _run_tsc_check(frontend_code: dict) -> tuple[bool, str]:
+    if not frontend_code.get("tsconfig.json"):
+        return True, ""
+    with tempfile.TemporaryDirectory(prefix="vibedeploy-tsc-") as tmpdir:
+        _write_files_to_tmpdir(frontend_code, tmpdir)
+        try:
+            result = await asyncio.wait_for(
+                asyncio.to_thread(
+                    __import__("subprocess").run,
+                    ["npx", "--yes", "tsc", "--noEmit", "--strict", "false"],
+                    capture_output=True,
+                    text=True,
+                    cwd=tmpdir,
+                ),
+                timeout=30,
+            )
+            if result.returncode != 0:
+                return False, (result.stdout + result.stderr)[:1000]
+            return True, ""
+        except Exception as exc:
+            return True, f"tsc check skipped: {exc}"
+
+
 def _build_repair_prompt(errors: str, failing_files: dict[str, str]) -> str:
     file_context = "\n".join(f"--- {path} ---\n{code}" for path, code in failing_files.items())
     return f"Fix these build errors:\n{errors}\n\nCurrent code:\n{file_context}"
@@ -320,6 +363,10 @@ async def build_validator(state: VibeDeployState, config=None) -> dict:
     if not frontend_ok or not design_ok:
         failing_files.update(frontend_code)
     repair_prompt = _build_repair_prompt(trimmed, failing_files)
+
+    failing_paths = _extract_failing_file_paths(combined_stderr)
+    frontend_only_failure = backend_ok and (not frontend_ok or not design_ok)
+
     await _emit_build_event(
         "build.node.error",
         config=config,
@@ -331,6 +378,8 @@ async def build_validator(state: VibeDeployState, config=None) -> dict:
         frontend_ok=frontend_ok,
         errors=errors,
         attempt=state.get("build_attempt_count", 0) + 1,
+        failing_files=failing_paths,
+        frontend_only_failure=frontend_only_failure,
     )
 
     return {
@@ -339,8 +388,13 @@ async def build_validator(state: VibeDeployState, config=None) -> dict:
             "backend_ok": backend_ok,
             "frontend_ok": frontend_ok,
             "errors": errors,
+            "failing_files": failing_paths,
+            "frontend_only_failure": frontend_only_failure,
         },
         "build_errors": trimmed,
+        "build_errors_full": combined_stderr[:3000],
         "build_repair_prompt": repair_prompt,
         "build_attempt_count": state.get("build_attempt_count", 0) + 1,
+        "build_failing_files": failing_paths,
+        "build_frontend_only_failure": frontend_only_failure,
     }

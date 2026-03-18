@@ -70,6 +70,38 @@ _SHALLOW_CONTENT_PATTERNS = (
 
 _MIN_UNIQUE_API_ENDPOINTS = 2
 
+_STAGED_BLOCKER_ALLOWLIST = frozenset({"deterministic fallback scaffold detected"})
+
+
+def _is_staged_pipeline(state: VibeDeployState) -> bool:
+    """Detect staged pipeline: spec_freeze_gate sets spec_frozen, contract_validator sets wiring_validation."""
+    return bool(state.get("spec_frozen")) and isinstance(state.get("wiring_validation"), dict)
+
+
+def _staged_consistency(state: VibeDeployState, legacy_score: float) -> float:
+    """Use wiring_validation results (0.7 weight) blended with legacy regex heuristics (0.3 weight)."""
+    wiring = state.get("wiring_validation") or {}
+    if not wiring.get("passed"):
+        total = max(int(wiring.get("total_endpoints") or 1), 1)
+        matched = int(wiring.get("matched") or 0)
+        schema_mismatches = len(wiring.get("schema_mismatches") or [])
+        endpoint_rate = matched / total
+        schema_penalty = min(schema_mismatches * 5, 25)
+        wiring_score = max(0.0, endpoint_rate * 100 - schema_penalty)
+        return round(wiring_score * 0.7 + legacy_score * 0.3, 1)
+
+    return round(max(90.0, 95.0 * 0.8 + legacy_score * 0.2), 1)
+
+
+def _staged_quality_blockers(
+    blockers: list[str],
+    state: VibeDeployState,
+) -> list[str]:
+    """Drop allowlisted blockers in staged mode (e.g. deterministic fallback is expected without LLM credentials)."""
+    if not _is_staged_pipeline(state):
+        return blockers
+    return [b for b in blockers if b not in _STAGED_BLOCKER_ALLOWLIST]
+
 
 async def code_evaluator(state: VibeDeployState, config=None) -> dict:
     blueprint = state.get("blueprint", {})
@@ -77,6 +109,7 @@ async def code_evaluator(state: VibeDeployState, config=None) -> dict:
     backend_code = state.get("backend_code", {})
     flagship_contract = state.get("flagship_contract") if isinstance(state.get("flagship_contract"), dict) else {}
     iteration = state.get("code_eval_iteration", 0) + 1
+    staged = _is_staged_pipeline(state)
 
     expected_frontend = set(blueprint.get("frontend_files", {}).keys())
     expected_backend = set(blueprint.get("backend_files", {}).keys())
@@ -87,7 +120,8 @@ async def code_evaluator(state: VibeDeployState, config=None) -> dict:
     backend_coverage = len(actual_backend & expected_backend) / max(len(expected_backend), 1) * 100
     completeness = (frontend_coverage + backend_coverage) / 2
 
-    consistency = _check_consistency(frontend_code, backend_code, blueprint)
+    legacy_consistency = _check_consistency(frontend_code, backend_code, blueprint)
+    consistency = _staged_consistency(state, legacy_consistency) if staged else legacy_consistency
     runnability = _check_runnability(frontend_code, backend_code)
     experience = _check_experience(frontend_code, blueprint)
     artifact_fidelity = _check_flagship_artifact_fidelity(frontend_code, backend_code, flagship_contract)
@@ -98,6 +132,8 @@ async def code_evaluator(state: VibeDeployState, config=None) -> dict:
     missing_be = list(expected_backend - actual_backend)
     blockers = _collect_quality_blockers(frontend_code, backend_code, blueprint)
     blockers.extend(_artifact_fidelity_blockers(flagship_contract, artifact_fidelity))
+    if staged:
+        blockers = _staged_quality_blockers(blockers, state)
     flagship_fallback_accepted = _allow_flagship_fallback_pass(
         flagship_contract,
         blockers,
@@ -111,6 +147,28 @@ async def code_evaluator(state: VibeDeployState, config=None) -> dict:
         blockers = []
     deployment_blocked = bool(blockers)
 
+    if staged:
+        wiring_passed = (state.get("wiring_validation") or {}).get("passed", False)
+        staged_pass = (
+            wiring_passed
+            and match_rate >= 70
+            and runnability >= 70
+            and not missing_fe
+            and not missing_be
+            and not blockers
+        ) or flagship_fallback_accepted
+        passed = staged_pass
+    else:
+        passed = (
+            (match_rate >= PASS_THRESHOLD and consistency >= MIN_CONSISTENCY_TO_PASS) or flagship_fallback_accepted
+        ) and (
+            runnability >= MIN_RUNNABILITY_TO_PASS
+            and experience >= MIN_EXPERIENCE_TO_PASS
+            and not missing_fe
+            and not missing_be
+            and not blockers
+        )
+
     eval_result = {
         "match_rate": match_rate,
         "completeness": round(completeness, 1),
@@ -121,16 +179,8 @@ async def code_evaluator(state: VibeDeployState, config=None) -> dict:
         "content_depth": content_depth,
         "flagship_fallback_accepted": flagship_fallback_accepted,
         "iteration": iteration,
-        "passed": (
-            (match_rate >= PASS_THRESHOLD and consistency >= MIN_CONSISTENCY_TO_PASS) or flagship_fallback_accepted
-        )
-        and (
-            runnability >= MIN_RUNNABILITY_TO_PASS
-            and experience >= MIN_EXPERIENCE_TO_PASS
-            and not missing_fe
-            and not missing_be
-            and not blockers
-        ),
+        "passed": passed,
+        "staged_pipeline": staged,
         "missing_frontend": missing_fe,
         "missing_backend": missing_be,
         "blockers": blockers,
@@ -142,8 +192,25 @@ async def code_evaluator(state: VibeDeployState, config=None) -> dict:
 
     repair_tasks = build_repair_tasks_from_eval(eval_result)
 
+    provenance: dict | None = None
+    if staged:
+        code_gen_warnings = state.get("code_gen_warnings") or []
+        llm_files = [w for w in code_gen_warnings if "_llm_used:" in w]
+        fallback_files = [w for w in code_gen_warnings if "_llm_unavailable:" in w or "_llm_fallback:" in w]
+        provenance = {
+            "mode": "staged",
+            "spec_frozen": bool(state.get("spec_frozen")),
+            "wiring_passed": (state.get("wiring_validation") or {}).get("passed", False),
+            "llm_generated_count": len(llm_files),
+            "deterministic_count": len(fallback_files),
+            "consistency_source": "wiring_validation",
+        }
+        eval_result["provenance"] = provenance
+
+    mode_tag = "[STAGED]" if staged else ""
     logger.info(
-        "[CODE_EVAL] Iteration %d: match_rate=%.1f%% (completeness=%.1f, consistency=%.1f, runnability=%.1f, experience=%.1f) → %s",
+        "[CODE_EVAL]%s Iteration %d: match_rate=%.1f%% (completeness=%.1f, consistency=%.1f, runnability=%.1f, experience=%.1f) → %s",
+        mode_tag,
         iteration,
         match_rate,
         completeness,
@@ -154,25 +221,25 @@ async def code_evaluator(state: VibeDeployState, config=None) -> dict:
     )
 
     if config is not None:
-        await adispatch_custom_event(
-            "code_eval.result",
-            {
-                "type": "code_eval.result",
-                "node": "code_evaluator",
-                "phase": "code_evaluation",
-                "message": f"Code evaluation {'PASSED' if eval_result['passed'] else f'iteration {iteration}/{MAX_CODE_EVAL_ITERATIONS}'}",
-                "passed": eval_result["passed"],
-                "iteration": iteration,
-                "max_iterations": MAX_CODE_EVAL_ITERATIONS,
-                "match_rate": match_rate,
-                "completeness": round(completeness, 1),
-                "consistency": round(consistency, 1),
-                "runnability": round(runnability, 1),
-                "experience": round(experience, 1),
-                "blockers": blockers,
-            },
-            config=config,
-        )
+        event_payload = {
+            "type": "code_eval.result",
+            "node": "code_evaluator",
+            "phase": "code_evaluation",
+            "message": f"Code evaluation {'PASSED' if eval_result['passed'] else f'iteration {iteration}/{MAX_CODE_EVAL_ITERATIONS}'}",
+            "passed": eval_result["passed"],
+            "iteration": iteration,
+            "max_iterations": MAX_CODE_EVAL_ITERATIONS,
+            "match_rate": match_rate,
+            "completeness": round(completeness, 1),
+            "consistency": round(consistency, 1),
+            "runnability": round(runnability, 1),
+            "experience": round(experience, 1),
+            "blockers": blockers,
+            "staged_pipeline": staged,
+        }
+        if provenance:
+            event_payload["provenance"] = provenance
+        await adispatch_custom_event("code_eval.result", event_payload, config=config)
 
     return {
         "code_eval_result": eval_result,

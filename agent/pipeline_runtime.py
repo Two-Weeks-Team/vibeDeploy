@@ -169,6 +169,12 @@ def build_meeting_result(state: dict) -> dict:
             )
 
     deploy = state.get("deploy_result", {}) if isinstance(state.get("deploy_result"), dict) else {}
+    build_validation = state.get("build_validation") if isinstance(state.get("build_validation"), dict) else {}
+    runtime_validation = (
+        state.get("local_runtime_validation") if isinstance(state.get("local_runtime_validation"), dict) else {}
+    )
+    deploy_gate_result = state.get("deploy_gate_result") if isinstance(state.get("deploy_gate_result"), dict) else {}
+    code_eval_result = state.get("code_eval_result") if isinstance(state.get("code_eval_result"), dict) else {}
     deployment = {
         "repoUrl": deploy.get("github_repo", ""),
         "liveUrl": deploy.get("live_url", ""),
@@ -182,9 +188,25 @@ def build_meeting_result(state: dict) -> dict:
         "localFrontendUrl": deploy.get("local_frontend_url", ""),
     }
 
+    pipeline_succeeded = bool(
+        code_eval_result.get("passed")
+        and build_validation.get("passed")
+        and runtime_validation.get("passed")
+        and deploy_gate_result.get("passed")
+        and deploy.get("status") in {"local_running", "running", "deployed", "success"}
+    )
+
+    verdict = verdict_map.get(decision_raw, "NO-GO")
+    if pipeline_succeeded:
+        verdict = "GO"
+
+    score = scoring.get("final_score", 0)
+    if not score and isinstance(code_eval_result.get("match_rate"), (int, float)):
+        score = code_eval_result.get("match_rate", 0)
+
     return {
-        "score": scoring.get("final_score", 0),
-        "verdict": verdict_map.get(decision_raw, "NO-GO"),
+        "score": score,
+        "verdict": verdict,
         "selected_flagship": state.get("selected_flagship", ""),
         "analyses": analyses_list,
         "debates": debates_list,
@@ -430,6 +452,75 @@ async def _stream_evaluation(
                         "backend_model": strategy.get("model_plan", {}).get("backend", {}).get("model", ""),
                     },
                 )
+            elif name == "spec_freeze_gate":
+                yield format_sse(
+                    "spec_freeze.result",
+                    {
+                        "type": "spec_freeze.result",
+                        "node": "spec_freeze_gate",
+                        "frozen": output.get("spec_frozen", False),
+                        "errors": output.get("spec_freeze_errors", []),
+                    },
+                )
+            elif name == "backend_generator":
+                backend = output.get("backend_code", {}) or {}
+                warnings = output.get("code_gen_warnings", [])
+                yield format_sse(
+                    "backend_gen.complete",
+                    {
+                        "type": "backend_gen.complete",
+                        "node": "backend_generator",
+                        "files": len(backend),
+                        "warnings": [w for w in warnings if "backend" in w],
+                    },
+                )
+            elif name == "frontend_generator":
+                frontend = output.get("frontend_code", {}) or {}
+                warnings = output.get("code_gen_warnings", [])
+                yield format_sse(
+                    "frontend_gen.complete",
+                    {
+                        "type": "frontend_gen.complete",
+                        "node": "frontend_generator",
+                        "files": len(frontend),
+                        "warnings": [w for w in warnings if "frontend" in w],
+                    },
+                )
+            elif name == "contract_validator":
+                wiring = output.get("wiring_validation", {}) or {}
+                yield format_sse(
+                    "contract_validation.result",
+                    {
+                        "type": "contract_validation.result",
+                        "node": "contract_validator",
+                        "passed": wiring.get("passed", False),
+                        "matched": wiring.get("matched", 0),
+                        "total": wiring.get("total_endpoints", 0),
+                        "missing": wiring.get("missing", []),
+                    },
+                )
+            elif name == "local_runtime_validator":
+                runtime = output.get("local_runtime_validation", {}) or {}
+                yield format_sse(
+                    "runtime_validation.result",
+                    {
+                        "type": "runtime_validation.result",
+                        "node": "local_runtime_validator",
+                        "passed": runtime.get("passed", False),
+                        "errors": runtime.get("errors", []),
+                    },
+                )
+            elif name == "deploy_gate":
+                gate = output.get("deploy_gate_result", {}) or {}
+                yield format_sse(
+                    "deploy_gate.result",
+                    {
+                        "type": "deploy_gate.result",
+                        "node": "deploy_gate",
+                        "passed": gate.get("passed", False),
+                        "failures": gate.get("failures", []),
+                    },
+                )
             elif name == "code_evaluator":
                 eval_res = output.get("code_eval_result", {}) or {}
                 yield format_sse(
@@ -445,6 +536,8 @@ async def _stream_evaluation(
                         "iteration": eval_res.get("iteration", 0),
                         "passed": eval_res.get("passed", False),
                         "blockers": eval_res.get("blockers", []),
+                        "staged_pipeline": eval_res.get("staged_pipeline", False),
+                        "provenance": eval_res.get("provenance"),
                     },
                 )
             elif name == "code_generator":

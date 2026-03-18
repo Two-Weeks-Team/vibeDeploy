@@ -22,6 +22,18 @@ NODE_EVENTS = {
     },  # COMPAT: remove after 2026-06-01 — no graph node emits this; kept for tests/conftest.py mock fixture
     "run_brainstorm_agent": {"phase": "brainstorming", "message": "Agents brainstorming ideas..."},
     "synthesize_brainstorm": {"phase": "synthesis", "message": "Synthesizing insights..."},
+    "api_contract_generator": {"phase": "api_contract", "message": "Generating OpenAPI contract..."},
+    "spec_freeze_gate": {"phase": "spec_freeze", "message": "Freezing API specification..."},
+    "scaffold_generator": {"phase": "scaffold", "message": "Scaffolding project structure..."},
+    "type_generator": {"phase": "type_generation", "message": "Generating TypeScript types..."},
+    "pydantic_generator": {"phase": "pydantic_generation", "message": "Generating Pydantic models..."},
+    "design_system_generator": {"phase": "design_system", "message": "Generating design system tokens..."},
+    "backend_generator": {"phase": "backend_generation", "message": "Generating backend files..."},
+    "frontend_generator": {"phase": "frontend_generation", "message": "Generating frontend files..."},
+    "contract_validator": {"phase": "contract_validation", "message": "Validating API contract compliance..."},
+    "local_runtime_validator": {"phase": "runtime_validation", "message": "Validating local runtime..."},
+    "deploy_gate": {"phase": "deploy_gate", "message": "Checking deploy readiness..."},
+    "frontend_file_repairer": {"phase": "frontend_repair", "message": "Repairing failing frontend files..."},
 }
 
 

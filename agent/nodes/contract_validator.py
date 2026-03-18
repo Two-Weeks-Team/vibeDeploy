@@ -12,6 +12,10 @@ _ROUTE_PATTERN = re.compile(
     r"""@(?:app|router)\.(get|post|put|delete|patch|head|options)\s*\(\s*["']([^"']+)["']""",
     re.IGNORECASE,
 )
+_ROUTER_PREFIX_PATTERN = re.compile(
+    r"""include_router\([^\)]*prefix\s*=\s*["']([^"']+)["']""",
+    re.IGNORECASE,
+)
 
 # Regex to extract Pydantic model field definitions: field_name: type (with optional default)
 _PYDANTIC_FIELD_PATTERN = re.compile(
@@ -43,6 +47,33 @@ def extract_fastapi_routes(code: str) -> list[dict]:
         path = match.group(2)
         routes.append({"method": method, "path": path})
     return routes
+
+
+def extract_router_prefixes(code: str) -> list[str]:
+    prefixes: list[str] = []
+    for match in _ROUTER_PREFIX_PATTERN.finditer(code):
+        prefix = match.group(1).strip()
+        if prefix and prefix not in prefixes:
+            prefixes.append(prefix)
+    return prefixes
+
+
+def apply_router_prefixes(routes: list[dict], prefixes: list[str]) -> list[dict]:
+    if not prefixes:
+        return routes
+    expanded: list[dict] = []
+    for route in routes:
+        path = str(route.get("path") or "")
+        method = str(route.get("method") or "GET")
+        if path.startswith("/") and path.startswith("/api"):
+            expanded.append({"method": method, "path": path})
+            continue
+        for prefix in prefixes:
+            if not prefix.startswith("/"):
+                prefix = "/" + prefix
+            full_path = prefix.rstrip("/") + (path if path.startswith("/") else f"/{path}")
+            expanded.append({"method": method, "path": full_path})
+    return expanded or routes
 
 
 def _parse_spec_endpoints(api_contract_json: str) -> list[dict]:
@@ -319,10 +350,14 @@ def validate_contract(api_contract_json: str, backend_code: dict[str, str]) -> d
     else:
         code_sources = [v for k, v in backend_code.items() if k.endswith(".py") and isinstance(v, str)]
 
+    router_prefixes = extract_router_prefixes(str(backend_code.get("main.py") or ""))
+
     code_endpoints: list[dict] = []
     for source in code_sources:
         if isinstance(source, str):
             code_endpoints.extend(extract_fastapi_routes(source))
+
+    code_endpoints = apply_router_prefixes(code_endpoints, router_prefixes)
 
     seen: set[str] = set()
     unique_code_endpoints: list[dict] = []

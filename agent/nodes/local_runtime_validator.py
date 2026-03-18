@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import socket
 import subprocess
 import tempfile
@@ -40,8 +41,20 @@ def _http_ok(url: str, timeout: float = 10.0) -> tuple[bool, str]:
         return False, str(exc)
 
 
+def _http_json(url: str, payload: dict[str, Any], timeout: float = 10.0) -> tuple[bool, str]:
+    try:
+        data = json.dumps(payload).encode("utf-8")
+        req = request.Request(url, data=data, headers={"Content-Type": "application/json"}, method="POST")
+        with request.urlopen(req, timeout=timeout) as resp:
+            body = resp.read(500).decode("utf-8", errors="ignore")
+            return 200 <= resp.status < 300, body
+    except urlerror.URLError as exc:
+        return False, str(exc)
+
+
 async def local_runtime_validator(state: dict[str, Any], config=None) -> dict:
     backend_code = dict(state.get("backend_code") or {})
+    api_contract = str(state.get("api_contract") or "")
     errors: list[str] = []
     if "main.py" not in backend_code:
         return {
@@ -80,6 +93,25 @@ async def local_runtime_validator(state: dict[str, Any], config=None) -> dict:
                 ok, detail = await asyncio.to_thread(_http_ok, f"http://127.0.0.1:{port}/health")
                 if not ok:
                     errors.append(f"backend_health_failed:{detail}")
+                if ok and api_contract:
+                    try:
+                        spec = json.loads(api_contract)
+                    except Exception:
+                        spec = {}
+                    paths = spec.get("paths") if isinstance(spec, dict) else {}
+                    if isinstance(paths, dict):
+                        for endpoint, methods in list(paths.items())[:3]:
+                            if not isinstance(methods, dict):
+                                continue
+                            if "post" in methods:
+                                payload = {"query": "test", "preferences": "test"}
+                                if "insight" in endpoint.lower():
+                                    payload = {"selection": "test", "context": "test"}
+                                post_ok, post_detail = await asyncio.to_thread(
+                                    _http_json, f"http://127.0.0.1:{port}{endpoint}", payload
+                                )
+                                if not post_ok:
+                                    errors.append(f"backend_endpoint_failed:{endpoint}:{post_detail}")
         finally:
             if proc.poll() is None:
                 proc.terminate()

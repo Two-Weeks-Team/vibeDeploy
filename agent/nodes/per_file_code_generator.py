@@ -1,4 +1,5 @@
 import ast
+import asyncio
 import json
 import logging
 import os
@@ -13,7 +14,6 @@ from agent.llm import (
     ainvoke_with_retry,
     content_to_str,
     get_llm,
-    get_rate_limit_fallback_models,
     llm_auth_route_for_model,
     llm_credentials_available,
 )
@@ -162,9 +162,55 @@ def per_file_code_generator_node(state: dict) -> dict:
     }
 
 
+_MAX_PARALLEL_LLM = int(os.environ.get("VIBEDEPLOY_MAX_PARALLEL_LLM", "4"))
+
+
+async def _generate_tier_parallel(
+    specs: list,
+    context: dict,
+    code_store: dict,
+    warnings: list,
+    file_type_filter: set[str],
+    is_frontend: bool,
+) -> None:
+    model_key = "code_gen_frontend" if is_frontend else "code_gen_backend"
+    model = MODEL_CONFIG.get(model_key, MODEL_CONFIG["code_gen"])
+    semaphore = asyncio.Semaphore(_MAX_PARALLEL_LLM)
+
+    async def _generate_one(spec) -> tuple[str, dict[str, str]]:
+        async with semaphore:
+            if _use_llm_per_file_generation() and spec.file_type in file_type_filter:
+                if not llm_credentials_available(model):
+                    warnings.append(f"per_file_llm_unavailable:{model}")
+                    return spec.path, _generate_file_from_spec(spec, context)
+                try:
+                    content = await _generate_file_with_llm(spec, context)
+                    route = llm_auth_route_for_model(model) or "unknown"
+                    target = "frontend" if is_frontend else "backend"
+                    warnings.append(f"per_file_{target}_llm_used:{model}:{route}")
+                    return spec.path, {spec.path: content}
+                except Exception as exc:
+                    target = "frontend" if is_frontend else "backend"
+                    logger.warning("[PER_FILE_LLM] %s fallback for %s: %s", target, spec.path, str(exc)[:200])
+                    warnings.append(f"per_file_{target}_llm_fallback:{spec.path}")
+                    return spec.path, _generate_file_from_spec(spec, context)
+            else:
+                try:
+                    return spec.path, _generate_file_from_spec(spec, context)
+                except Exception:
+                    return spec.path, _generate_file_from_spec(spec, context)
+
+    results = await asyncio.gather(*[_generate_one(spec) for spec in specs])
+    for _, generated in results:
+        code_store.update(generated)
+        context["already_generated"].update(generated)
+
+
 def _build_generation_context(state: dict) -> dict:
     blueprint = state.get("blueprint") if isinstance(state, dict) else {}
     blueprint = blueprint if isinstance(blueprint, dict) else {}
+    wiring = state.get("wiring_validation") or {}
+    repair_instructions = wiring.get("repair_instructions") or []
     return {
         "api_contract": state.get("api_contract"),
         "design_system": blueprint.get("design_system", {}),
@@ -175,6 +221,10 @@ def _build_generation_context(state: dict) -> dict:
         "frontend_code": dict(state.get("frontend_code") or {}),
         "backend_code": dict(state.get("backend_code") or {}),
         "already_generated": {},
+        "repair_instructions": repair_instructions,
+        "wiring_missing": wiring.get("missing") or [],
+        "wiring_schema_mismatches": wiring.get("schema_mismatches") or [],
+        "build_errors": str(state.get("build_errors") or "").strip(),
     }
 
 
@@ -239,6 +289,59 @@ def _prompt_context_for_spec(spec: FileSpec, context: dict) -> dict:
     appendix = str(prompt_strategy.get(appendix_key) or "").strip()
     if appendix:
         prompt = f"{prompt}\n\nAdditional Strategy:\n{appendix}"
+
+    repair_lines = []
+    repair_instructions = context.get("repair_instructions") or []
+    wiring_missing = context.get("wiring_missing") or []
+    build_errors = context.get("build_errors") or ""
+
+    if target == "frontend" and _is_page_file(spec.path):
+        available_exports = context.get("available_exports") or {}
+        if available_exports:
+            export_lines = []
+            for file_path, info in sorted(available_exports.items()):
+                module = (
+                    "@/" + file_path.replace("src/", "", 1).rsplit(".", 1)[0]
+                    if file_path.startswith("src/")
+                    else file_path.rsplit(".", 1)[0]
+                )
+                defaults = info.get("default") or []
+                named = info.get("named") or []
+                props_map = info.get("props") or {}
+                if defaults:
+                    sig = props_map.get(defaults[0], "")
+                    props_note = f"  // props: {sig}" if sig else "  // default export"
+                    export_lines.append(f'  import {defaults[0]} from "{module}";{props_note}')
+                if named:
+                    for n in named:
+                        sig = props_map.get(n, "")
+                        props_note = f"  // props: {sig}" if sig else ""
+                        export_lines.append(f'  import {{ {n} }} from "{module}";{props_note}')
+
+    if target == "backend" and (repair_instructions or wiring_missing):
+        if wiring_missing:
+            repair_lines.append(
+                "CRITICAL — Previous attempt FAILED contract validation. "
+                "These endpoints are MISSING from your code and MUST be added:\n"
+                + "\n".join(f"  - {ep}" for ep in wiring_missing)
+            )
+        for instr in repair_instructions:
+            action = instr.get("action", "")
+            if action == "add_endpoint":
+                repair_lines.append(f"Add route: {instr.get('method', 'GET')} {instr.get('path', '/')}")
+            elif action == "add_model":
+                repair_lines.append(f"Add Pydantic model: {instr.get('schema', '?')}")
+            elif action == "add_field":
+                repair_lines.append(f"Add field '{instr.get('field')}' to {instr.get('schema', '?')}")
+
+    if build_errors:
+        repair_lines.append(
+            "CRITICAL — Previous attempt FAILED build validation. Fix these errors:\n" + build_errors[:1500]
+        )
+
+    if repair_lines:
+        prompt = f"{prompt}\n\n## Repair Feedback (MUST FIX)\n" + "\n".join(repair_lines)
+
     return {"template_key": template_key, "target": target, "prompt": prompt}
 
 
@@ -294,29 +397,99 @@ def _parse_single_file_payload(raw: str, path: str) -> str:
     return cleaned
 
 
+def _has_truncated_jsx(content: str, path: str) -> bool:
+    if not path.endswith((".tsx", ".jsx")):
+        return False
+    if not content or not content.strip():
+        return True
+    lines = [ln for ln in content.splitlines() if ln.strip()]
+    if not lines:
+        return True
+    last = lines[-1].strip()
+    if last.endswith((";", "}", ")", ">", "/>")):
+        return False
+    if last.startswith("//") or last.startswith("/*") or last.startswith("*"):
+        return False
+    return True
+
+
+async def _generate_file_via_responses_api(
+    model: str,
+    instructions: str,
+    user_prompt: str,
+    path: str,
+) -> str:
+    import openai
+
+    openai_key = os.environ.get("OPENAI_API_KEY", "")
+    if not openai_key or openai_key in ("test-key", ""):
+        raise ValueError("OPENAI_API_KEY not set for direct responses API call")
+
+    client = openai.AsyncOpenAI(api_key=openai_key)
+    for attempt in range(1, 4):
+        response = await client.responses.create(
+            model=model,
+            instructions=instructions,
+            input=user_prompt,
+            reasoning={"effort": "medium"},
+        )
+        content = _parse_single_file_payload(response.output_text, path)
+        if not _has_truncated_jsx(content, path):
+            return content
+        logger.warning("[PER_FILE_RESPONSES] truncated JSX in %s (attempt %d), retrying", path, attempt)
+        user_prompt = (
+            "CRITICAL: Previous output was TRUNCATED. Generate the SAME file but COMPLETE without cutoff.\n\n"
+            + user_prompt
+        )
+    return content
+
+
 async def _generate_file_with_llm(spec: FileSpec, context: dict) -> str:
+    from agent.model_capabilities import model_endpoint_type
+
     prompt_meta = _prompt_context_for_spec(spec, context)
     target = prompt_meta["target"]
     model_key = "code_gen_backend" if target == "backend" else "code_gen_frontend"
     model = MODEL_CONFIG.get(model_key, MODEL_CONFIG["code_gen"])
+    is_page = target == "frontend" and _is_page_file(spec.path)
+    available_exports = context.get("available_exports") or {}
+
+    if is_page and available_exports:
+        import_rule = (
+            "CRITICAL IMPORT RULE: Only import from the exact module paths and export names listed "
+            "in the '## Available Component Exports' section below. "
+            "Do NOT invent or assume any export that is not explicitly listed there. "
+            "If a module exports a default, use `import Name from 'path'`. "
+            "If a module exports named, use `import { Name } from 'path'`. "
+            "Mixing these up causes build failures."
+        )
+    else:
+        import_rule = ""
+
+    system_content = (
+        "Generate exactly one file. Return ONLY the raw file content — no JSON wrapping, no markdown fences, no prose. "
+        "Every JSX element MUST be properly closed. File MUST end with closing brace or export statement."
+    )
+    if import_rule:
+        system_content = f"{system_content}\n\n{import_rule}"
+
+    if model_endpoint_type(model) == "responses" or model.startswith("gpt-5"):
+        try:
+            return await _generate_file_via_responses_api(
+                model=model,
+                instructions=system_content,
+                user_prompt=prompt_meta["prompt"],
+                path=spec.path,
+            )
+        except Exception as exc:
+            logger.warning("[PER_FILE_LLM] responses API failed for %s (%s), falling back to LangChain", spec.path, exc)
+
     llm = get_llm(model=model, temperature=0.1, max_tokens=12000)
     messages = [
-        {
-            "role": "system",
-            "content": (
-                "Generate exactly one file. Return ONLY valid JSON with this shape: "
-                '{"content":"full file content"}. No markdown fences, no prose.'
-            ),
-        },
+        {"role": "system", "content": system_content},
         {"role": "user", "content": prompt_meta["prompt"]},
     ]
-    response = await ainvoke_with_retry(
-        llm,
-        messages,
-        max_attempts=4,
-        fallback_models=get_rate_limit_fallback_models(model),
-        rate_limit_switch_after_attempts=max(1, 4 - 1),
-    )
+    response = await ainvoke_with_retry(llm, messages, max_attempts=3)
     return _parse_single_file_payload(content_to_str(response.content), spec.path)
 
 
@@ -331,28 +504,30 @@ async def backend_generator_node(state: dict, config=None) -> dict:
     backend_code = dict(state.get("backend_code") or {})
     context = _build_generation_context(state)
     warnings = list(state.get("code_gen_warnings") or [])
+
+    is_retry = bool(context.get("wiring_missing") or context.get("repair_instructions") or context.get("build_errors"))
+    build_errors_text = context.get("build_errors") or ""
+    if is_retry:
+        logger.info(
+            "[BACKEND_GEN] Retry with feedback: missing=%s build_errors=%s",
+            context.get("wiring_missing") or [],
+            bool(build_errors_text),
+        )
+
     for spec in specs:
         if spec.path in backend_code and _should_preserve_existing_file(spec.path):
             continue
-        if _use_llm_per_file_generation() and spec.file_type in {"route", "service", "api"}:
-            model = MODEL_CONFIG.get("code_gen_backend", MODEL_CONFIG["code_gen"])
-            if not llm_credentials_available(model):
-                warnings.append(f"per_file_backend_llm_unavailable:{model}")
-                generated = _generate_file_from_spec(spec, context)
-            else:
-                try:
-                    generated = {spec.path: await _generate_file_with_llm(spec, context)}
-                    route = llm_auth_route_for_model(model) or "unknown"
-                    warnings.append(f"per_file_backend_llm_used:{model}:{route}")
-                except Exception as exc:
-                    logger.warning("[PER_FILE_LLM] backend fallback for %s: %s", spec.path, str(exc)[:200])
-                    warnings.append(f"per_file_backend_llm_fallback:{spec.path}")
-                    generated = _generate_file_from_spec(spec, context)
-        else:
-            try:
-                generated = _generate_file_from_spec(spec, context)
-            except Exception:
-                generated = _generate_file_from_spec(spec, context)
+        if (
+            is_retry
+            and spec.path in backend_code
+            and spec.file_type not in {"route", "service"}
+            and spec.path not in build_errors_text
+        ):
+            continue
+        try:
+            generated = _generate_file_from_spec(spec, context)
+        except Exception:
+            generated = _generate_file_from_spec(spec, context)
         context["already_generated"].update(generated)
         backend_code.update(generated)
         context["backend_code"] = dict(backend_code)
@@ -376,9 +551,45 @@ async def frontend_generator_node(state: dict, config=None) -> dict:
     context = _build_generation_context(state)
     context["already_generated"].update(frontend_code)
     warnings = list(state.get("code_gen_warnings") or [])
-    for spec in specs:
+
+    is_retry = bool(context.get("wiring_missing") or context.get("repair_instructions") or context.get("build_errors"))
+    build_errors_text = context.get("build_errors") or ""
+    build_failing_files = list(state.get("build_failing_files") or [])
+
+    def _should_skip(spec) -> bool:
         if spec.path in frontend_code and _should_preserve_existing_file(spec.path):
-            continue
+            return True
+        if is_retry and spec.path in frontend_code:
+            if build_failing_files:
+                normalized = spec.path.replace("./", "").lstrip("/")
+                if not any(normalized in fp or fp in normalized for fp in build_failing_files):
+                    return True
+            elif spec.path not in build_errors_text:
+                return True
+        return False
+
+    specs_to_generate = [s for s in specs if not _should_skip(s)]
+
+    page_specs = [s for s in specs_to_generate if _is_page_file(s.path)]
+    component_specs = [s for s in specs_to_generate if not _is_page_file(s.path)]
+
+    for spec in component_specs:
+        generated = _generate_file_from_spec(spec, context)
+        frontend_code.update(generated)
+        context["already_generated"].update(generated)
+    context["frontend_code"] = dict(frontend_code)
+
+    for spec in page_specs:
+        all_frontend = dict(context.get("frontend_code") or {})
+        all_frontend.update(context["already_generated"])
+        component_code = {p: c for p, c in all_frontend.items() if not _is_page_file(p)}
+        exports = _extract_component_exports(component_code)
+        context["available_exports"] = exports
+        logger.info(
+            "[FRONTEND_GEN] page.tsx injection: %d files, api_client=%s",
+            len(component_code),
+            "src/lib/api-client.ts" in component_code,
+        )
         if _use_llm_per_file_generation() and spec.file_type in {"page", "component", "api"}:
             model = MODEL_CONFIG.get("code_gen_frontend", MODEL_CONFIG["code_gen"])
             if not llm_credentials_available(model):
@@ -390,21 +601,91 @@ async def frontend_generator_node(state: dict, config=None) -> dict:
                     route = llm_auth_route_for_model(model) or "unknown"
                     warnings.append(f"per_file_frontend_llm_used:{model}:{route}")
                 except Exception as exc:
-                    logger.warning("[PER_FILE_LLM] frontend fallback for %s: %s", spec.path, str(exc)[:200])
+                    logger.warning("[PER_FILE_LLM] page fallback for %s: %s", spec.path, str(exc)[:200])
                     warnings.append(f"per_file_frontend_llm_fallback:{spec.path}")
                     generated = _generate_file_from_spec(spec, context)
         else:
-            try:
-                generated = _generate_file_from_spec(spec, context)
-            except Exception:
-                generated = _generate_file_from_spec(spec, context)
+            generated = _generate_file_from_spec(spec, context)
         context["already_generated"].update(generated)
         frontend_code.update(generated)
         context["frontend_code"] = dict(frontend_code)
+
     return {
         "frontend_code": frontend_code,
         "phase": "frontend_generated",
         "code_gen_warnings": warnings,
+    }
+
+
+async def frontend_file_repairer_node(state: dict, config=None) -> dict:
+    build_errors_full = state.get("build_errors_full") or state.get("build_errors") or ""
+    build_failing_files = list(state.get("build_failing_files") or [])
+    frontend_code = dict(state.get("frontend_code") or {})
+    blueprint = state.get("blueprint") if isinstance(state, dict) else {}
+    blueprint = blueprint if isinstance(blueprint, dict) else {}
+    warnings = list(state.get("code_gen_warnings") or [])
+
+    all_specs = {s.path: s for s in extract_file_specs(blueprint) if not _is_backend_path(s.path)}
+
+    context = _build_generation_context(state)
+    context["already_generated"].update(frontend_code)
+    context["build_errors"] = build_errors_full
+
+    target_paths: list[str] = []
+    for fp in build_failing_files:
+        normalized = fp.replace("./", "").lstrip("/")
+        if normalized in all_specs:
+            target_paths.append(normalized)
+        else:
+            for spec_path in all_specs:
+                if normalized in spec_path or spec_path.endswith(normalized.split("/")[-1]):
+                    target_paths.append(spec_path)
+                    break
+
+    if not target_paths:
+        logger.warning("[FILE_REPAIR] No matching specs for failing files: %s", build_failing_files)
+        return {"phase": "frontend_generated", "build_failing_files": []}
+
+    logger.info("[FILE_REPAIR] Repairing %d files: %s", len(target_paths), target_paths)
+
+    specs_to_repair = [all_specs[p] for p in target_paths if p in all_specs]
+    page_repairs = [s for s in specs_to_repair if _is_page_file(s.path)]
+    component_repairs = [s for s in specs_to_repair if not _is_page_file(s.path)]
+
+    for spec in component_repairs:
+        generated = _generate_file_from_spec(spec, context)
+        frontend_code.update(generated)
+        context["already_generated"].update(generated)
+    context["frontend_code"] = dict(frontend_code)
+
+    for spec in page_repairs:
+        all_fe = dict(context.get("frontend_code") or {})
+        all_fe.update(context["already_generated"])
+        component_code = {p: c for p, c in all_fe.items() if not _is_page_file(p)}
+        context["available_exports"] = _extract_component_exports(component_code)
+        if state.get("build_errors"):
+            logger.info("[FILE_REPAIR] Using deterministic rescue for %s", spec.path)
+            generated = _generate_file_from_spec(spec, context)
+            frontend_code.update(generated)
+            continue
+        if _use_llm_per_file_generation():
+            model = MODEL_CONFIG.get("code_gen_frontend", MODEL_CONFIG["code_gen"])
+            if llm_credentials_available(model):
+                try:
+                    content = await _generate_file_with_llm(spec, context)
+                    frontend_code[spec.path] = content
+                    warnings.append(f"per_file_repair_llm_used:{model}")
+                    continue
+                except Exception as exc:
+                    logger.warning("[FILE_REPAIR] LLM failed for %s: %s", spec.path, exc)
+        generated = _generate_file_from_spec(spec, context)
+        frontend_code.update(generated)
+
+    return {
+        "frontend_code": frontend_code,
+        "phase": "frontend_generated",
+        "code_gen_warnings": warnings,
+        "build_failing_files": [],
     }
 
 
@@ -783,6 +1064,14 @@ def _api_template(path: str, description: str, api_contract: object) -> str:
     )
 
 
+def _strip_api_prefix(path: str) -> str:
+    if path.startswith("/api/"):
+        return path[4:]
+    if path == "/api":
+        return "/"
+    return path
+
+
 def _route_template(path: str, description: str, api_contract: object) -> str:
     operations = _contract_operations(api_contract)
     lines = [
@@ -799,6 +1088,7 @@ def _route_template(path: str, description: str, api_contract: object) -> str:
         route_path = str(op["path"])
         func_name = f"route_{idx}_{method}"
         if method == "get":
+            route_path = _strip_api_prefix(route_path)
             lines.extend(
                 [
                     f'@router.get("{route_path}")\n',
@@ -807,6 +1097,7 @@ def _route_template(path: str, description: str, api_contract: object) -> str:
                 ]
             )
         elif "insight" in route_path:
+            route_path = _strip_api_prefix(route_path)
             lines.extend(
                 [
                     f'@router.post("{route_path}")\n',
@@ -815,6 +1106,7 @@ def _route_template(path: str, description: str, api_contract: object) -> str:
                 ]
             )
         else:
+            route_path = _strip_api_prefix(route_path)
             lines.extend(
                 [
                     f'@router.post("{route_path}")\n',
@@ -898,6 +1190,63 @@ def _style_template(description: str) -> str:
 def _is_backend_path(path: str) -> bool:
     normalized = path.replace("\\", "/").lower()
     return normalized.endswith(".py") or normalized == "requirements.txt"
+
+
+def _is_page_file(path: str) -> bool:
+    normalized = path.replace("\\", "/")
+    return "page.tsx" in normalized or "page.ts" in normalized
+
+
+def _extract_props_signature(content: str, component_name: str) -> str:
+    pattern = re.compile(
+        rf"(?:type|interface)\s+{re.escape(component_name)}Props\s*(?:=\s*\{{([^}}]{{1,400}})\}}|\{{([^}}]{{1,400}})\}})",
+        re.DOTALL,
+    )
+    match = pattern.search(content)
+    if match:
+        body = (match.group(1) or match.group(2) or "").strip()
+        props = []
+        for line in body.splitlines():
+            line = line.strip().rstrip(";,")
+            if line and ":" in line and not line.startswith("//"):
+                props.append(line)
+        if props:
+            return "{ " + "; ".join(props[:6]) + " }"
+    return ""
+
+
+def _extract_component_exports(code: dict[str, str]) -> dict[str, dict[str, list[str] | dict[str, str]]]:
+    exports_by_file: dict[str, dict] = {}
+    default_pattern = re.compile(r"export\s+default\s+(?:function|class|const)?\s*(\w+)")
+    named_pattern = re.compile(r"export\s+(?:function|class|const|type|interface|enum)\s+(\w+)")
+    reexport_pattern = re.compile(r"export\s+\{([^}]+)\}")
+    for path, content in code.items():
+        if not path.endswith((".tsx", ".ts", ".js", ".jsx")):
+            continue
+        default_exports: list[str] = []
+        named_exports: list[str] = []
+        props_signatures: dict[str, str] = {}
+        for match in default_pattern.finditer(content):
+            if match.group(1):
+                default_exports.append(match.group(1))
+        for match in named_pattern.finditer(content):
+            named_exports.append(match.group(1))
+        for match in reexport_pattern.finditer(content):
+            for item in match.group(1).split(","):
+                stripped = item.split(" as ")[0].strip()
+                if stripped:
+                    named_exports.append(stripped)
+        for name in default_exports + named_exports:
+            sig = _extract_props_signature(content, name)
+            if sig:
+                props_signatures[name] = sig
+        if default_exports or named_exports:
+            exports_by_file[path] = {
+                "default": default_exports,
+                "named": named_exports,
+                "props": props_signatures,
+            }
+    return exports_by_file
 
 
 def _should_preserve_existing_file(path: str) -> bool:

@@ -110,7 +110,10 @@ class VibeDeployState(TypedDict):
     build_validation: Optional[Dict]
     build_attempt_count: int
     build_errors: Optional[str]
+    build_errors_full: Optional[str]
     build_repair_prompt: Optional[str]
+    build_failing_files: Optional[List[str]]
+    build_frontend_only_failure: Optional[bool]
 
     # API Contract
     api_contract: Optional[str]

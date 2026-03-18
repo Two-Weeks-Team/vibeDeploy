@@ -21,7 +21,11 @@ from .nodes.fix_storm import fix_storm, scope_down
 from .nodes.input_processor import input_processor
 from .nodes.inspiration_agent import inspiration_agent
 from .nodes.local_runtime_validator import local_runtime_validator
-from .nodes.per_file_code_generator import backend_generator_node, frontend_generator_node
+from .nodes.per_file_code_generator import (
+    backend_generator_node,
+    frontend_file_repairer_node,
+    frontend_generator_node,
+)
 from .nodes.prompt_strategist import prompt_strategist
 from .nodes.pydantic_generator import pydantic_generator_node
 from .nodes.scaffold_generator import scaffold_generator_node
@@ -82,10 +86,16 @@ def route_after_local_runtime(state):
 
 def route_after_build_staged(state):
     result = route_after_build(state)
-    if result == "code_generator":
-        return "backend_generator"
     if result == "deployer":
         return "local_runtime_validator"
+    if result == "code_generator":
+        build_validation = state.get("build_validation") or {}
+        frontend_only = state.get("build_frontend_only_failure") or build_validation.get("frontend_only_failure")
+        failing_files = state.get("build_failing_files") or []
+        attempts = int(state.get("build_attempt_count") or 0)
+        if frontend_only and failing_files and attempts <= 3:
+            return "frontend_file_repairer"
+        return "backend_generator"
     return result
 
 
@@ -217,6 +227,7 @@ def create_staged_graph():
     workflow.add_node("prompt_strategist", prompt_strategist)
     workflow.add_node("backend_generator", backend_generator_node)
     workflow.add_node("frontend_generator", frontend_generator_node)
+    workflow.add_node("frontend_file_repairer", frontend_file_repairer_node)
     workflow.add_node("code_generator", code_generator)
     workflow.add_node("contract_validator", contract_validator_node)
     workflow.add_node("code_evaluator", code_evaluator)
@@ -296,9 +307,11 @@ def create_staged_graph():
         {
             "local_runtime_validator": "local_runtime_validator",
             "backend_generator": "backend_generator",
+            "frontend_file_repairer": "frontend_file_repairer",
             "__end__": END,
         },
     )
+    workflow.add_edge("frontend_file_repairer", "build_validator")
     workflow.add_conditional_edges(
         "local_runtime_validator",
         route_after_local_runtime,
