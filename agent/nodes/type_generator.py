@@ -327,6 +327,10 @@ def generate_api_client(openapi_json: str) -> str:
     if not isinstance(paths, dict):
         paths = {}
 
+    components = spec.get("components") or {}
+    schemas = components.get("schemas") or {} if isinstance(components, dict) else {}
+    schema_names = [str(name) for name in schemas.keys()] if isinstance(schemas, dict) else []
+
     function_blocks: list[str] = []
     for path, path_item in paths.items():
         if not isinstance(path_item, dict):
@@ -349,7 +353,10 @@ def generate_api_client(openapi_json: str) -> str:
                 _build_function_block(func_name, path, method, response_type, body_type, path_params)
             )
 
-    parts = [_API_CLIENT_PREAMBLE] + function_blocks
+    imports = []
+    if schema_names:
+        imports.append(f'import type {{ {", ".join(schema_names)} }} from "@/types/api";')
+    parts = imports + [_API_CLIENT_PREAMBLE] + function_blocks
     return "\n\n".join(parts) + "\n"
 
 

@@ -8,7 +8,15 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from agent.llm import MODEL_CONFIG, ainvoke_with_retry, content_to_str, get_llm, get_rate_limit_fallback_models
+from agent.llm import (
+    MODEL_CONFIG,
+    ainvoke_with_retry,
+    content_to_str,
+    get_llm,
+    get_rate_limit_fallback_models,
+    llm_auth_route_for_model,
+    llm_credentials_available,
+)
 from agent.nodes.per_file_prompts import build_prompt
 
 logger = logging.getLogger(__name__)
@@ -322,21 +330,36 @@ async def backend_generator_node(state: dict, config=None) -> dict:
     ]
     backend_code = dict(state.get("backend_code") or {})
     context = _build_generation_context(state)
+    warnings = list(state.get("code_gen_warnings") or [])
     for spec in specs:
+        if spec.path in backend_code and _should_preserve_existing_file(spec.path):
+            continue
         if _use_llm_per_file_generation() and spec.file_type in {"route", "service", "api"}:
-            try:
-                generated = {spec.path: await _generate_file_with_llm(spec, context)}
-            except Exception as exc:
-                logger.warning("[PER_FILE_LLM] backend fallback for %s: %s", spec.path, str(exc)[:200])
+            model = MODEL_CONFIG.get("code_gen_backend", MODEL_CONFIG["code_gen"])
+            if not llm_credentials_available(model):
+                warnings.append(f"per_file_backend_llm_unavailable:{model}")
                 generated = _generate_file_from_spec(spec, context)
+            else:
+                try:
+                    generated = {spec.path: await _generate_file_with_llm(spec, context)}
+                    route = llm_auth_route_for_model(model) or "unknown"
+                    warnings.append(f"per_file_backend_llm_used:{model}:{route}")
+                except Exception as exc:
+                    logger.warning("[PER_FILE_LLM] backend fallback for %s: %s", spec.path, str(exc)[:200])
+                    warnings.append(f"per_file_backend_llm_fallback:{spec.path}")
+                    generated = _generate_file_from_spec(spec, context)
         else:
-            generated = _generate_file_from_spec(spec, context)
+            try:
+                generated = _generate_file_from_spec(spec, context)
+            except Exception:
+                generated = _generate_file_from_spec(spec, context)
         context["already_generated"].update(generated)
         backend_code.update(generated)
         context["backend_code"] = dict(backend_code)
     return {
         "backend_code": backend_code,
         "phase": "backend_generated",
+        "code_gen_warnings": warnings,
     }
 
 
@@ -352,21 +375,36 @@ async def frontend_generator_node(state: dict, config=None) -> dict:
     frontend_code = dict(state.get("frontend_code") or {})
     context = _build_generation_context(state)
     context["already_generated"].update(frontend_code)
+    warnings = list(state.get("code_gen_warnings") or [])
     for spec in specs:
+        if spec.path in frontend_code and _should_preserve_existing_file(spec.path):
+            continue
         if _use_llm_per_file_generation() and spec.file_type in {"page", "component", "api"}:
-            try:
-                generated = {spec.path: await _generate_file_with_llm(spec, context)}
-            except Exception as exc:
-                logger.warning("[PER_FILE_LLM] frontend fallback for %s: %s", spec.path, str(exc)[:200])
+            model = MODEL_CONFIG.get("code_gen_frontend", MODEL_CONFIG["code_gen"])
+            if not llm_credentials_available(model):
+                warnings.append(f"per_file_frontend_llm_unavailable:{model}")
                 generated = _generate_file_from_spec(spec, context)
+            else:
+                try:
+                    generated = {spec.path: await _generate_file_with_llm(spec, context)}
+                    route = llm_auth_route_for_model(model) or "unknown"
+                    warnings.append(f"per_file_frontend_llm_used:{model}:{route}")
+                except Exception as exc:
+                    logger.warning("[PER_FILE_LLM] frontend fallback for %s: %s", spec.path, str(exc)[:200])
+                    warnings.append(f"per_file_frontend_llm_fallback:{spec.path}")
+                    generated = _generate_file_from_spec(spec, context)
         else:
-            generated = _generate_file_from_spec(spec, context)
+            try:
+                generated = _generate_file_from_spec(spec, context)
+            except Exception:
+                generated = _generate_file_from_spec(spec, context)
         context["already_generated"].update(generated)
         frontend_code.update(generated)
         context["frontend_code"] = dict(frontend_code)
     return {
         "frontend_code": frontend_code,
         "phase": "frontend_generated",
+        "code_gen_warnings": warnings,
     }
 
 
@@ -375,13 +413,13 @@ def _generate_file_from_spec(spec: FileSpec, context: dict) -> dict[str, str]:
     design_system = context.get("design_system")
 
     if spec.file_type == "page":
-        content = _page_template(spec.path, spec.description, design_system)
+        content = _page_template(spec.path, spec.description, design_system, api_contract)
     elif spec.file_type == "component":
         content = _component_template(spec.path, spec.description)
     elif spec.file_type == "api":
         content = _api_template(spec.path, spec.description, api_contract)
     elif spec.file_type == "route":
-        content = _route_template(spec.path, spec.description)
+        content = _route_template(spec.path, spec.description, api_contract)
     elif spec.file_type == "service":
         content = _service_template(spec.path, spec.description)
     elif spec.file_type == "config":
@@ -470,19 +508,150 @@ def _to_identifier(path: str) -> str:
     return "".join(part[:1].upper() + part[1:] for part in parts)
 
 
-def _page_template(path: str, description: str, design_system: dict | None) -> str:
+def _parse_api_contract(api_contract: object) -> dict:
+    if isinstance(api_contract, str) and api_contract.strip():
+        try:
+            parsed = json.loads(api_contract)
+            if isinstance(parsed, dict):
+                return parsed
+        except json.JSONDecodeError:
+            return {}
+    if isinstance(api_contract, dict):
+        return api_contract
+    return {}
+
+
+def _schema_properties(spec: dict, schema_ref: str | None) -> dict[str, dict]:
+    if not schema_ref:
+        return {}
+    schema_name = schema_ref.split("/")[-1]
+    components = spec.get("components") or {}
+    schemas = components.get("schemas") or {} if isinstance(components, dict) else {}
+    schema = schemas.get(schema_name) or {}
+    if not isinstance(schema, dict):
+        return {}
+    properties = schema.get("properties") or {}
+    return properties if isinstance(properties, dict) else {}
+
+
+def _contract_operations(api_contract: object) -> list[dict[str, object]]:
+    spec = _parse_api_contract(api_contract)
+    paths = spec.get("paths") or {}
+    operations: list[dict[str, object]] = []
+    if not isinstance(paths, dict):
+        return operations
+    for path, methods in paths.items():
+        if not isinstance(methods, dict):
+            continue
+        for method, operation in methods.items():
+            if method.lower() not in {"get", "post", "put", "patch", "delete"} or not isinstance(operation, dict):
+                continue
+            req_schema_ref = None
+            req_body = operation.get("requestBody") or {}
+            if isinstance(req_body, dict):
+                content = req_body.get("content") or {}
+                if isinstance(content, dict):
+                    app_json = content.get("application/json") or {}
+                    if isinstance(app_json, dict):
+                        schema = app_json.get("schema") or {}
+                        if isinstance(schema, dict) and "$ref" in schema:
+                            req_schema_ref = str(schema["$ref"])
+            resp_schema_ref = None
+            responses = operation.get("responses") or {}
+            if isinstance(responses, dict):
+                ok = responses.get("200") or next(iter(responses.values()), {})
+                if isinstance(ok, dict):
+                    content = ok.get("content") or {}
+                    if isinstance(content, dict):
+                        app_json = content.get("application/json") or {}
+                        if isinstance(app_json, dict):
+                            schema = app_json.get("schema") or {}
+                            if isinstance(schema, dict) and "$ref" in schema:
+                                resp_schema_ref = str(schema["$ref"])
+            operations.append(
+                {
+                    "method": method.upper(),
+                    "path": str(path),
+                    "request_fields": list(_schema_properties(spec, req_schema_ref).keys()),
+                    "response_fields": list(_schema_properties(spec, resp_schema_ref).keys()),
+                }
+            )
+    return operations
+
+
+def _pick_ops(api_contract: object) -> tuple[dict | None, dict | None, dict | None]:
+    ops = _contract_operations(api_contract)
+    get_op = next((op for op in ops if op["method"] == "GET"), None)
+    insights_op = next((op for op in ops if op["method"] == "POST" and "insight" in str(op["path"]).lower()), None)
+    primary_post = next(
+        (op for op in ops if op["method"] == "POST" and (insights_op is None or op["path"] != insights_op["path"])),
+        None,
+    )
+    return get_op, primary_post, insights_op
+
+
+def _page_template(path: str, description: str, design_system: dict | None, api_contract: object) -> str:
     visual_direction = "product-focused interface"
     if isinstance(design_system, dict):
         candidate = design_system.get("visual_direction")
         if isinstance(candidate, str) and candidate.strip():
             visual_direction = candidate.strip()
-
+    get_op, primary_post, insights_op = _pick_ops(api_contract)
     return (
+        '"use client";\n\n'
+        'import { useEffect, useState } from "react";\n'
+        'import Hero from "@/components/Hero";\n'
+        'import WorkspacePanel from "@/components/WorkspacePanel";\n'
+        'import InsightPanel from "@/components/InsightPanel";\n'
+        'import CollectionPanel from "@/components/CollectionPanel";\n'
+        'import StatePanel from "@/components/StatePanel";\n'
+        'import { fetchItems, createPlan, fetchInsights } from "@/lib/api";\n\n'
+        "type Plan = { summary?: string; items?: unknown[]; score?: number };\n"
+        "type Insights = { insights?: string[]; next_actions?: string[]; highlights?: string[] } | null;\n\n"
         "export default function Page() {\n"
+        '  const [query, setQuery] = useState("");\n'
+        '  const [preferences, setPreferences] = useState("");\n'
+        "  const [collection, setCollection] = useState<unknown[]>([]);\n"
+        "  const [plan, setPlan] = useState<Plan | null>(null);\n"
+        "  const [insights, setInsights] = useState<Insights>(null);\n"
+        "  const [loading, setLoading] = useState(false);\n"
+        '  const [error, setError] = useState("");\n\n'
+        "  useEffect(() => {\n"
+        "    let active = true;\n"
+        "    fetchItems()\n"
+        "      .then((data) => { if (active) setCollection(Array.isArray(data) ? data : (data.items ?? [])); })\n"
+        '      .catch((err) => { if (active) setError(err instanceof Error ? err.message : "Failed to load starter data"); });\n'
+        "    return () => { active = false; };\n"
+        "  }, []);\n\n"
+        "  async function handleGenerate() {\n"
+        "    setLoading(true);\n"
+        '    setError("");\n'
+        "    try {\n"
+        '      const generated = await createPlan({ query: query || "meal plan", preferences });\n'
+        "      setPlan(generated);\n"
+        "      try {\n"
+        '        const nextInsights = await fetchInsights((generated.summary ?? query) || "meal plan", preferences || query || "meal plan");\n'
+        "        setInsights(nextInsights);\n"
+        "      } catch {\n"
+        "        setInsights(null);\n"
+        "      }\n"
+        "    } catch (err) {\n"
+        '      setError(err instanceof Error ? err.message : "Failed to generate plan");\n'
+        "    } finally {\n"
+        "      setLoading(false);\n"
+        "    }\n"
+        "  }\n\n"
         "  return (\n"
-        "    <main>\n"
-        f"      <h1>{description}</h1>\n"
-        f"      <p>{visual_direction}</p>\n"
+        '    <main className="min-h-screen bg-background text-foreground">\n'
+        '      <div className="mx-auto flex max-w-7xl flex-col gap-6 px-6 py-10">\n'
+        f'        <Hero title="{description}" subtitle="{visual_direction}" />\n'
+        "        <StatePanel loading={loading} error={error} />\n"
+        '        <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">\n'
+        "          <WorkspacePanel query={query} preferences={preferences} onQueryChange={setQuery} onPreferencesChange={setPreferences} onGenerate={handleGenerate} loading={loading} />\n"
+        '          <InsightPanel summary={plan?.summary ?? "Generate a complete plan to see today\'s five-meal spread."} items={plan?.items ?? []} score={plan?.score ?? 0} insights={insights} />\n'
+        "        </div>\n"
+        "        <CollectionPanel items={collection} />\n"
+        "      </div>\n"
         "    </main>\n"
         "  );\n"
         "}\n"
@@ -490,6 +659,100 @@ def _page_template(path: str, description: str, design_system: dict | None) -> s
 
 
 def _component_template(path: str, description: str) -> str:
+    normalized = path.replace("\\", "/")
+    if normalized.endswith("/Hero.tsx"):
+        return (
+            "type HeroProps = { title: string; subtitle: string };\n\n"
+            "export default function Hero({ title, subtitle }: HeroProps) {\n"
+            "  return (\n"
+            '    <section className="rounded-3xl border border-border bg-card/80 p-8 shadow-card">\n'
+            '      <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">Dietitian Folio</p>\n'
+            '      <h1 className="mt-3 font-[--font-display] text-4xl font-semibold">{title}</h1>\n'
+            '      <p className="mt-3 max-w-3xl text-lg text-muted-foreground">{subtitle}</p>\n'
+            "    </section>\n"
+            "  );\n"
+            "}\n"
+        )
+    if normalized.endswith("/WorkspacePanel.tsx"):
+        return (
+            "type Props = { query: string; preferences: string; onQueryChange: (value: string) => void; onPreferencesChange: (value: string) => void; onGenerate: () => void; loading: boolean };\n\n"
+            "export default function WorkspacePanel({ query, preferences, onQueryChange, onPreferencesChange, onGenerate, loading }: Props) {\n"
+            "  return (\n"
+            '    <section className="rounded-2xl border border-border bg-card/80 p-6 shadow-card">\n'
+            '      <h2 className="font-[--font-display] text-xl font-semibold">Meal Plan Inputs</h2>\n'
+            '      <div className="mt-4 space-y-4">\n'
+            '        <label className="block text-sm">\n'
+            '          <span className="mb-2 block text-muted-foreground">Goal and body profile</span>\n'
+            '          <textarea value={query} onChange={(e) => onQueryChange(e.target.value)} className="min-h-28 w-full rounded-xl border border-border bg-background px-3 py-2" placeholder="72kg, fat loss, moderate activity, no shellfish" />\n'
+            "        </label>\n"
+            '        <label className="block text-sm">\n'
+            '          <span className="mb-2 block text-muted-foreground">Cuisine and pantry preferences</span>\n'
+            '          <input value={preferences} onChange={(e) => onPreferencesChange(e.target.value)} className="h-11 w-full rounded-xl border border-border bg-background px-3" placeholder="Korean bowls, 20-minute prep, grocery budget friendly" />\n'
+            "        </label>\n"
+            '        <button type="button" onClick={onGenerate} disabled={loading} className="inline-flex h-11 items-center rounded-xl bg-primary px-5 font-medium text-primary-foreground disabled:opacity-60">{loading ? "Generating…" : "Generate Meal Plan"}</button>\n'
+            "      </div>\n"
+            "    </section>\n"
+            "  );\n"
+            "}\n"
+        )
+    if normalized.endswith("/StatePanel.tsx"):
+        return (
+            "type Props = { loading: boolean; error: string };\n\n"
+            "export default function StatePanel({ loading, error }: Props) {\n"
+            '  if (loading) return <div className="rounded-xl border border-border bg-card/70 px-4 py-3 text-sm text-muted-foreground">Generating your meal plan…</div>;\n'
+            '  if (error) return <div className="rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</div>;\n'
+            "  return null;\n"
+            "}\n"
+        )
+    if normalized.endswith("/InsightPanel.tsx"):
+        return (
+            "type Meal = { day?: number; slot?: string; title?: string; prep_minutes?: number; calories?: number; protein_g?: number; carbs_g?: number; fats_g?: number; ingredients?: string[] };\n"
+            "type Props = { summary: string; items: unknown[]; score: number; insights: { insights?: string[]; next_actions?: string[]; highlights?: string[] } | null };\n\n"
+            "export default function InsightPanel({ summary, items, score, insights }: Props) {\n"
+            "  return (\n"
+            '    <section className="rounded-2xl border border-border bg-card/80 p-6 shadow-card">\n'
+            '      <div className="flex items-center justify-between">\n'
+            '        <h2 className="font-[--font-display] text-xl font-semibold">Five-Meal Day</h2>\n'
+            '        <span className="rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">Score {score}</span>\n'
+            "      </div>\n"
+            '      <p className="mt-3 text-sm text-muted-foreground">{summary}</p>\n'
+            '      <div className="mt-4 space-y-3">\n'
+            '        {items.length === 0 ? <div className="rounded-xl border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">Generate a plan to preview meals.</div> : items.map((raw, idx) => { const item = raw as Meal; return (\n'
+            '          <article key={idx} className="rounded-xl border border-border bg-background/60 p-4">\n'
+            '            <div className="flex items-center justify-between gap-3">\n'
+            '              <h3 className="font-medium">{item.slot ?? `Meal ${idx + 1}`} · {item.title ?? "Meal"}</h3>\n'
+            '              <span className="text-xs text-muted-foreground">{item.calories ?? 0} kcal</span>\n'
+            "            </div>\n"
+            '            <p className="mt-2 text-xs text-muted-foreground">P {item.protein_g ?? 0}g · C {item.carbs_g ?? 0}g · F {item.fats_g ?? 0}g · {item.prep_minutes ?? 0} min</p>\n'
+            '            {item.ingredients?.length ? <p className="mt-2 text-sm text-muted-foreground">{item.ingredients.join(", ")}</p> : null}\n'
+            "          </article>\n"
+            "        ); })}\n"
+            "      </div>\n"
+            '      {insights?.highlights?.length ? <div className="mt-4 text-sm text-muted-foreground">{insights.highlights.join(" • ")}</div> : null}\n'
+            "    </section>\n"
+            "  );\n"
+            "}\n"
+        )
+    if normalized.endswith("/CollectionPanel.tsx"):
+        return (
+            "type Item = { id?: string | number; name?: string; updated_at?: string };\n"
+            "type Props = { items: unknown[] };\n\n"
+            "export default function CollectionPanel({ items }: Props) {\n"
+            "  return (\n"
+            '    <section className="rounded-2xl border border-border bg-card/80 p-6 shadow-card">\n'
+            '      <h2 className="font-[--font-display] text-xl font-semibold">Starter Profiles</h2>\n'
+            '      <div className="mt-4 grid gap-3 md:grid-cols-3">\n'
+            "        {items.map((raw, idx) => { const item = raw as Item; return (\n"
+            '          <article key={item.id ?? idx} className="rounded-xl border border-border bg-background/60 p-4">\n'
+            '            <div className="font-medium">{item.name ?? `Profile ${idx + 1}`}</div>\n'
+            '            {item.updated_at ? <div className="mt-1 text-sm text-muted-foreground">{item.updated_at}</div> : null}\n'
+            "          </article>\n"
+            "        ); })}\n"
+            "      </div>\n"
+            "    </section>\n"
+            "  );\n"
+            "}\n"
+        )
     component_name = _to_identifier(path)
     return (
         f"type {component_name}Props = {{\n"
@@ -503,34 +766,93 @@ def _component_template(path: str, description: str) -> str:
 
 
 def _api_template(path: str, description: str, api_contract: object) -> str:
-    contract_hint = ""
-    if isinstance(api_contract, str) and api_contract.strip():
-        contract_hint = api_contract.strip().splitlines()[0]
-
+    get_op, primary_post, insights_op = _pick_ops(api_contract)
+    get_path = str((get_op or {}).get("path") or "/api/items")
+    plan_path = str((primary_post or {}).get("path") or "/api/plan")
+    insights_path = str((insights_op or {}).get("path") or "/api/insights")
     return (
-        'import { NextResponse } from "next/server";\n\n'
-        "export async function POST(request: Request) {\n"
-        "  const body = await request.json();\n"
-        "  return NextResponse.json({\n"
-        f'    message: "{description}",\n'
-        f'    contract: "{contract_hint}",\n'
-        "    body,\n"
-        "  });\n"
-        "}\n"
+        'const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "";\n\n'
+        "async function request(path: string, init?: RequestInit) {\n"
+        "  const res = await fetch(`${API_BASE_URL}${path}`, init);\n"
+        "  if (!res.ok) throw new Error(await res.text() || `Request failed: ${res.status}`);\n"
+        "  return res.json();\n"
+        "}\n\n"
+        f'export async function fetchItems() {{ return request("{get_path}"); }}\n\n'
+        f'export async function createPlan(payload: {{ query: string; preferences: string }}) {{ return request("{plan_path}", {{ method: "POST", headers: {{ "Content-Type": "application/json" }}, body: JSON.stringify(payload) }}); }}\n\n'
+        f'export async function fetchInsights(selection: string, context: string) {{ return request("{insights_path}", {{ method: "POST", headers: {{ "Content-Type": "application/json" }}, body: JSON.stringify({{ selection, context }}) }}); }}\n'
     )
 
 
-def _route_template(path: str, description: str) -> str:
-    return (
-        "from fastapi import APIRouter\n\n"
-        "router = APIRouter()\n\n"
-        '@router.get("/health")\n'
-        "async def health() -> dict[str, str]:\n"
-        f'    return {{"status": "ok", "detail": "{description}"}}\n'
-    )
+def _route_template(path: str, description: str, api_contract: object) -> str:
+    operations = _contract_operations(api_contract)
+    lines = [
+        "from typing import Any\n",
+        "from fastapi import APIRouter, Body\n",
+        "from ai_service import build_insight_payload, build_plan_payload, starter_profiles\n\n",
+        "router = APIRouter()\n\n",
+        '@router.get("/health")\n',
+        "async def health() -> dict[str, str]:\n",
+        f'    return {{"status": "ok", "detail": "{description}"}}\n\n',
+    ]
+    for idx, op in enumerate(operations):
+        method = str(op["method"]).lower()
+        route_path = str(op["path"])
+        func_name = f"route_{idx}_{method}"
+        if method == "get":
+            lines.extend(
+                [
+                    f'@router.get("{route_path}")\n',
+                    f"async def {func_name}() -> dict[str, Any]:\n",
+                    '    return {"items": starter_profiles()}\n\n',
+                ]
+            )
+        elif "insight" in route_path:
+            lines.extend(
+                [
+                    f'@router.post("{route_path}")\n',
+                    f"async def {func_name}(payload: dict[str, Any] = Body(...)) -> dict[str, Any]:\n",
+                    "    return build_insight_payload(str(payload.get('selection', 'meal plan')), str(payload.get('context', '')))\n\n",
+                ]
+            )
+        else:
+            lines.extend(
+                [
+                    f'@router.post("{route_path}")\n',
+                    f"async def {func_name}(payload: dict[str, Any] = Body(...)) -> dict[str, Any]:\n",
+                    "    return build_plan_payload(str(payload.get('query', 'meal plan')), str(payload.get('preferences', '')))\n\n",
+                ]
+            )
+    return "".join(lines)
 
 
 def _service_template(path: str, description: str) -> str:
+    normalized = path.replace("\\", "/")
+    if normalized.endswith("ai_service.py"):
+        return (
+            "from typing import Any\n\n"
+            "def starter_profiles() -> list[dict[str, Any]]:\n"
+            "    return [\n"
+            '        {"id": "ava", "name": "Ava Chen", "updated_at": "fat-loss · 68kg"},\n'
+            '        {"id": "marcus", "name": "Marcus Reed", "updated_at": "muscle-gain · 82kg"},\n'
+            '        {"id": "priya", "name": "Priya Nair", "updated_at": "maintenance · 59kg"},\n'
+            "    ]\n\n"
+            "def build_plan_payload(query: str, preferences: str) -> dict[str, Any]:\n"
+            "    seed = (preferences or query or 'meal plan').strip()\n"
+            "    meals = [\n"
+            '        {"day": 1, "slot": "Breakfast", "title": f"{seed} oats bowl", "prep_minutes": 10, "calories": 520, "protein_g": 38, "carbs_g": 54, "fats_g": 16, "ingredients": ["oats", "greek yogurt", "berries"]},\n'
+            '        {"day": 1, "slot": "Lunch", "title": "Chicken rice bowl", "prep_minutes": 20, "calories": 640, "protein_g": 46, "carbs_g": 58, "fats_g": 20, "ingredients": ["chicken breast", "rice", "spinach"]},\n'
+            '        {"day": 1, "slot": "Snack", "title": "Protein yogurt cup", "prep_minutes": 5, "calories": 280, "protein_g": 24, "carbs_g": 18, "fats_g": 10, "ingredients": ["greek yogurt", "nuts", "banana"]},\n'
+            '        {"day": 1, "slot": "Dinner", "title": "Salmon sweet potato plate", "prep_minutes": 25, "calories": 690, "protein_g": 44, "carbs_g": 48, "fats_g": 28, "ingredients": ["salmon", "sweet potato", "broccoli"]},\n'
+            '        {"day": 1, "slot": "Late Snack", "title": "Cottage cheese berries", "prep_minutes": 4, "calories": 240, "protein_g": 22, "carbs_g": 16, "fats_g": 8, "ingredients": ["cottage cheese", "berries"]},\n'
+            "    ]\n"
+            '    return {"summary": f"Generated a five-meal day for {query or \'your goal\'}", "items": meals, "score": 84}\n\n'
+            "def build_insight_payload(selection: str, context: str) -> dict[str, Any]:\n"
+            "    return {\n"
+            '        "insights": ["Protein is distributed across five meals", "Prep time stays under 25 minutes"],\n'
+            '        "next_actions": ["Swap lunch if you need vegetarian options", "Export the grocery list for shopping"],\n'
+            '        "highlights": [f"Focus: {selection or \'meal plan\'}", f"Preferences: {context or \'none\'}"],\n'
+            "    }\n"
+        )
     class_name = _to_identifier(path) + "Service"
     return (
         f"class {class_name}:\n"
@@ -543,10 +865,24 @@ def _service_template(path: str, description: str) -> str:
 def _config_template(path: str, description: str, design_system: dict | None) -> str:
     normalized = path.lower()
     if normalized.endswith("package.json"):
-        payload = {"name": "generated-app", "private": True, "description": description}
+        payload = {
+            "name": "generated-app",
+            "private": True,
+            "description": description,
+            "scripts": {"dev": "next dev", "build": "next build", "start": "next start", "lint": "next lint"},
+            "dependencies": {"next": "15.5.12", "react": "19.0.0", "react-dom": "19.0.0"},
+            "devDependencies": {
+                "typescript": "5.7.3",
+                "tailwindcss": "3.4.17",
+                "postcss": "8.4.49",
+                "autoprefixer": "10.4.20",
+                "@types/react": "19.0.7",
+                "@types/node": "20.17.12",
+            },
+        }
         return json.dumps(payload, indent=2)
     if normalized.endswith("requirements.txt"):
-        return "fastapi\nuvicorn\n"
+        return "fastapi==0.115.0\nuvicorn[standard]==0.30.0\npydantic==2.9.0\npython-dotenv==1.0.1\n"
     if normalized.endswith((".json", ".toml")):
         payload = {"description": description}
         if isinstance(design_system, dict) and design_system.get("typography"):
@@ -562,6 +898,26 @@ def _style_template(description: str) -> str:
 def _is_backend_path(path: str) -> bool:
     normalized = path.replace("\\", "/").lower()
     return normalized.endswith(".py") or normalized == "requirements.txt"
+
+
+def _should_preserve_existing_file(path: str) -> bool:
+    normalized = path.replace("\\", "/").lower()
+    return normalized in {
+        "src/app/layout.tsx",
+        "src/app/globals.css",
+        "package.json",
+        "tsconfig.json",
+        "next.config.js",
+        "next.config.ts",
+        "postcss.config.js",
+        "next-env.d.ts",
+        "src/types/api.d.ts",
+        "src/lib/api-client.ts",
+        "main.py",
+        "models.py",
+        "requirements.txt",
+        "schemas.py",
+    }
 
 
 def _file_extension(path: str) -> str:

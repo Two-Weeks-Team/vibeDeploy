@@ -6,6 +6,7 @@ import os
 from collections.abc import Iterator
 
 from .model_capabilities import model_endpoint_type
+from .providers.registry import get_provider, resolve_canonical
 
 DO_INFERENCE_BASE_URL = "https://inference.do-ai.run/v1"
 DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS = float(os.getenv("LLM_REQUEST_TIMEOUT_SECONDS", "180"))
@@ -108,6 +109,36 @@ def get_model_for_role(role: str, default: str | None = None) -> str:
 
 def get_runtime_model_config() -> dict[str, str]:
     return {role: get_model_for_role(role, default=value) for role, value in DEFAULT_MODEL_CONFIG.items()}
+
+
+def llm_auth_route_for_model(model: str) -> str | None:
+    canonical = resolve_canonical(model)
+    provider = get_provider(canonical)
+    openai_key = os.getenv("OPENAI_API_KEY", "").strip()
+    inference_key = (os.getenv("GRADIENT_MODEL_ACCESS_KEY", "") or os.getenv("DIGITALOCEAN_INFERENCE_KEY", "")).strip()
+    anthropic_key = os.getenv("ANTHROPIC_API_KEY", "").strip()
+    google_key = (os.getenv("GEMINI_API_KEY", "") or os.getenv("GOOGLE_API_KEY", "")).strip()
+
+    if provider == "anthropic":
+        return "anthropic_direct" if anthropic_key and anthropic_key != "test-key" else None
+    if provider == "google":
+        return "google_direct" if google_key and google_key != "test-key" else None
+    if provider == "openai":
+        if openai_key and openai_key != "test-key":
+            return "openai_direct"
+        if inference_key and inference_key != "test-key":
+            return "do_inference"
+        return None
+
+    if inference_key and inference_key != "test-key":
+        return "do_inference"
+    if openai_key and openai_key != "test-key":
+        return "openai_direct"
+    return None
+
+
+def llm_credentials_available(model: str) -> bool:
+    return llm_auth_route_for_model(model) is not None
 
 
 class _RuntimeModelConfig(dict):

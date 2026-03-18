@@ -246,3 +246,35 @@ def test_invalid_spec_structure_returns_error_comment():
     result = generate_api_client("[]")
     assert result.startswith("//")
     assert "Error" in result
+
+
+def test_api_client_imports_generated_types_when_schemas_exist():
+    spec = {
+        "openapi": "3.1.0",
+        "info": {"title": "Test API", "version": "1.0.0"},
+        "paths": {
+            "/api/plan": {
+                "post": {
+                    "requestBody": {
+                        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ApiPlanPostRequest"}}}
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "OK",
+                            "content": {
+                                "application/json": {"schema": {"$ref": "#/components/schemas/ApiPlanPostResponse"}}
+                            },
+                        }
+                    },
+                }
+            }
+        },
+        "components": {
+            "schemas": {
+                "ApiPlanPostRequest": {"type": "object", "properties": {"query": {"type": "string"}}},
+                "ApiPlanPostResponse": {"type": "object", "properties": {"summary": {"type": "string"}}},
+            }
+        },
+    }
+    result = generate_api_client(json.dumps(spec))
+    assert 'import type { ApiPlanPostRequest, ApiPlanPostResponse } from "@/types/api";' in result

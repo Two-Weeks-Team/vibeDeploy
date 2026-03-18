@@ -30,10 +30,8 @@ _TSCONFIG = {
     "exclude": ["node_modules"],
 }
 
-_NEXT_CONFIG_TS = """\
-import type { NextConfig } from "next";
-
-const nextConfig: NextConfig = {
+_NEXT_CONFIG_JS = """\
+module.exports = {
   output: "standalone",
   async rewrites() {
     return [
@@ -44,8 +42,6 @@ const nextConfig: NextConfig = {
     ];
   },
 };
-
-export default nextConfig;
 """
 
 _POSTCSS_CONFIG_JS = """\
@@ -233,7 +229,7 @@ def generate_scaffold(blueprint: dict[str, Any]) -> dict[str, str]:
     return {
         "web/package.json": json.dumps(package_json, indent=2),
         "web/tsconfig.json": json.dumps(_TSCONFIG, indent=2),
-        "web/next.config.ts": _NEXT_CONFIG_TS,
+        "web/next.config.js": _NEXT_CONFIG_JS,
         "web/postcss.config.js": _POSTCSS_CONFIG_JS,
         "web/src/app/layout.tsx": _LAYOUT_TSX,
         "web/src/app/globals.css": _build_globals_css(domain, pairing),

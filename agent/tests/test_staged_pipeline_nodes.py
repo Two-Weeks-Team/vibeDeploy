@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from agent.graph import create_staged_graph
+from agent.graph import create_staged_graph, route_after_build_staged, route_after_contract
 from agent.nodes.api_contract_generator import api_contract_generator_node, generate_api_contract
 from agent.nodes.deploy_gate import deploy_gate, route_after_deploy_gate
 from agent.nodes.local_runtime_validator import local_runtime_validator
@@ -99,6 +99,7 @@ async def test_frontend_generator_uses_llm_when_flag_enabled(monkeypatch):
 
     monkeypatch.setenv("VIBEDEPLOY_USE_LLM_PER_FILE_GENERATION", "true")
     monkeypatch.setattr("agent.nodes.per_file_code_generator._generate_file_with_llm", fake_generate)
+    monkeypatch.setattr("agent.nodes.per_file_code_generator.llm_credentials_available", lambda model: True)
     state = {
         "blueprint": BLUEPRINT,
         "api_contract": generate_api_contract(BLUEPRINT),
@@ -107,6 +108,20 @@ async def test_frontend_generator_uses_llm_when_flag_enabled(monkeypatch):
     }
     result = await frontend_generator_node(state)
     assert result["frontend_code"]["src/app/page.tsx"].startswith("export default function Page")
+
+
+@pytest.mark.asyncio
+async def test_frontend_generator_records_unavailable_llm_warning(monkeypatch):
+    monkeypatch.setenv("VIBEDEPLOY_USE_LLM_PER_FILE_GENERATION", "true")
+    monkeypatch.setattr("agent.nodes.per_file_code_generator.llm_credentials_available", lambda model: False)
+    state = {
+        "blueprint": BLUEPRINT,
+        "api_contract": generate_api_contract(BLUEPRINT),
+        "frontend_code": {},
+        "backend_code": {},
+    }
+    result = await frontend_generator_node(state)
+    assert any(str(item).startswith("per_file_frontend_llm_unavailable:") for item in result["code_gen_warnings"])
 
 
 @pytest.mark.asyncio
@@ -129,6 +144,16 @@ async def test_deploy_gate_blocks_skipped_build():
     assert result["deploy_gate_result"]["passed"] is False
     assert "build_validation_skipped" in result["deploy_gate_result"]["failures"]
     assert route_after_deploy_gate(result) == "__end__"
+
+
+def test_route_after_contract_stops_after_three_attempts():
+    state = {"wiring_validation": {"passed": False}, "wiring_attempt_count": 3}
+    assert route_after_contract(state) == "__end__"
+
+
+def test_route_after_build_staged_maps_retry_to_backend_generator():
+    state = {"build_validation": {"passed": False}, "build_attempt_count": 1}
+    assert route_after_build_staged(state) == "backend_generator"
 
 
 def test_staged_graph_compiles():
