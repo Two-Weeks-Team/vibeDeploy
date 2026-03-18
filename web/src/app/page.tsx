@@ -12,8 +12,9 @@ import Image from "next/image";
 function extractVideoId(url: string): string | null {
   try {
     const u = new URL(url);
-    if (u.hostname.includes("youtube.com")) return u.searchParams.get("v");
-    if (u.hostname === "youtu.be") return u.pathname.slice(1);
+    const rawId = u.hostname.includes("youtube.com") ? u.searchParams.get("v") : u.hostname === "youtu.be" ? u.pathname.slice(1) : null;
+    if (!rawId || rawId.length < 11) return null;
+    return rawId.slice(0, 11);
   } catch { /* ignore */ }
   return null;
 }
@@ -148,7 +149,7 @@ export default function LandingPage() {
                   </p>
                   <div className="relative aspect-video rounded-lg overflow-hidden bg-muted">
                     <Image
-                      src={`https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`}
+                      src={`https://img.youtube.com/vi/${videoId}/hqdefault.jpg`}
                       alt="YouTube video thumbnail"
                       fill
                       className="object-cover"

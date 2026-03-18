@@ -123,8 +123,8 @@ export function CardDetailModal({ card, isOpen, onClose, onQueueBuild, onPassCar
                 Key Insights
               </h4>
               <ul className="space-y-1">
-                {card.insights.map((insight, i) => (
-                  <li key={i} className="text-sm text-muted-foreground flex items-start gap-2">
+                {card.insights.map((insight) => (
+                  <li key={insight} className="text-sm text-muted-foreground flex items-start gap-2">
                     <span className="text-yellow-500 mt-0.5">•</span>
                     <span>{insight}</span>
                   </li>
@@ -154,8 +154,8 @@ export function CardDetailModal({ card, isOpen, onClose, onQueueBuild, onPassCar
                 )}
                 {card.mvp_proposal.key_pages && card.mvp_proposal.key_pages.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 mt-1">
-                    {card.mvp_proposal.key_pages.map((page, i) => (
-                      <Badge key={i} variant="secondary" className="text-xs">{page}</Badge>
+                    {card.mvp_proposal.key_pages.map((page) => (
+                      <Badge key={page} variant="secondary" className="text-xs">{page}</Badge>
                     ))}
                   </div>
                 )}
@@ -167,10 +167,10 @@ export function CardDetailModal({ card, isOpen, onClose, onQueueBuild, onPassCar
         <div className="flex justify-end gap-2 mt-2">
           {card.status === "go_ready" && (
             <>
-              <Button variant="outline" onClick={() => { onPassCard(card.card_id); onClose(); }}>
+              <Button data-modal-pass-card-id={card.card_id} variant="outline" onClick={() => { onPassCard(card.card_id); onClose(); }}>
                 <X className="w-4 h-4 mr-2" /> Pass
               </Button>
-              <Button className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              <Button data-modal-go-card-id={card.card_id} className="bg-emerald-600 hover:bg-emerald-700 text-white"
                 onClick={() => { onQueueBuild(card.card_id); onClose(); }}>
                 <Play className="w-4 h-4 mr-2" /> GO! Build
               </Button>

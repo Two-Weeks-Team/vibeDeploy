@@ -25,8 +25,17 @@ export function IdeaCard({ card, onQueueBuild, onPassCard, onDeleteCard, onReExp
       layoutId={card.card_id}
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
+      data-card-id={card.card_id}
       className="bg-card border border-border/50 rounded-lg shadow-sm overflow-hidden cursor-pointer hover:border-primary/50 transition-colors"
+      role="button"
+      tabIndex={0}
       onClick={() => onClick?.(card)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onClick?.(card);
+        }
+      }}
     >
       <div className="p-3">
         <div className="flex justify-between items-start mb-2">
@@ -48,11 +57,11 @@ export function IdeaCard({ card, onQueueBuild, onPassCard, onDeleteCard, onReExp
         )}
 
         {card.status === "go_ready" && (
-          <div className="flex gap-2 mt-3" onClick={(e) => e.stopPropagation()}>
-            <Button size="sm" className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white h-8 text-xs" onClick={() => onQueueBuild(card.card_id)}>
+          <div className="flex gap-2 mt-3">
+            <Button data-go-card-id={card.card_id} size="sm" className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white h-8 text-xs" onClick={(event) => { event.stopPropagation(); onQueueBuild(card.card_id); }}>
               <Play className="w-3 h-3 mr-1" /> GO!
             </Button>
-            <Button size="sm" variant="outline" className="flex-1 h-8 text-xs" onClick={() => onPassCard(card.card_id)}>
+            <Button data-pass-card-id={card.card_id} size="sm" variant="outline" className="flex-1 h-8 text-xs" onClick={(event) => { event.stopPropagation(); onPassCard(card.card_id); }}>
               <X className="w-3 h-3 mr-1" /> Pass
             </Button>
           </div>
@@ -70,10 +79,10 @@ export function IdeaCard({ card, onQueueBuild, onPassCard, onDeleteCard, onReExp
         )}
 
         {card.status === "deployed" && (
-          <div className="mt-3 space-y-2" onClick={(e) => e.stopPropagation()}>
+          <div className="mt-3 space-y-2">
             {card.domain && <p className="text-[10px] text-muted-foreground">Domain: {card.domain}</p>}
             <Button size="sm" variant="outline" className="w-full h-8 text-xs border-emerald-500/30 text-emerald-500 hover:bg-emerald-500/10" asChild>
-              <a href={card.thread_id?.startsWith("http") ? card.thread_id : `https://${card.card_id}.ondigitalocean.app`} target="_blank" rel="noopener noreferrer">
+              <a href={card.thread_id?.startsWith("http") ? card.thread_id : `https://${card.card_id}.ondigitalocean.app`} target="_blank" rel="noopener noreferrer" onClick={(event) => event.stopPropagation()}>
                 <ExternalLink className="w-3 h-3 mr-1" /> View App
               </a>
             </Button>
@@ -81,16 +90,16 @@ export function IdeaCard({ card, onQueueBuild, onPassCard, onDeleteCard, onReExp
         )}
 
         {(card.status === "nogo" || card.status === "passed" || card.status === "build_failed") && (
-          <div className="mt-3 space-y-1.5" onClick={(e) => e.stopPropagation()}>
+          <div className="mt-3 space-y-1.5">
             {card.reason && <p className="text-[10px] text-muted-foreground line-clamp-2">{card.reason}</p>}
             <div className="flex gap-2">
               {onDeleteCard && (
-                <Button size="sm" variant="ghost" className="flex-1 h-7 text-xs text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => onDeleteCard(card.card_id)}>
+                <Button size="sm" variant="ghost" className="flex-1 h-7 text-xs text-destructive hover:text-destructive hover:bg-destructive/10" onClick={(event) => { event.stopPropagation(); onDeleteCard(card.card_id); }}>
                   <Trash2 className="w-3 h-3 mr-1" /> Delete
                 </Button>
               )}
               {onReExplore && (
-                <Button size="sm" variant="ghost" className="flex-1 h-7 text-xs text-blue-500 hover:text-blue-500 hover:bg-blue-500/10" onClick={() => onReExplore(card.card_id)}>
+                <Button size="sm" variant="ghost" className="flex-1 h-7 text-xs text-blue-500 hover:text-blue-500 hover:bg-blue-500/10" onClick={(event) => { event.stopPropagation(); onReExplore(card.card_id); }}>
                   <RefreshCw className="w-3 h-3 mr-1" /> Re-explore
                 </Button>
               )}

@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
-import { Rocket, Youtube, FlaskConical, Code2, Globe, Play, ExternalLink, Lock } from "lucide-react";
+import { Rocket, Youtube, FlaskConical, Code2, Globe, Play, ExternalLink, Lock, MousePointer2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -12,8 +12,9 @@ import Image from "next/image";
 function extractVideoId(url: string): string | null {
   try {
     const u = new URL(url);
-    if (u.hostname.includes("youtube.com")) return u.searchParams.get("v");
-    if (u.hostname === "youtu.be") return u.pathname.slice(1);
+    const rawId = u.hostname.includes("youtube.com") ? u.searchParams.get("v") : u.hostname === "youtu.be" ? u.pathname.slice(1) : null;
+    if (!rawId || rawId.length < 11) return null;
+    return rawId.slice(0, 11);
   } catch { /* ignore */ }
   return null;
 }
@@ -23,6 +24,15 @@ import { ActionFeed } from "@/components/zero-prompt/action-feed";
 import { useDemoZeroPrompt } from "@/hooks/use-demo-zero-prompt";
 
 type DemoStage = "landing" | "dashboard";
+
+const DEMO_VIDEO_URL = "https://www.youtube.com/watch?v=aADukThvjXQ";
+
+const INITIAL_CURSOR = {
+  visible: false,
+  x: -40,
+  y: -40,
+  clicking: false,
+};
 
 const COUNCIL_AGENTS = [
   { emoji: "\u{1F3D7}\uFE0F", name: "Architect", role: "Technical Lead" },
@@ -52,8 +62,10 @@ const cardItem = {
 
 export default function DemoPage() {
   const [stage, setStage] = useState<DemoStage>("landing");
-  const [youtubeUrl, setYoutubeUrl] = useState("https://www.youtube.com/watch?v=aADukThvjXQ");
+  const [youtubeUrl, setYoutubeUrl] = useState("");
   const videoId = extractVideoId(youtubeUrl);
+  const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
+  const [cursor, setCursor] = useState(INITIAL_CURSOR);
 
   const {
     session,
@@ -69,16 +81,57 @@ export default function DemoPage() {
   } = useDemoZeroPrompt();
 
   const autoFired = useRef(false);
+  const introInputRef = useRef<HTMLInputElement | null>(null);
+  const zeroPromptStartRef = useRef<HTMLButtonElement | null>(null);
+  const sequenceTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const buildDialogShownRef = useRef(false);
+
+  const clearSequenceTimers = useCallback(() => {
+    sequenceTimersRef.current.forEach(clearTimeout);
+    sequenceTimersRef.current = [];
+  }, []);
+
+  const moveCursorToElement = useCallback((element: Element | null, clicking = false) => {
+    if (!element) return;
+    const rect = element.getBoundingClientRect();
+    setCursor({
+      visible: true,
+      x: rect.left + rect.width * 0.5,
+      y: rect.top + rect.height * 0.55,
+      clicking,
+    });
+  }, []);
+
+  const queueTimer = useCallback((callback: () => void, delay: number) => {
+    const timer = setTimeout(callback, delay);
+    sequenceTimersRef.current.push(timer);
+  }, []);
 
   useEffect(() => {
     if (stage !== "landing" || autoFired.current) return;
     autoFired.current = true;
-    const timer = setTimeout(() => {
+    clearSequenceTimers();
+    buildDialogShownRef.current = false;
+
+    queueTimer(() => moveCursorToElement(introInputRef.current), 600);
+    queueTimer(() => setCursor((prev) => ({ ...prev, clicking: true })), 900);
+    queueTimer(() => setCursor((prev) => ({ ...prev, clicking: false })), 1120);
+
+    DEMO_VIDEO_URL.split("").forEach((_, index) => {
+      queueTimer(() => setYoutubeUrl(DEMO_VIDEO_URL.slice(0, index + 1)), 1300 + index * 32);
+    });
+
+    const typingCompleteAt = 1300 + DEMO_VIDEO_URL.length * 32;
+    queueTimer(() => moveCursorToElement(zeroPromptStartRef.current), typingCompleteAt + 700);
+    queueTimer(() => setCursor((prev) => ({ ...prev, clicking: true })), typingCompleteAt + 1050);
+    queueTimer(() => setCursor((prev) => ({ ...prev, clicking: false })), typingCompleteAt + 1240);
+    queueTimer(() => {
       startSession();
       setStage("dashboard");
-    }, 5000);
-    return () => clearTimeout(timer);
-  }, [stage, startSession]);
+    }, typingCompleteAt + 1360);
+
+    return clearSequenceTimers;
+  }, [clearSequenceTimers, moveCursorToElement, queueTimer, stage, startSession]);
 
   useEffect(() => {
     if (stage === "dashboard" && !session && !isLoading) {
@@ -86,9 +139,34 @@ export default function DemoPage() {
     }
   }, [stage, session, isLoading, startSession]);
 
+  useEffect(() => {
+    if (stage !== "dashboard" || !session || buildDialogShownRef.current) return;
+
+    const readyCards = session.cards.filter((card) => card.status === "go_ready");
+    const buildAlreadyStarted = session.cards.some((card) => ["build_queued", "building", "deployed"].includes(card.status));
+    const targetCard = readyCards.find((card) => card.card_id === "nutriplan-aADukT");
+    const studyMateGoSeen = actions.some((action) => action.message.includes("StudyMate Lite scored 75.0 → GO"));
+
+    if (!targetCard || buildAlreadyStarted || !studyMateGoSeen) return;
+
+    buildDialogShownRef.current = true;
+    queueTimer(() => {
+      const cardElement = document.querySelector('[data-card-id="nutriplan-aADukT"]');
+      moveCursorToElement(cardElement);
+    }, 400);
+    queueTimer(() => {
+      setCursor((prev) => ({ ...prev, clicking: true }));
+      setSelectedCardId("nutriplan-aADukT");
+    }, 760);
+    queueTimer(() => setCursor((prev) => ({ ...prev, clicking: false })), 980);
+  }, [actions, moveCursorToElement, queueTimer, session, stage]);
+
+  useEffect(() => () => clearSequenceTimers(), [clearSequenceTimers]);
+
   return (
-    <AnimatePresence mode="wait">
-      {stage === "landing" && (
+    <>
+      <AnimatePresence mode="wait">
+        {stage === "landing" && (
         <motion.div
           key="landing"
           initial={{ opacity: 0 }}
@@ -119,7 +197,7 @@ export default function DemoPage() {
             </motion.div>
 
             <motion.div className="text-center space-y-3" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25, duration: 0.5 }}>
-              <Button size="lg" className="h-14 px-8 text-lg font-semibold bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-500 hover:to-purple-400 text-white rounded-full shadow-lg shadow-purple-500/25">
+              <Button ref={zeroPromptStartRef} size="lg" className="h-14 px-8 text-lg font-semibold bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-500 hover:to-purple-400 text-white rounded-full shadow-lg shadow-purple-500/25">
                 <Rocket className="w-5 h-5 mr-2" />
                 Zero-Prompt Start
               </Button>
@@ -144,6 +222,7 @@ export default function DemoPage() {
                 <CardContent className="pt-6 space-y-4">
                   <div className="flex gap-2">
                     <Input
+                      ref={introInputRef}
                       value={youtubeUrl}
                       onChange={(e) => setYoutubeUrl(e.target.value)}
                       placeholder="https://www.youtube.com/watch?v=..."
@@ -170,7 +249,7 @@ export default function DemoPage() {
                       </p>
                       <div className="relative aspect-video rounded-lg overflow-hidden bg-muted">
                         <Image
-                          src={`https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`}
+                          src={`https://img.youtube.com/vi/${videoId}/hqdefault.jpg`}
                           alt="YouTube video thumbnail"
                           fill
                           className="object-cover"
@@ -251,7 +330,7 @@ export default function DemoPage() {
         </motion.div>
       )}
 
-      {stage === "dashboard" && session && (
+        {stage === "dashboard" && session && (
         <motion.div
           key="dashboard"
           initial={{ opacity: 0 }}
@@ -292,11 +371,32 @@ export default function DemoPage() {
               onDeleteCard={deleteCard}
               onReExplore={reExplore}
               autoCloseMs={5000}
+              selectedCardId={selectedCardId}
+              onSelectedCardChange={setSelectedCardId}
             />
             <ActionFeed actions={actions} />
           </div>
         </motion.div>
       )}
-    </AnimatePresence>
+
+      </AnimatePresence>
+
+      <motion.div
+        className="pointer-events-none fixed left-0 top-0 z-[120]"
+        initial={false}
+        animate={{
+          opacity: cursor.visible ? 1 : 0,
+          x: cursor.x,
+          y: cursor.y,
+          scale: cursor.clicking ? 0.92 : 1,
+        }}
+        transition={{ type: "spring", stiffness: 420, damping: 28, mass: 0.5 }}
+      >
+        <div className="relative -translate-x-2 -translate-y-2">
+          <MousePointer2 className="h-6 w-6 fill-white text-slate-900 drop-shadow-[0_2px_8px_rgba(0,0,0,0.35)]" />
+          {cursor.clicking && <span className="absolute -inset-2 rounded-full border border-white/70 bg-white/15" />}
+        </div>
+      </motion.div>
+    </>
   );
 }
