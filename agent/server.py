@@ -51,6 +51,7 @@ _store: ResultStore | None = None
 
 # ── Dashboard live tracking ──────────────────────────────────────────
 _active_pipelines: dict[str, dict] = {}
+_zp_build_subscribers: dict[str, list[asyncio.Queue]] = {}
 _dashboard_queues: list[asyncio.Queue] = []
 _DASHBOARD_SHOWCASE_TTL_SECONDS = 15
 _DASHBOARD_SNAPSHOT_TTL_SECONDS = 4
@@ -1232,6 +1233,20 @@ async def zero_prompt_action(session_id: str, request: ZPActionRequest):
     return result
 
 
+def _parse_sse_chunk(chunk: str) -> dict | None:
+    """Parse an SSE chunk string into event data dict."""
+    if not isinstance(chunk, str):
+        return None
+    for line in chunk.strip().split("\n"):
+        line = line.strip()
+        if line.startswith("data: "):
+            try:
+                return json.loads(line[6:])
+            except (json.JSONDecodeError, TypeError):
+                pass
+    return None
+
+
 async def _analyze_single(orch, session_id: str, video_id: str, title: str) -> None:
     try:
         step_events = await orch.exploration_step(session_id, video_id, video_title=title, video_description=title)
@@ -1254,6 +1269,7 @@ async def _trigger_zp_build(orch, session_id: str, card_id: str) -> None:
 
         card.status = "building"
         card.build_step = "code_gen"
+        card.build_events = []
         idea_title = card.title or card.video_id
 
         try:
@@ -1282,17 +1298,19 @@ async def _trigger_zp_build(orch, session_id: str, card_id: str) -> None:
             "skip_council": True,
         }
         async for chunk in stream_action_session(action_payload):
-            phase = ""
-            if hasattr(chunk, "data") and isinstance(chunk.data, dict):
-                phase = chunk.data.get("phase", "")
-            elif isinstance(chunk, dict):
-                phase = chunk.get("phase", "") or chunk.get("node", "")
-            if phase:
-                if "code_gen" in phase or "code_generator" in phase:
+            event_data = _parse_sse_chunk(chunk)
+            if event_data:
+                card.build_events.append(event_data)
+                if "phase" in event_data:
+                    card.build_phase = event_data["phase"]
+                if "node" in event_data or "stage" in event_data:
+                    card.build_node = event_data.get("node", event_data.get("stage", ""))
+                phase_val = event_data.get("phase", "")
+                if "code_gen" in phase_val or "code_generator" in phase_val:
                     card.build_step = "code_gen"
-                elif "code_eval" in phase or "build_valid" in phase:
+                elif "code_eval" in phase_val or "build_valid" in phase_val:
                     card.build_step = "validate"
-                elif "deploy" in phase:
+                elif "deploy" in phase_val:
                     card.build_step = "deploy"
                 try:
                     await _zp_store.update_card(card_id, build_step=card.build_step)
@@ -1306,6 +1324,12 @@ async def _trigger_zp_build(orch, session_id: str, card_id: str) -> None:
                     )
                 except Exception:
                     pass
+                subscriber_key = f"{session_id}:{card_id}"
+                for queue in _zp_build_subscribers.get(subscriber_key, []):
+                    try:
+                        queue.put_nowait(event_data)
+                    except asyncio.QueueFull:
+                        pass
 
         card.build_step = "done"
         card.status = "deployed"
@@ -1315,7 +1339,7 @@ async def _trigger_zp_build(orch, session_id: str, card_id: str) -> None:
         live_url = ""
         repo_url = ""
         try:
-            result = await _store.get_result(thread_id) if _store else None
+            result = await _store.get_meeting(thread_id) if _store else None
             if result and isinstance(result, dict):
                 deploy = result.get("deployment", {})
                 if isinstance(deploy, dict):
@@ -1326,6 +1350,14 @@ async def _trigger_zp_build(orch, session_id: str, card_id: str) -> None:
 
         card.live_url = live_url
         card.repo_url = repo_url
+
+        completion_event = {"type": "zp.build.done", "card_id": card_id, "status": "deployed"}
+        subscriber_key = f"{session_id}:{card_id}"
+        for queue in _zp_build_subscribers.get(subscriber_key, []):
+            try:
+                queue.put_nowait(completion_event)
+            except asyncio.QueueFull:
+                pass
 
         try:
             await _zp_store.update_card(
@@ -1362,6 +1394,13 @@ async def _trigger_zp_build(orch, session_id: str, card_id: str) -> None:
                     )
                 except Exception:
                     pass
+                failure_event = {"type": "zp.build.done", "card_id": card_id, "status": "build_failed"}
+                subscriber_key = f"{session_id}:{card_id}"
+                for queue in _zp_build_subscribers.get(subscriber_key, []):
+                    try:
+                        queue.put_nowait(failure_event)
+                    except asyncio.QueueFull:
+                        pass
 
 
 async def _resume_exploration(orch, session_id: str) -> None:
@@ -1379,6 +1418,81 @@ async def _resume_exploration(orch, session_id: str) -> None:
         logger.info("[ZP] Exploration resumed for session %s", session_id)
     except Exception:
         logger.exception("[ZP] Exploration resume failed for session %s", session_id)
+
+
+@app.get("/api/zero-prompt/{session_id}/build/{card_id}/events")
+@app.get("/zero-prompt/{session_id}/build/{card_id}/events")
+async def zero_prompt_build_events(session_id: str, card_id: str):
+    orch = _get_zp_orchestrator()
+    session = await orch.ensure_session(session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="session_not_found")
+
+    card = next((c for c in session.cards if c.card_id == card_id), None)
+    if card is None:
+        raise HTTPException(status_code=404, detail="card_not_found")
+
+    subscriber_key = f"{session_id}:{card_id}"
+    queue: asyncio.Queue = asyncio.Queue(maxsize=200)
+
+    if subscriber_key not in _zp_build_subscribers:
+        _zp_build_subscribers[subscriber_key] = []
+    _zp_build_subscribers[subscriber_key].append(queue)
+
+    async def event_stream() -> AsyncGenerator[str, None]:
+        try:
+            for evt in list(card.build_events):
+                yield f"data: {json.dumps(evt)}\n\n"
+
+            if card.status in ("deployed", "build_failed"):
+                yield f"data: {json.dumps({'type': 'zp.build.done', 'card_id': card_id, 'status': card.status})}\n\n"
+                return
+
+            while True:
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=60.0)
+                    yield f"data: {json.dumps(event)}\n\n"
+                    if event.get("type") == "zp.build.done":
+                        break
+                except asyncio.TimeoutError:
+                    yield f"data: {json.dumps({'type': 'keepalive'})}\n\n"
+                    if card.status in ("deployed", "build_failed"):
+                        yield f"data: {json.dumps({'type': 'zp.build.done', 'card_id': card_id, 'status': card.status})}\n\n"
+                        break
+        finally:
+            subs = _zp_build_subscribers.get(subscriber_key, [])
+            if queue in subs:
+                subs.remove(queue)
+            if not subs and subscriber_key in _zp_build_subscribers:
+                del _zp_build_subscribers[subscriber_key]
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@app.get("/api/zero-prompt/{session_id}/build/{card_id}")
+@app.get("/zero-prompt/{session_id}/build/{card_id}")
+async def zero_prompt_build_status(session_id: str, card_id: str):
+    orch = _get_zp_orchestrator()
+    session = await orch.ensure_session(session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="session_not_found")
+
+    card = next((c for c in session.cards if c.card_id == card_id), None)
+    if card is None:
+        raise HTTPException(status_code=404, detail="card_not_found")
+
+    return {
+        "card_id": card_id,
+        "status": card.status,
+        "build_phase": card.build_phase,
+        "build_node": card.build_node,
+        "event_count": len(card.build_events),
+        "thread_id": card.thread_id,
+    }
 
 
 if __name__ == "__main__":

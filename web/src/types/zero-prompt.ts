@@ -18,6 +18,8 @@ export interface ZPCard {
   analysis_step?: string;
   repo_url?: string;
   live_url?: string;
+  build_phase?: string;
+  build_node?: string;
   video_summary?: string;
   insights?: string[];
   mvp_proposal?: {

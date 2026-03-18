@@ -117,6 +117,9 @@ class ZPCard(BaseModel):
     analysis_step: str = ""
     repo_url: str = ""
     live_url: str = ""
+    build_events: list[dict] = []
+    build_phase: str = ""
+    build_node: str = ""
 
 
 class ZPSession(BaseModel):
