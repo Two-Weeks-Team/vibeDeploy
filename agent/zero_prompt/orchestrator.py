@@ -568,43 +568,6 @@ class StreamingOrchestrator:
             except Exception:
                 pass
 
-            go_cards = [c for c in session.cards if c.status == "go_ready"]
-            already_committed = any(c.status in ("build_queued", "building", "deployed") for c in session.cards)
-            if not already_committed and len(go_cards) >= session.goal_go_cards:
-                best_card = max(go_cards, key=lambda c: c.score)
-                if best_card.card_id not in session.build_queue:
-                    bq = self._build_queues.get(session_id)
-                    if bq:
-                        bq.enqueue(best_card.card_id)
-                    session.build_queue.append(best_card.card_id)
-                    best_card.status = "build_queued"
-                    _fire(_db_update_card_safe(best_card.card_id, status="build_queued"))
-                    push_zp_event(
-                        {
-                            "type": "card.update",
-                            "card_id": best_card.card_id,
-                            "status": "build_queued",
-                            "title": best_card.title,
-                            "session_id": session_id,
-                        }
-                    )
-                    push_zp_event(
-                        {
-                            "type": "zp.auto_build.triggered",
-                            "card_id": best_card.card_id,
-                            "title": best_card.title,
-                            "score": best_card.score,
-                            "session_id": session_id,
-                        }
-                    )
-                    logger.info(
-                        "[ZP] Auto-build triggered for %s (score=%d, %d/%d GO cards)",
-                        best_card.card_id,
-                        best_card.score,
-                        len(go_cards),
-                        session.goal_go_cards,
-                    )
-
             try:
                 from agent.zero_prompt.card_enrichment import enrich_card_with_gemini
 
