@@ -1,6 +1,6 @@
 # vibeDeploy Demo Mode - 영상 촬영 가이드
 
-> **이 브랜치(`demo/full-flow`)는 영상 촬영 전용입니다. main 브랜치에 병합하지 않습니다.**
+> **이 문서는 `demo/full-flow` 데모 흐름을 설명하며, 현재 PR을 통해 `main` 반영을 진행 중입니다.**
 
 ---
 
