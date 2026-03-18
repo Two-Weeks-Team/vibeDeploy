@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { BrainstormView } from "@/components/brainstorm-view";
+import { BrainstormView } from "@/components/brainstorm/brainstorm-view";
 
 export default function BrainstormPage() {
   const params = useParams<{ id: string }>();

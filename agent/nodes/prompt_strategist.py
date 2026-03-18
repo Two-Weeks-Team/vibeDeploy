@@ -49,6 +49,17 @@ _OFFICIAL_MODEL_SOURCES = {
     "generic": [],
 }
 
+_ARCHETYPE_DESCRIPTIONS: dict[str, str] = {
+    "storyboard": "vertical reading flow, editorial header, scrollable main content",
+    "operations_console": "sidebar + main content area, data-dense layout",
+    "studio": "3-panel workspace with toolbar, palette, canvas, and inspector",
+    "atlas": "map-dominant layout with side panel for search results",
+    "notebook": "centered content column with outline and table of contents",
+    "lab": "sidebar file tree + notebook-style cell area with status footer",
+    "creator_shell": "icon nav + vertical feed column + aside recommendations",
+    "marketplace": "global header + filter sidebar + product grid",
+}
+
 _STATIC_MODEL_GUIDANCE = {
     "anthropic": [
         "Claude excels at following system prompts precisely; place structural contracts in the system message and domain context in the user message.",
@@ -104,12 +115,14 @@ async def prompt_strategist(state: VibeDeployState) -> dict:
         *model_plan["backend"]["fallback_families"],
     }
     guidance_by_family = await _collect_family_guidance(family_names)
+    design_block = _build_design_block(state)
     strategy = _build_prompt_strategy(
         idea=idea,
         blueprint=blueprint,
         generated_docs=generated_docs,
         model_plan=model_plan,
         guidance_by_family=guidance_by_family,
+        design_block=design_block,
     )
 
     return {
@@ -270,6 +283,7 @@ def _build_prompt_strategy(
     generated_docs: dict,
     model_plan: dict,
     guidance_by_family: dict[str, dict],
+    design_block: str = "",
 ) -> dict:
     idea_name = idea.get("name") or idea.get("tagline") or "Hackathon product"
     design_system = blueprint.get("design_system", {}) or {}
@@ -396,6 +410,7 @@ def _build_prompt_strategy(
         [
             shared_prompt_appendix,
             specialist_briefs["frontend_architect"],
+            design_block,
         ]
     )
     backend_prompt_appendix = "\n\n".join(
@@ -407,6 +422,7 @@ def _build_prompt_strategy(
 
     return {
         "strategy_version": "prompt-strategy-v1",
+        "design_block": design_block,
         "model_plan": model_plan,
         "model_guidance": guidance_by_family,
         "context_priority": context_priority,
@@ -462,6 +478,54 @@ def _summarize_spec_line(spec: str, fallback: str) -> str:
         if len(stripped) >= 24:
             return stripped[:180]
     return fallback
+
+
+def _build_design_block(state: VibeDeployState) -> str:
+    design_preset = str(state.get("design_preset") or "").strip()
+    typography_pairing = state.get("typography_pairing") or {}
+    idea = state.get("idea") or {}
+    archetype_id = str(idea.get("layout_archetype") or "").strip() or "operations_console"
+
+    display_font = (
+        str(typography_pairing.get("display") or typography_pairing.get("heading") or "").strip()
+        or "var(--font-display)"
+    )
+    body_font = (
+        str(typography_pairing.get("body") or typography_pairing.get("body_font") or "").strip() or "var(--font-body)"
+    )
+    archetype_desc = _ARCHETYPE_DESCRIPTIONS.get(archetype_id, "domain-appropriate layout")
+
+    lines: list[str] = [
+        "## Design System (MANDATORY — use these exact CSS variables)",
+        "",
+        "Your globals.css already defines these tokens. USE them:",
+        "  bg-background, text-foreground, bg-card, border-border",
+        "  bg-primary, text-primary-foreground, bg-muted, text-muted-foreground",
+        "  bg-accent, text-accent-foreground, text-success, text-warning, text-destructive",
+        "",
+        "Typography:",
+        f"  Display: var(--font-display) [{display_font}] → apply to h1, h2, h3",
+        f"  Body: var(--font-body) [{body_font}] → apply to body, p",
+    ]
+    if design_preset:
+        lines += ["", f"Design preset: {design_preset}"]
+    lines += [
+        "",
+        f"Layout archetype: {archetype_id}",
+        f"  → {archetype_desc}",
+        "",
+        "FORBIDDEN (will fail review):",
+        "  - bg-white, bg-gray-50, bg-gray-100, #ffffff, #fff",
+        "  - font-family: sans-serif (direct), font-sans (Tailwind default)",
+        "  - Flat solid white/light-gray backgrounds",
+        "  - Centered hero cards on blank backgrounds",
+        "",
+        "REQUIRED:",
+        '  - Apply `dark` class to `<html>` element: `<html lang="en" className="dark">`',
+        "  - All colors via CSS variables: bg-background NOT bg-white",
+        "  - Background depth: gradient, radial accent, grid overlay, or texture",
+    ]
+    return "\n".join(lines)
 
 
 def _unique(values) -> list[str]:

@@ -92,6 +92,23 @@ API and implementation requirements:
 - NEVER import from "@/src/...". When using the alias, write "@/components/...", "@/lib/...", "@/app/..." because "@/*" already points to "./src/*".
 - package.json engines field must specify: { "node": "22.x" }
 - Avoid generic dashboards, centered auth-card layouts on blank backgrounds, stock hero sections with three random feature cards, or unstyled shadcn defaults.
+
+HTML DARK MODE (MANDATORY):
+- Apply `dark` class to the `<html>` element by default in src/app/layout.tsx:
+  `<html lang="en" className="dark">` — never omit the className="dark".
+
+CSS VARIABLE TOKENS (USE THESE — do not invent Tailwind utility classes that bypass the token system):
+  Colors:     bg-background, text-foreground, bg-card, border-border
+              bg-primary, text-primary-foreground, bg-muted, text-muted-foreground
+              bg-accent, text-accent-foreground, text-success, text-warning, text-destructive
+  Typography: font-[--font-display] for headings (h1, h2, h3), font-[--font-body] for body/p
+
+FORBIDDEN PATTERNS (will fail code review — do not generate):
+- bg-white, bg-gray-50, bg-gray-100, bg-slate-50 → use bg-background or bg-card instead
+- #ffffff, #fff, color: white as inline values → use CSS variable tokens
+- font-family: sans-serif (direct inline style), font-sans Tailwind class → use var(--font-body)
+- Flat solid single-color backgrounds with no depth → always add gradient, radial accent, grid, or texture
+- Centered single-card layout on a blank white or light-gray background
 """.strip()
 
 

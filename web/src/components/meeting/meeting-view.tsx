@@ -4,18 +4,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import confetti from "canvas-confetti";
-import { CouncilMember } from "@/components/council-member";
-import { CrossExam } from "@/components/cross-exam";
-import { DecisionGate } from "@/components/decision-gate";
-import { DeployStatus } from "@/components/deploy-status";
-import { VibeScore } from "@/components/vibe-score";
+import { CouncilMember } from "@/components/meeting/council-member";
+import { CrossExam } from "@/components/meeting/cross-exam";
+import { DecisionGate } from "@/components/meeting/decision-gate";
+import { DeployStatus } from "@/components/result/deploy-status";
+import { VibeScore } from "@/components/result/vibe-score";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { DASHBOARD_API_URL, resumeMeeting } from "@/lib/api";
 import { createSSEClient, type SSEEvent } from "@/lib/sse-client";
-
-type AgentKey = "architect" | "scout" | "guardian" | "catalyst" | "advocate" | "strategist";
+import { AGENTS, type AgentKey, toAgentKey } from "@/config/agents";
 
 type AgentStatus = "idle" | "active" | "complete" | "error";
 
@@ -26,21 +25,6 @@ type AnalysisEntry = {
 };
 
 const PHASES = ["Input", "Analysis", "Debate", "Scoring", "Verdict", "Build", "Deploy"] as const;
-
-const AGENTS: {
-  key: AgentKey;
-  name: string;
-  role: string;
-  emoji: string;
-  color: "amber" | "blue" | "emerald" | "purple" | "rose" | "slate";
-}[] = [
-  { key: "architect", name: "Architect", role: "Technical Lead", emoji: "🏗️", color: "amber" },
-  { key: "scout", name: "Scout", role: "Market Analyst", emoji: "🔭", color: "blue" },
-  { key: "guardian", name: "Guardian", role: "Risk Assessor", emoji: "🛡️", color: "emerald" },
-  { key: "catalyst", name: "Catalyst", role: "Innovation Officer", emoji: "⚡", color: "purple" },
-  { key: "advocate", name: "Advocate", role: "UX Champion", emoji: "🎯", color: "rose" },
-  { key: "strategist", name: "Strategist", role: "Session Lead", emoji: "🧭", color: "slate" },
-];
 
 const phaseToIndex: Record<string, number> = {
   input: 0,
@@ -419,18 +403,6 @@ function asString(value: unknown): string | undefined {
 
 function asNumber(value: unknown): number | undefined {
   return typeof value === "number" ? value : undefined;
-}
-
-function toAgentKey(value: string | undefined): AgentKey | null {
-  if (!value) return null;
-  const normalized = value.toLowerCase();
-  if (normalized.includes("architect")) return "architect";
-  if (normalized.includes("scout")) return "scout";
-  if (normalized.includes("guardian")) return "guardian";
-  if (normalized.includes("catalyst")) return "catalyst";
-  if (normalized.includes("advocate")) return "advocate";
-  if (normalized.includes("strategist")) return "strategist";
-  return null;
 }
 
 function asVerdict(value: string | undefined): "GO" | "CONDITIONAL" | "NO_GO" {
