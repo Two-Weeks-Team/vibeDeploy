@@ -39,8 +39,8 @@ const COUNCIL_AGENTS = [
 ];
 
 const STEPS = [
-  { num: "1", title: "Discover", desc: "AI explores YouTube for trending app ideas", icon: Youtube },
-  { num: "2", title: "Evaluate", desc: "Vibe Council scores feasibility with 6 agents", icon: FlaskConical },
+  { num: "1", title: "Discover", desc: "AI explores YouTube for high-signal app ideas", icon: Youtube },
+  { num: "2", title: "Rank", desc: "A live Kanban sorts GO and NO-GO cards", icon: FlaskConical },
   { num: "3", title: "Build", desc: "PRD, code, and assets auto-generated", icon: Code2 },
   { num: "4", title: "Deploy", desc: "Live app on DigitalOcean in minutes", icon: Globe },
 ];
@@ -77,7 +77,7 @@ export function ZeroPromptLanding({ youtubeUrl, onYoutubeUrlChange, startAction,
         <Link href="/dashboard">
           <Button variant="outline" size="sm" className="gap-2">
             <LayoutDashboard className="h-4 w-4" />
-            Dashboard
+            Ops Dashboard
           </Button>
         </Link>
       </div>
@@ -91,7 +91,7 @@ export function ZeroPromptLanding({ youtubeUrl, onYoutubeUrlChange, startAction,
             Zero prompts. Zero coding. One button deploys a live app.
           </motion.p>
           <motion.p variants={fadeUp} className="text-sm text-muted-foreground/70">
-            AI discovers ideas from YouTube, validates with research, writes code, and ships to DigitalOcean — autonomously.
+            One click starts discovery, the live Kanban ranks GO ideas, and you choose what to build.
           </motion.p>
           <motion.div variants={fadeUp} className="flex flex-col items-center gap-4 pt-6">
             <div className="flex flex-col sm:flex-row items-center gap-3">
@@ -112,7 +112,7 @@ export function ZeroPromptLanding({ youtubeUrl, onYoutubeUrlChange, startAction,
                       <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-300">8x accelerated</span>
                     </div>
                     <p className="text-xs leading-relaxed text-muted-foreground">
-                      The demo compresses the real pipeline to about <span className="font-medium text-foreground">8x speed</span> so reviewers can understand discovery, council review, GO approval, build, and deploy without waiting through the full runtime.
+                      The demo compresses the real pipeline to about <span className="font-medium text-foreground">8x speed</span> so reviewers can understand discovery, live ranking, GO approval, build, and deploy without waiting through the full runtime.
                     </p>
                     <div className="grid gap-2 sm:grid-cols-3">
                       <div className="space-y-1">
@@ -120,8 +120,8 @@ export function ZeroPromptLanding({ youtubeUrl, onYoutubeUrlChange, startAction,
                         <p className="text-xs leading-relaxed text-muted-foreground">Watch the YouTube URL type in and the preview update.</p>
                       </div>
                       <div className="space-y-1">
-                        <p className="text-sm font-semibold">2. Watch the AI pick</p>
-                        <p className="text-xs leading-relaxed text-muted-foreground">The council opens the card, then visibly approves the GO handoff.</p>
+                        <p className="text-sm font-semibold">2. Watch GO cards appear</p>
+                        <p className="text-xs leading-relaxed text-muted-foreground">The board fills in real time as ideas are ranked into GO and NO-GO outcomes.</p>
                       </div>
                       <div className="space-y-1">
                         <p className="text-sm font-semibold">3. See the outcome</p>
@@ -133,7 +133,7 @@ export function ZeroPromptLanding({ youtubeUrl, onYoutubeUrlChange, startAction,
                 </div>
               </div>
             </div>
-            <p className="text-xs text-muted-foreground">Press Start for the full Zero-Prompt loop, or open Demo for a guided autoplay judge flow.</p>
+              <p className="text-xs text-muted-foreground">Press Start for the full Zero-Prompt loop, or open Demo for a guided autoplay review flow.</p>
           </motion.div>
         </motion.div>
 

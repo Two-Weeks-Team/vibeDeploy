@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Terminal, Search } from "lucide-react";
+import { Activity, Search } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -23,12 +23,14 @@ export function ActionFeed({ actions }: ActionFeedProps) {
     const matchesType = typeFilter ? action.type === typeFilter : true;
     return matchesText && matchesType;
   });
+  const filteredCount = filteredActions.length;
 
+  const actionCount = filteredActions.length;
   useEffect(() => {
-    if (autoScroll && scrollRef.current) {
+    if (actionCount > 0 && autoScroll && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [filteredActions.length, autoScroll]);
+  }, [actionCount, autoScroll]);
 
   const handleScroll = () => {
     if (!scrollRef.current) return;
@@ -44,9 +46,9 @@ export function ActionFeed({ actions }: ActionFeedProps) {
       <CardHeader className="py-3 px-4 border-b border-border/50 space-y-3">
         <div className="flex items-center justify-between">
           <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <Terminal className="w-4 h-4" /> Action Feed
+            <Activity className="w-4 h-4" /> Live Activity
             <Badge variant="secondary" className="text-[10px] ml-2">
-              {filteredActions.length} events
+              {filteredCount} events
             </Badge>
           </CardTitle>
           {!autoScroll && (
@@ -64,7 +66,7 @@ export function ActionFeed({ actions }: ActionFeedProps) {
           <div className="relative flex-1">
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground" />
             <Input 
-              placeholder="Filter logs..." 
+               placeholder="Search activity..." 
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
               className="h-7 text-xs pl-7 bg-background/50"
@@ -98,7 +100,7 @@ export function ActionFeed({ actions }: ActionFeedProps) {
       >
         {filteredActions.length === 0 ? (
           <div className="text-muted-foreground text-center py-8">
-            {actions.length === 0 ? "No actions yet..." : "No actions match your filter."}
+            {actions.length === 0 ? "Activity will appear here." : "No activity matches your search."}
           </div>
         ) : (
           filteredActions.slice().reverse().map((action) => (

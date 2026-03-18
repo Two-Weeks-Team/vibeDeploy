@@ -186,7 +186,7 @@ LIVE ✓
 - [ ] Text overlays: white on semi-transparent dark, consistent font
 - [ ] Export at exactly 2:55 (verify with YouTube after upload)
 - [ ] Upload to YouTube as **Public**, **Not for Kids**
-- [ ] After upload: update README `REPLACE_WITH_VIDEO_ID` → actual YouTube ID
+- [ ] After upload: update README and Devpost docs with the final public video URL
 - [ ] Verify video plays on mobile (judges watch on phones)
 
 ## Key Principles Applied

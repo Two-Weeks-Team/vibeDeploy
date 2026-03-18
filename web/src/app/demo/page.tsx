@@ -194,7 +194,7 @@ export default function DemoPage() {
               <div>
                 <h1 className="text-2xl sm:text-3xl font-bold tracking-tight flex items-center gap-2">
                   <Rocket className="w-6 h-6 text-blue-500" />
-                  Zero-Prompt Dashboard
+                   Zero-Prompt Workspace
                 </h1>
                 <p className="text-sm text-muted-foreground mt-1">
                   Session: {session.session_id.slice(0, 8)}... &bull; Status: {session.status}

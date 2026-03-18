@@ -27,6 +27,7 @@
 
 | App | URL |
 |-----|-----|
+| NutriPlan | https://nutriplan-meal-planning-818722-dei83.ondigitalocean.app |
 | FlavorSwap Lite | https://flavorswap-lite-637431-dl43t.ondigitalocean.app |
 | GardenBreak | https://gardenbreak-377462-h9bmg.ondigitalocean.app |
 | Creator Batch Studio | https://creator-batch-studio-640303-segyb.ondigitalocean.app |

@@ -61,10 +61,10 @@ export function IdeaCard({ card, onQueueBuild, onPassCard, onDeleteCard, onReExp
         {card.status === "go_ready" && (
           <div className="flex gap-2 mt-3">
             <Button data-go-card-id={card.card_id} size="sm" className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white h-8 text-xs" onClick={(event) => { event.stopPropagation(); onQueueBuild(card.card_id); }}>
-              <Play className="w-3 h-3 mr-1" /> GO!
+              <Play className="w-3 h-3 mr-1" /> Build App
             </Button>
             <Button data-pass-card-id={card.card_id} size="sm" variant="outline" className="flex-1 h-8 text-xs" onClick={(event) => { event.stopPropagation(); onPassCard(card.card_id); }}>
-              <X className="w-3 h-3 mr-1" /> Pass
+              <X className="w-3 h-3 mr-1" /> Skip
             </Button>
           </div>
         )}
@@ -72,7 +72,7 @@ export function IdeaCard({ card, onQueueBuild, onPassCard, onDeleteCard, onReExp
         {card.status === "build_queued" && (
           <div className="flex items-center justify-center gap-2 mt-3 text-xs text-muted-foreground bg-muted/50 py-1.5 rounded">
             <Loader2 className="w-3 h-3 animate-spin" />
-            Queued...
+            Queued for build...
           </div>
         )}
 
@@ -86,7 +86,7 @@ export function IdeaCard({ card, onQueueBuild, onPassCard, onDeleteCard, onReExp
             <div className="flex gap-2">
               <Button size="sm" variant="outline" className="flex-1 h-8 text-xs border-emerald-500/30 text-emerald-500 hover:bg-emerald-500/10" asChild>
                 <a data-view-app-card-id={card.card_id} href={appHref} target="_blank" rel="noopener noreferrer" onClick={(event) => event.stopPropagation()}>
-                  <ExternalLink className="w-3 h-3 mr-1" /> App
+                  <ExternalLink className="w-3 h-3 mr-1" /> Open App
                 </a>
               </Button>
               {card.repo_url && (

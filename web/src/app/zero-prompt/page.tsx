@@ -45,10 +45,10 @@ export default function ZeroPromptPage() {
           <div className="space-y-2">
             <h1 className="text-3xl font-bold tracking-tight flex items-center justify-center gap-2">
               <Rocket className="w-8 h-8 text-blue-500" />
-              Zero-Prompt Mode
+              Zero-Prompt Start
             </h1>
             <p className="text-muted-foreground">
-              AI discovers trending YouTube videos, validates with papers, and deploys apps autonomously.
+              Start discovery, watch the board fill live, then choose any GO idea to build.
             </p>
           </div>
 
@@ -97,7 +97,7 @@ export default function ZeroPromptPage() {
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight flex items-center gap-2">
               <Rocket className="w-6 h-6 text-blue-500" />
-              Zero-Prompt Dashboard
+               Zero-Prompt Workspace
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
               {session 

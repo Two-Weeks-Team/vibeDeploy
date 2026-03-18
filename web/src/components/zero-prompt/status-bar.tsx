@@ -56,7 +56,7 @@ export function StatusBar({ session, isConnected }: StatusBarProps) {
       <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
         <CardContent className="p-4">
           <p className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-            <CheckCircle className="w-4 h-4 text-emerald-400" /> Deployed
+            <CheckCircle className="w-4 h-4 text-emerald-400" /> Live
           </p>
           <p className="text-2xl font-bold mt-1">{deployedCount}</p>
         </CardContent>
