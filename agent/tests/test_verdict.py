@@ -83,13 +83,13 @@ def test_novelty_boost_capped_at_one():
     assert score_uncapped == score_at_cap == 15
 
 
-def test_boundary_score_60_is_go():
-    result = determine_verdict(score=60, market_opportunity=50, novelty_boost=0.2, differentiation=50)
+def test_boundary_score_70_is_go():
+    result = determine_verdict(score=70, market_opportunity=50, novelty_boost=0.2, differentiation=50)
     assert result.decision == "GO"
 
 
-def test_boundary_score_59_is_no_go():
-    result = determine_verdict(score=59, market_opportunity=50, novelty_boost=0.2, differentiation=50)
+def test_boundary_score_69_is_no_go():
+    result = determine_verdict(score=69, market_opportunity=50, novelty_boost=0.2, differentiation=50)
     assert result.decision == "NO_GO"
 
 

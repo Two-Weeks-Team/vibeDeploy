@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Rocket } from "lucide-react";
 import { useZeroPrompt } from "@/hooks/use-zero-prompt";
 import { StatusBar } from "@/components/zero-prompt/status-bar";
@@ -8,12 +8,14 @@ import { KanbanBoard } from "@/components/zero-prompt/kanban-board";
 import { ActionFeed } from "@/components/zero-prompt/action-feed";
 
 export default function ZeroPromptPage() {
+  const hasStartedRef = useRef(false);
   const {
     session,
     actions,
     isConnected,
     isCompleted,
     isLoading,
+    hasLoadedDashboard,
     startSession,
     queueBuild,
     passCard,
@@ -21,10 +23,11 @@ export default function ZeroPromptPage() {
   } = useZeroPrompt();
 
   useEffect(() => {
-    if (!session && !isLoading) {
-      startSession(10);
+    if (hasLoadedDashboard && !session && !isLoading && !hasStartedRef.current) {
+      hasStartedRef.current = true;
+      startSession(5);
     }
-  }, [session, isLoading, startSession]);
+  }, [session, isLoading, hasLoadedDashboard, startSession]);
 
   return (
     <div className="min-h-screen bg-background text-foreground p-4 sm:p-6 lg:p-8">

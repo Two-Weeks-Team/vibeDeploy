@@ -30,7 +30,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from starlette.responses import StreamingResponse
+from starlette.responses import JSONResponse, StreamingResponse
 
 from .cost import estimate_pipeline_cost
 from .db.store import ResultStore
@@ -39,8 +39,7 @@ from .model_capabilities import load_model_capability_report, selected_runtime_m
 from .pipeline_runtime import build_brainstorm_result, build_meeting_result, stream_action_session
 from .sse import NODE_EVENTS, format_sse
 from .tools.digitalocean import list_apps as list_digitalocean_apps
-from .zero_prompt.event_bus import _event_buses as _zp_event_buses
-from .zero_prompt.event_bus import push_zp_event
+from .zero_prompt.event_bus import push_zp_event, register_zp_client, unregister_zp_client
 
 _AGENT_DIR = Path(__file__).resolve().parent
 load_dotenv(_AGENT_DIR / ".env.test")
@@ -1007,15 +1006,21 @@ async def zp_dashboard():
 @app.get("/zero-prompt/events")
 async def zp_events(request: Request):
     client_id = str(uuid.uuid4())
-    q: asyncio.Queue = _zp_event_buses[client_id]
+    session_id = request.query_params.get("session_id")
+    q: asyncio.Queue = register_zp_client(client_id, session_id)
 
     async def event_stream() -> AsyncGenerator[str, None]:
         try:
             try:
                 from .db import zp_store as _zps
 
-                dashboard = await _zps.get_dashboard()
-                yield f"data: {json.dumps({'type': 'snapshot', **dashboard})}\n\n"
+                if session_id:
+                    snapshot = await _zps.get_session(session_id)
+                    if snapshot:
+                        yield f"data: {json.dumps({'type': 'snapshot', **snapshot})}\n\n"
+                else:
+                    dashboard = await _zps.get_dashboard()
+                    yield f"data: {json.dumps({'type': 'snapshot', **dashboard})}\n\n"
             except Exception:
                 pass
 
@@ -1028,7 +1033,7 @@ async def zp_events(request: Request):
         except asyncio.CancelledError:
             pass
         finally:
-            _zp_event_buses.pop(client_id, None)
+            unregister_zp_client(client_id)
 
     return StreamingResponse(
         event_stream(),
@@ -1050,7 +1055,7 @@ def _get_zp_orchestrator():
 
 
 class ZPStartRequest(BaseModel):
-    goal: int = 10
+    goal: int = 5
 
 
 class ZPActionRequest(BaseModel):
@@ -1081,7 +1086,7 @@ _ZP_FALLBACK_TOPICS = [
 ]
 
 
-async def _discover_videos() -> list[tuple[str, str, str]]:
+async def _discover_videos(session_id: str) -> list[tuple[str, str, str]]:
     try:
         from .zero_prompt.discovery import YouTubeDiscovery
 
@@ -1096,7 +1101,13 @@ async def _discover_videos() -> list[tuple[str, str, str]]:
     except Exception as exc:
         logger.warning("[ZP] YouTube API failed: %s", str(exc)[:200])
 
-    push_zp_event({"type": "zp.discovery.grounding", "message": "Using Gemini AI to discover trending videos..."})
+    push_zp_event(
+        {
+            "type": "zp.discovery.grounding",
+            "message": "Using Gemini AI to discover trending videos...",
+            "session_id": session_id,
+        }
+    )
     try:
         from .zero_prompt.grounding_discovery import discover_videos_via_grounding
 
@@ -1112,8 +1123,12 @@ async def _discover_videos() -> list[tuple[str, str, str]]:
 
 
 def _count_go_cards(session) -> int:
-    committed = {"go_ready", "build_queued", "building", "deployed"}
-    return sum(1 for c in session.cards if c.status in committed)
+    return sum(1 for c in session.cards if c.status == "go_ready")
+
+
+def _count_pending_cards(session) -> int:
+    pending = {"analyzing", "go_ready"}
+    return sum(1 for c in session.cards if c.status in pending)
 
 
 async def _run_zp_pipeline(orch, session_id: str, goal: int) -> None:
@@ -1121,11 +1136,23 @@ async def _run_zp_pipeline(orch, session_id: str, goal: int) -> None:
         seen_video_ids: set[str] = set()
         round_num = 0
         max_rounds = 5
+        max_pending_cards = 5
 
         while round_num < max_rounds:
             session = orch.get_session(session_id)
             if session and _count_go_cards(session) >= goal:
                 logger.info("[ZP] Goal reached (%d GO cards) for session %s", goal, session_id)
+                break
+
+            available_slots = max_pending_cards
+            if session:
+                available_slots = max(0, max_pending_cards - _count_pending_cards(session))
+            if available_slots <= 0:
+                logger.info(
+                    "[ZP] Pending card limit reached (%d), stopping registration for session %s",
+                    max_pending_cards,
+                    session_id,
+                )
                 break
 
             round_num += 1
@@ -1136,14 +1163,14 @@ async def _run_zp_pipeline(orch, session_id: str, goal: int) -> None:
                     "session_id": session_id,
                 }
             )
-            videos = await _discover_videos()
+            videos = await _discover_videos(session_id)
 
             new_videos = [(vid_id, title, desc) for vid_id, title, desc in videos if vid_id not in seen_video_ids]
             if not new_videos:
                 logger.info("[ZP] No new videos found in round %d, stopping", round_num)
                 break
 
-            batch = new_videos[: goal + 5]
+            batch = new_videos[:available_slots]
             for vid_id, title, desc in batch:
                 seen_video_ids.add(vid_id)
                 await orch.register_card(session_id, vid_id, title)
@@ -1173,24 +1200,24 @@ async def _run_zp_pipeline(orch, session_id: str, goal: int) -> None:
 @app.post("/api/zero-prompt/start")
 @app.post("/zero-prompt/start")
 async def zero_prompt_start(request: ZPStartRequest):
-    from .sse import format_sse as _fmt
-    from .zero_prompt.events import ZP_SESSION_START
-
     orch = _get_zp_orchestrator()
-    session, start_event = orch.create_session(goal=request.goal)
+    session, _start_event = orch.create_session(goal=request.goal)
     session_id = session.session_id
-    goal = request.goal or 10
+    goal = request.goal or 5
 
     asyncio.create_task(_run_zp_pipeline(orch, session_id, goal))
+    push_zp_event(
+        {"type": "zp.session.start", "session_id": session_id, "goal_go_cards": goal, "session_status": session.status}
+    )
+    push_zp_event({"type": "zp.pipeline.started", "session_id": session_id, "goal": goal})
 
-    async def event_stream() -> AsyncGenerator[str, None]:
-        yield _fmt(ZP_SESSION_START, start_event)
-        yield _fmt("zp.pipeline.started", {"type": "zp.pipeline.started", "session_id": session_id, "goal": goal})
-
-    return StreamingResponse(
-        event_stream(),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+    return JSONResponse(
+        {
+            "session_id": session_id,
+            "status": session.status,
+            "goal_go_cards": goal,
+            "cards": [],
+        }
     )
 
 

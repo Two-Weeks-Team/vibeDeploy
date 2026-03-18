@@ -51,7 +51,7 @@ def determine_verdict(
         score >= 70 → GO
         score <  70 → NO_GO
     """
-    if score >= 60:
+    if score >= 70:
         reason = (
             f"Strong signals across all axes (score {score}) — high potential opportunity."
             if score >= 80

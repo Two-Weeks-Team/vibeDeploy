@@ -13,7 +13,7 @@ from .schemas import PaperMetadata
 logger = logging.getLogger(__name__)
 
 _OPENALEX_WORKS_URL = "https://api.openalex.org/works"
-_ARXIV_API_URL = "http://export.arxiv.org/api/query"
+_ARXIV_API_URL = "https://export.arxiv.org/api/query"
 
 _REQUEST_TIMEOUT_SECONDS = 10
 _OPENALEX_MAX_RETRIES = 2

@@ -1,13 +1,14 @@
 import { DASHBOARD_API_URL } from "./api";
 import type { ZPSession } from "@/types/zero-prompt";
 
-export async function startSession(goal?: number): Promise<void> {
+export async function startSession(goal?: number): Promise<ZPSession> {
   const response = await fetch(`${DASHBOARD_API_URL}/zero-prompt/start`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ goal }),
   });
   if (!response.ok) throw new Error("Failed to start session");
+  return response.json();
 }
 
 export async function getDashboard(): Promise<ZPSession & { session_id: string | null }> {

@@ -1,6 +1,7 @@
 """YouTube transcript extraction using yt-dlp."""
 
 import logging
+import os
 import re
 from typing import Optional
 
@@ -18,6 +19,63 @@ except ImportError:
 
 
 logger = logging.getLogger(__name__)
+
+
+def _build_metadata_context_from_snippet(snippet: dict) -> str:
+    title = snippet.get("title", "") or ""
+    description = (snippet.get("description", "") or "")[:2000]
+    channel = snippet.get("channelTitle", "") or ""
+    tags = snippet.get("tags", []) or []
+
+    parts = []
+    if title:
+        parts.append(f"Video Title: {title}")
+    if channel:
+        parts.append(f"Channel: {channel}")
+    if tags:
+        parts.append(f"Tags: {', '.join(tags[:15])}")
+    if description:
+        parts.append(f"Description:\n{description}")
+    return "\n".join(parts) if parts else ""
+
+
+def _fetch_video_metadata_fallback(video_id: str) -> str:
+    api_key = ""
+    for key_name in ("YOUTUBE_DATA_API_KEY", "YOUTUBE_API_KEY"):
+        api_key = api_key or os.environ.get(key_name, "").strip()
+
+    if api_key:
+        try:
+            resp = requests.get(
+                "https://www.googleapis.com/youtube/v3/videos",
+                params={"part": "snippet", "id": video_id, "key": api_key},
+                timeout=15,
+            )
+            resp.raise_for_status()
+            items = resp.json().get("items", [])
+            if items:
+                snippet = items[0].get("snippet", {}) or {}
+                context = _build_metadata_context_from_snippet(snippet)
+                if context:
+                    return context
+        except requests.RequestException as exc:
+            logger.debug("YouTube Data API metadata fallback failed: %s", exc)
+
+    try:
+        resp = requests.get(
+            "https://www.youtube.com/oembed",
+            params={"url": f"https://www.youtube.com/watch?v={video_id}", "format": "json"},
+            timeout=10,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        return _build_metadata_context_from_snippet(
+            {"title": data.get("title", ""), "channelTitle": data.get("author_name", "")}
+        )
+    except requests.RequestException as exc:
+        logger.debug("YouTube oEmbed fallback failed: %s", exc)
+
+    return ""
 
 
 def is_youtube_url(text: str) -> bool:
@@ -98,11 +156,17 @@ async def extract_youtube_transcript(
                 return text
 
         logger.info("Subtitle fetch failed (likely IP-blocked), using video metadata fallback")
-        return _build_metadata_context(info)
+        metadata_context = _build_metadata_context(info)
+        if metadata_context:
+            return metadata_context
+        return _fetch_video_metadata_fallback(video_id)
 
     except Exception as e:
         error_msg = str(e)[:200]
         logger.warning("yt-dlp extraction failed: %s", error_msg)
+        metadata_context = _fetch_video_metadata_fallback(video_id)
+        if metadata_context:
+            return metadata_context
         return f"[Error: {error_msg}]"
 
 

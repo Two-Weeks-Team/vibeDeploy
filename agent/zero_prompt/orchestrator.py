@@ -330,15 +330,21 @@ class StreamingOrchestrator:
         await _db_update_card_safe(card_id, analysis_step="transcript")
 
         events.append(transcript_start_event(video_id))
+        transcript_source = "error"
+        transcript_tokens = 0
         try:
             from agent.zero_prompt.transcript import fetch_transcript_artifact
 
             transcript = await fetch_transcript_artifact(video_id)
             transcript_text = transcript.text
+            transcript_source = transcript.source
+            transcript_tokens = transcript.token_count
             events.append(transcript_complete_event(video_id, transcript.source, transcript.token_count))
         except Exception:
-            transcript_text = video_description or video_title or ""
-            events.append(transcript_complete_event(video_id, "error", 0))
+            transcript_text = f"Video Title: {video_title}\nDescription:\n{video_description}".strip()
+            transcript_source = "metadata_fallback" if transcript_text else "error"
+            transcript_tokens = len(transcript_text.split()) if transcript_text else 0
+            events.append(transcript_complete_event(video_id, transcript_source, transcript_tokens))
 
         card.analysis_step = "insight"
         await _db_update_card_safe(card_id, analysis_step="insight")
@@ -512,10 +518,23 @@ class StreamingOrchestrator:
             try:
                 from agent.zero_prompt.verdict import compute_verdict_score, determine_verdict
 
-                raw_confidence = idea.confidence_score if idea else 0.5
-                confidence = max(raw_confidence, 0.72)
-                engagement = max(0.60, min(1.0, len(papers) * 0.2 + 0.40)) if papers else 0.60
-                differentiation = max(50, 100 - (market_opportunity if market_opportunity > 60 else 20))
+                raw_confidence = idea.confidence_score if idea else 0.0
+                transcript_quality = (
+                    1.0 if transcript_source == "auto" else 0.65 if transcript_source == "metadata_fallback" else 0.25
+                )
+                confidence = max(0.05, raw_confidence) * transcript_quality
+
+                transcript_base = (
+                    0.30 if transcript_source == "auto" else 0.20 if transcript_source == "metadata_fallback" else 0.05
+                )
+                paper_bonus = min(len(papers) * 0.15, 0.45) if papers else 0.0
+                engagement = min(1.0, transcript_base + paper_bonus)
+
+                feature_bonus = min(len(idea.key_features) * 6, 24) if idea else 0
+                gap_bonus = min(len(market.gaps) * 8, 24) if market else 0
+                competitor_penalty = min((len(market.competitors) if market else 0) * 4, 28)
+                differentiation = max(10, min(90, 35 + feature_bonus + gap_bonus - competitor_penalty))
+
                 score = compute_verdict_score(
                     confidence, engagement, market_opportunity, novelty_boost, differentiation
                 )
@@ -525,7 +544,7 @@ class StreamingOrchestrator:
                 reason_code = verdict.reason_code
                 score = verdict.score
             except Exception:
-                decision, score, reason, reason_code = "GO", 70, "default verdict", "high_potential"
+                decision, score, reason, reason_code = "NO_GO", 0, "verdict computation failed", "low_confidence"
 
         card.title = idea.name or video_title or video_id
         card.score = score

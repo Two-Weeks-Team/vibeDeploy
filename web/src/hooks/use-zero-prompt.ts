@@ -1,9 +1,51 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { getDashboard, startSession, queueBuild, passCard, deleteCard } from "@/lib/zero-prompt-api";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { getDashboard, getSession, startSession, queueBuild, passCard, deleteCard } from "@/lib/zero-prompt-api";
 import { DASHBOARD_API_URL } from "@/lib/api";
 import type { ZPSession, ZPAction } from "@/types/zero-prompt";
+
+function stringifyValue(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (Array.isArray(value)) return value.map((item) => stringifyValue(item)).filter(Boolean).join(", ");
+  if (value && typeof value === "object") {
+    return Object.entries(value as Record<string, unknown>)
+      .map(([k, v]) => `${k}: ${stringifyValue(v)}`)
+      .join(", ");
+  }
+  return "";
+}
+
+function normalizeStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => stringifyValue(item)).filter(Boolean);
+}
+
+function normalizeSession(raw: ZPSession | (ZPSession & { session_id?: string | null })): ZPSession | null {
+  if (!(raw as { session_id?: string | null }).session_id) return null;
+  return {
+    ...raw,
+    session_id: String((raw as { session_id: string }).session_id),
+    cards: (raw.cards || []).map((card) => ({
+      ...card,
+      title: stringifyValue(card.title) || stringifyValue(card.video_id),
+      reason: stringifyValue(card.reason),
+      domain: stringifyValue(card.domain),
+      video_summary: stringifyValue(card.video_summary),
+      insights: normalizeStringArray(card.insights),
+      mvp_proposal: card.mvp_proposal
+        ? {
+            app_name: stringifyValue(card.mvp_proposal.app_name),
+            core_feature: stringifyValue(card.mvp_proposal.core_feature),
+            tech_stack: stringifyValue(card.mvp_proposal.tech_stack),
+            key_pages: normalizeStringArray(card.mvp_proposal.key_pages),
+            estimated_days: Number(card.mvp_proposal.estimated_days || 0) || undefined,
+          }
+        : undefined,
+    })),
+  };
+}
 
 function getActionCategory(type: string, data: Record<string, unknown>): string {
   if (type.startsWith("zp.transcript") || type.startsWith("zp.discovery") || type.startsWith("zp.exploration") || type === "zp.card.registered" || type === "zp.pipeline.started") return "explore";
@@ -72,46 +114,90 @@ export function useZeroPrompt() {
   const [isConnected, setIsConnected] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [hasLoadedDashboard, setHasLoadedDashboard] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const sessionRef = useRef<ZPSession | null>(null);
+  const [eventSessionId, setEventSessionId] = useState<string | null>(null);
+
+  useEffect(() => {
+    sessionRef.current = session;
+  }, [session]);
 
   const loadDashboard = useCallback(async () => {
     try {
       const data = await getDashboard();
-      if (data.session_id) {
-        setSession(data as ZPSession);
-        setIsCompleted(data.status === "completed");
+      const normalized = normalizeSession(data as ZPSession & { session_id: string | null });
+      if (normalized) {
+        setSession(normalized);
+        setEventSessionId(normalized.session_id);
+        setIsCompleted(normalized.status === "completed");
+      } else {
+        setSession(null);
+        setEventSessionId(null);
+        if (typeof window !== "undefined") {
+          window.localStorage.removeItem("zp_session_id");
+        }
       }
     } catch (err) {
       console.error("Failed to load dashboard", err);
+    } finally {
+      setHasLoadedDashboard(true);
     }
   }, []);
 
   useEffect(() => {
-    loadDashboard();
+    const restore = async () => {
+      try {
+        const storedSessionId = typeof window !== "undefined" ? window.localStorage.getItem("zp_session_id") : null;
+        if (storedSessionId) {
+          const restored = await getSession(storedSessionId);
+          const normalized = normalizeSession(restored as ZPSession & { session_id?: string | null });
+          if (normalized) {
+            setSession(normalized);
+            setEventSessionId(normalized.session_id);
+            setIsCompleted(normalized.status === "completed");
+            setHasLoadedDashboard(true);
+            return;
+          }
+        }
+      } catch {
+        if (typeof window !== "undefined") {
+          window.localStorage.removeItem("zp_session_id");
+        }
+      }
+
+      await loadDashboard();
+    };
+
+    void restore();
   }, [loadDashboard]);
 
   useEffect(() => {
+    if (!eventSessionId) return;
     const controller = new AbortController();
-    
-    (async () => {
+    let cancelled = false;
+    let retryCount = 0;
+
+    const connect = async () => {
       try {
-        const res = await fetch(`${DASHBOARD_API_URL}/zero-prompt/events`, {
+        const res = await fetch(`${DASHBOARD_API_URL}/zero-prompt/events?session_id=${encodeURIComponent(eventSessionId)}`, {
           signal: controller.signal,
         });
-        if (!res.ok || !res.body) return;
+        if (!res.ok || !res.body) throw new Error(`SSE failed: ${res.status}`);
         setIsConnected(true);
-        
+        retryCount = 0;
+
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
         let buffer = "";
-        
+
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
           buffer += decoder.decode(value, { stream: true });
           const lines = buffer.split("\n");
           buffer = lines.pop() ?? "";
-          
+
           for (const line of lines) {
             const trimmed = line.trim();
             if (!trimmed.startsWith("data: ")) continue;
@@ -119,9 +205,16 @@ export function useZeroPrompt() {
               const data = JSON.parse(trimmed.slice(6));
 
               if (data.type === "snapshot") {
-                if (data.session_id) {
-                  setSession(data as ZPSession);
+                if (data.session_id && data.session_id === eventSessionId) {
+                  const normalized = normalizeSession(data as ZPSession & { session_id: string | null });
+                  if (normalized) {
+                    setSession(normalized);
+                  }
                 }
+                continue;
+              }
+
+              if (data.session_id && data.session_id !== eventSessionId) {
                 continue;
               }
 
@@ -129,35 +222,65 @@ export function useZeroPrompt() {
               const category = getActionCategory(rawType, data as Record<string, unknown>);
               const msg = formatEventMessage(data as Record<string, unknown>);
               if (msg && msg !== rawType) {
-                setActions(prev => [{
+                setActions((prev) => [{
                   type: category,
                   timestamp: new Date().toISOString(),
                   message: msg,
                 }, ...prev].slice(0, 300));
               }
 
-              if (rawType.includes("card") || rawType.includes("verdict") || rawType.includes("session") || rawType.includes("council")) {
+              if (rawType.includes("card") || rawType.includes("verdict") || rawType.includes("session") || rawType.includes("council") || rawType.includes("build")) {
                 await loadDashboard();
               }
-            } catch {}
+            } catch (err) {
+              if (process.env.NODE_ENV === "development") {
+                console.debug("[useZeroPrompt] Ignoring malformed SSE payload", err);
+              }
+            }
           }
+        }
+
+        if (!cancelled) {
+          throw new Error("SSE stream ended");
         }
       } catch (err) {
         if (err instanceof DOMException && err.name === "AbortError") return;
-      } finally {
-        setIsConnected(false);
+        if (!cancelled) {
+          setIsConnected(false);
+          retryCount += 1;
+          const delay = Math.min(1000 * 2 ** Math.min(retryCount, 5), 10000);
+          setTimeout(() => {
+            if (!cancelled) {
+              void connect();
+            }
+          }, delay);
+        }
       }
-    })();
-    
-    return () => controller.abort();
-  }, [loadDashboard]);
+    };
+
+    void connect();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+      setIsConnected(false);
+    };
+  }, [eventSessionId, loadDashboard]);
 
   const handleStartSession = async (goal?: number) => {
     setIsLoading(true);
     setError(null);
     try {
-      await startSession(goal);
-      await loadDashboard();
+      const started = await startSession(goal);
+      const normalized = normalizeSession(started);
+      if (normalized) {
+        setSession(normalized);
+        setEventSessionId(normalized.session_id);
+        if (typeof window !== "undefined") {
+          window.localStorage.setItem("zp_session_id", normalized.session_id);
+        }
+      }
+      setActions([]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to start");
     } finally {
@@ -190,6 +313,9 @@ export function useZeroPrompt() {
     try {
       await deleteCard(session.session_id, cardId);
       await loadDashboard();
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem("zp_session_id", session.session_id);
+      }
     } catch (err) {
       console.error("Failed to delete card", err);
     }
@@ -201,6 +327,7 @@ export function useZeroPrompt() {
     isConnected,
     isCompleted,
     isLoading,
+    hasLoadedDashboard,
     error,
     startSession: handleStartSession,
     restoreSession: loadDashboard,
