@@ -27,6 +27,9 @@ from agent.zero_prompt.schemas import ZPCard, ZPSession
 
 logger = logging.getLogger(__name__)
 
+_DEFAULT_TECH_STACK = "FastAPI + Next.js + PostgreSQL"
+_DEFAULT_ESTIMATED_DAYS = 3
+
 VerdictFn = Callable[[str, str, str], Awaitable[tuple[str, int, str, str]]]
 
 
@@ -320,6 +323,7 @@ class StreamingOrchestrator:
                 "card_id": card_id,
                 "status": "analyzing",
                 "analysis_step": "transcript",
+                "title": card.title,
                 "session_id": session_id,
             }
         )
@@ -637,10 +641,10 @@ class StreamingOrchestrator:
                     pass
 
                 mvp = card.mvp_proposal or {}
-                tech = mvp.get("tech_stack", "FastAPI + Next.js + PostgreSQL")
+                tech = mvp.get("tech_stack", _DEFAULT_TECH_STACK)
                 pages = mvp.get("key_pages", [])
                 app_name = mvp.get("app_name", card.title)
-                days = mvp.get("estimated_days", 3)
+                days = mvp.get("estimated_days", _DEFAULT_ESTIMATED_DAYS)
                 if tech and pages:
                     arch_msg = (
                         f"Architect: {app_name} maps cleanly to {len(pages)} screens "
