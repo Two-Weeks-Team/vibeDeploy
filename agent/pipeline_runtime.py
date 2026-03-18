@@ -169,6 +169,12 @@ def build_meeting_result(state: dict) -> dict:
             )
 
     deploy = state.get("deploy_result", {}) if isinstance(state.get("deploy_result"), dict) else {}
+    build_validation = state.get("build_validation") if isinstance(state.get("build_validation"), dict) else {}
+    runtime_validation = (
+        state.get("local_runtime_validation") if isinstance(state.get("local_runtime_validation"), dict) else {}
+    )
+    deploy_gate_result = state.get("deploy_gate_result") if isinstance(state.get("deploy_gate_result"), dict) else {}
+    code_eval_result = state.get("code_eval_result") if isinstance(state.get("code_eval_result"), dict) else {}
     deployment = {
         "repoUrl": deploy.get("github_repo", ""),
         "liveUrl": deploy.get("live_url", ""),
@@ -182,9 +188,25 @@ def build_meeting_result(state: dict) -> dict:
         "localFrontendUrl": deploy.get("local_frontend_url", ""),
     }
 
+    pipeline_succeeded = bool(
+        code_eval_result.get("passed")
+        and build_validation.get("passed")
+        and runtime_validation.get("passed")
+        and deploy_gate_result.get("passed")
+        and deploy.get("status") in {"local_running", "running", "deployed", "success"}
+    )
+
+    verdict = verdict_map.get(decision_raw, "NO-GO")
+    if pipeline_succeeded:
+        verdict = "GO"
+
+    score = scoring.get("final_score", 0)
+    if not score and isinstance(code_eval_result.get("match_rate"), (int, float)):
+        score = code_eval_result.get("match_rate", 0)
+
     return {
-        "score": scoring.get("final_score", 0),
-        "verdict": verdict_map.get(decision_raw, "NO-GO"),
+        "score": score,
+        "verdict": verdict,
         "selected_flagship": state.get("selected_flagship", ""),
         "analyses": analyses_list,
         "debates": debates_list,
