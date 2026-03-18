@@ -19,7 +19,10 @@ function formatEventMessage(data: Record<string, unknown>): string {
   if (type === "zp.compete.complete") return `Competition: ${data.competitors_found} found, saturation: ${data.saturation_level}`;
   if (type === "zp.verdict.go") return `✅ GO (score: ${data.score}) — ${data.reason}`;
   if (type === "zp.verdict.nogo") return `❌ NO-GO (score: ${data.score}) — ${data.reason}`;
-  if (type === "zp.session.complete") return `Session complete!`;
+  if (type === "zp.session.complete") return "Session complete!";
+  if (type === "zp.discovery.start") return "Searching for trending videos...";
+  if (type === "zp.discovery.grounding") return "Using Gemini AI to discover trending videos...";
+  if (type === "zp.discovery.complete") return `Found ${data.count} trending videos`;
   return type;
 }
 

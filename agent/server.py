@@ -1012,6 +1012,7 @@ async def zero_prompt_start(request: ZPStartRequest):
 
     async def event_stream() -> AsyncGenerator[str, None]:
         yield _fmt(ZP_SESSION_START, start_event)
+        yield _fmt("zp.discovery.start", {"type": "zp.discovery.start", "message": "Searching for trending videos..."})
 
         videos: list[tuple[str, str, str]] = []
 
@@ -1028,6 +1029,10 @@ async def zero_prompt_start(request: ZPStartRequest):
             logger.warning("[ZP] YouTube API failed: %s", str(exc)[:200])
 
         if not videos:
+            yield _fmt(
+                "zp.discovery.grounding",
+                {"type": "zp.discovery.grounding", "message": "Using Gemini AI to discover trending videos..."},
+            )
             try:
                 from .zero_prompt.grounding_discovery import discover_videos_via_grounding
 
@@ -1111,6 +1116,7 @@ async def zero_prompt_action(session_id: str, request: ZPActionRequest):
 
     if action == "queue_build":
         result = orch.queue_build(session_id, card_id)
+        asyncio.create_task(_trigger_zp_build(orch, session_id, card_id))
     elif action == "pass_card":
         result = orch.pass_card(session_id, card_id)
     elif action == "delete_card":
@@ -1131,6 +1137,41 @@ async def zero_prompt_action(session_id: str, request: ZPActionRequest):
         raise HTTPException(status_code=422, detail=result["error"])
 
     return result
+
+
+async def _trigger_zp_build(orch, session_id: str, card_id: str) -> None:
+    try:
+        session = orch.get_session(session_id)
+        if session is None:
+            return
+        card = next((c for c in session.cards if c.card_id == card_id), None)
+        if card is None:
+            return
+
+        card.status = "building"
+        idea_title = card.title or card.video_id
+
+        from .pipeline_runtime import stream_action_session
+
+        action_payload = {
+            "action": "evaluate",
+            "thread_id": f"zp-{card_id}",
+            "prompt": idea_title,
+            "skip_council": True,
+        }
+        async for _chunk in stream_action_session(action_payload):
+            pass
+
+        card.status = "deployed"
+        card.thread_id = f"zp-{card_id}"
+        logger.info("[ZP] Build completed for card %s: %s", card_id, idea_title)
+    except Exception:
+        logger.exception("[ZP] Build failed for card %s", card_id)
+        session = orch.get_session(session_id)
+        if session:
+            card = next((c for c in session.cards if c.card_id == card_id), None)
+            if card:
+                card.status = "build_failed"
 
 
 if __name__ == "__main__":

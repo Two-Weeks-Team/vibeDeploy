@@ -157,7 +157,7 @@ class StreamingOrchestrator:
             return []
 
         card_id = str(uuid.uuid4())
-        card = ZPCard(card_id=card_id, video_id=video_id, status="analyzing", score=0)
+        card = ZPCard(card_id=card_id, video_id=video_id, status="analyzing", score=0, title=video_title or video_id)
         session.cards.append(card)
         events: list[dict] = []
 
