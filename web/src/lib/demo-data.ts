@@ -13,17 +13,17 @@ export const DEMO_CARDS: ZPCard[] = [
     status: "analyzing",
     score: 0,
     domain: "Health & Nutrition",
-    video_summary: "Trainer Winny breaks down how to simplify nutrition without obsessive calorie counting. The video covers macro-based meal templates, free meal plan structures, and grocery shopping strategies that eliminate decision fatigue for fitness-focused users.",
+    video_summary: "Trainer Winny (474k subs, 10yr experience) explains how to simplify nutrition for muscle gain. Core method: calculate calories from body weight (15-17 cal/lb), split into macros (1g protein/lb, remaining into carbs/fats), build a 4-5 meal daily template. Includes free downloadable meal plan. Key message: simpler diets = longer adherence = better results.",
     insights: [
-      "Simplified macro tracking (protein/carb/fat ratios) removes the complexity barrier that causes 70% of nutrition app users to quit within 2 weeks",
-      "Auto-generated weekly meal plans based on user goals and dietary preferences eliminate daily decision fatigue",
-      "Integrated grocery list export from meal plans saves 45 minutes per week on shopping preparation",
+      "Body-weight-based calorie calculation (15-17 cal/lb) + simple macro split (1g protein/lb) eliminates the complexity that causes 70% of nutrition app users to quit in 2 weeks",
+      "Daily meal template with 4-5 fixed meals removes decision fatigue — the #1 reason people abandon diet plans according to the video",
+      "Free meal plan download model proves high demand — converting this into a SaaS with AI-personalized plans based on user goals/weight/preferences is a clear product-market fit",
     ],
     mvp_proposal: {
       app_name: "NutriPlan",
-      core_feature: "AI-powered simplified meal planning with macro tracking, auto-generated weekly plans, and grocery list export",
+      core_feature: "AI-personalized meal planning SaaS — input body weight and goal, get auto-generated daily meal templates with macro splits and grocery lists",
       tech_stack: "FastAPI + Next.js + PostgreSQL + OpenAI API",
-      key_pages: ["Meal Plan Dashboard", "Macro Calculator", "Grocery List", "Progress Tracker"],
+      key_pages: ["Onboarding (weight/goal input)", "Meal Plan Dashboard", "Macro Calculator", "Grocery List Export"],
       estimated_days: 5,
     },
   },
@@ -359,7 +359,7 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   },
   {
     time: 8500,
-    action: { type: "council", message: "Vibe Council evaluating NutriPlan — nutrition SaaS market analysis in parallel..." },
+    action: { type: "council", message: "Vibe Council evaluating NutriPlan — analyzing Trainer Winny's simplified nutrition method for SaaS potential..." },
   },
   {
     time: 10000,
@@ -367,7 +367,7 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   },
   {
     time: 10500,
-    action: { type: "council", message: "Architect: FastAPI + Next.js + PostgreSQL. OpenAI API for meal plan generation based on macro targets. Clean REST API for CRUD + AI endpoints." },
+    action: { type: "council", message: "Architect: FastAPI + Next.js + PostgreSQL. OpenAI API generates personalized meal plans from body weight × calorie multiplier → macro split. Clean REST API with /calculate, /generate-plan, /grocery-list endpoints." },
   },
   {
     time: 12000,
@@ -375,7 +375,7 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   },
   {
     time: 12500,
-    action: { type: "council", message: "Scout: Health & wellness app market at $7.8B. Simplified nutrition angle underserved — MyFitnessPal and Noom are complex. Clear gap for 'easy mode' meal planning." },
+    action: { type: "council", message: "Scout: Health & wellness app market at $7.8B. Video creator has 474k subs proving demand. MyFitnessPal/Noom are overcomplicated — clear gap for Trainer Winny's 'simplify everything' approach as a SaaS." },
   },
   {
     time: 14000,
@@ -383,7 +383,7 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   },
   {
     time: 14500,
-    action: { type: "council", message: "Catalyst: 'Simplified nutrition' is the killer hook — directly from the video. Macro-based templates eliminate calorie obsession. Grocery list auto-export drives daily utility." },
+    action: { type: "council", message: "Catalyst: 'The simpler the diet, the longer you stick with it' — directly from the video. Converting free PDF meal plans into AI-personalized SaaS is the monetization path. Grocery list export creates daily utility loop." },
   },
   {
     time: 16500,
