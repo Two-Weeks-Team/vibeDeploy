@@ -13,11 +13,11 @@ export const DEMO_CARDS: ZPCard[] = [
     status: "analyzing",
     score: 0,
     domain: "Health & Nutrition",
-    video_summary: "Trainer Winny (474k subs, 10yr experience) explains how to simplify nutrition for muscle gain. Core method: calculate calories from body weight (15-17 cal/lb), split into macros (1g protein/lb, remaining into carbs/fats), build a 4-5 meal daily template. Includes free downloadable meal plan. Key message: simpler diets = longer adherence = better results.",
+    video_summary: "Simplified nutrition method: calculate daily calories from body weight, split into protein/carb/fat macros, then auto-generate a 4-5 meal daily template. The approach eliminates calorie-counting obsession and replaces it with a repeatable system that users actually stick with.",
     insights: [
-      "Body-weight-based calorie calculation (15-17 cal/lb) + simple macro split (1g protein/lb) eliminates the complexity that causes 70% of nutrition app users to quit in 2 weeks",
-      "Daily meal template with 4-5 fixed meals removes decision fatigue — the #1 reason people abandon diet plans according to the video",
-      "Free meal plan download model proves high demand — converting this into a SaaS with AI-personalized plans based on user goals/weight/preferences is a clear product-market fit",
+      "Existing nutrition apps (MyFitnessPal, Noom) require manual food logging — an AI that auto-generates daily meal templates from a simple weight+goal input removes the #1 friction point",
+      "Meal plan adherence drops 70% after 2 weeks due to decision fatigue — fixed daily templates with variety rotation solves this at the product level",
+      "Grocery list auto-generation from weekly meal plans creates daily utility and a natural upgrade path from free (1 plan) to paid (unlimited + AI customization)",
     ],
     mvp_proposal: {
       app_name: "NutriPlan",
@@ -359,7 +359,7 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   },
   {
     time: 8500,
-    action: { type: "council", message: "Vibe Council evaluating NutriPlan — analyzing Trainer Winny's simplified nutrition method for SaaS potential..." },
+    action: { type: "council", message: "Vibe Council evaluating NutriPlan — simplified meal planning SaaS, market fit analysis in parallel..." },
   },
   {
     time: 10000,
@@ -367,7 +367,7 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   },
   {
     time: 10500,
-    action: { type: "council", message: "Architect: FastAPI + Next.js + PostgreSQL. OpenAI API generates personalized meal plans from body weight × calorie multiplier → macro split. Clean REST API with /calculate, /generate-plan, /grocery-list endpoints." },
+    action: { type: "council", message: "Architect: Three-endpoint API design — /calculate (macro targets from weight+goal), /generate-plan (AI meal template), /grocery-list (auto-aggregated shopping list). FastAPI + PostgreSQL + OpenAI. Clean separation." },
   },
   {
     time: 12000,
@@ -375,7 +375,7 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   },
   {
     time: 12500,
-    action: { type: "council", message: "Scout: Health & wellness app market at $7.8B. Video creator has 474k subs proving demand. MyFitnessPal/Noom are overcomplicated — clear gap for Trainer Winny's 'simplify everything' approach as a SaaS." },
+    action: { type: "council", message: "Scout: Health & wellness app market at $7.8B but dominated by complex calorie-counting tools. 'Simplified meal planning' is an underserved niche — no major player owns the 'just tell me what to eat' positioning." },
   },
   {
     time: 14000,
@@ -383,7 +383,7 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   },
   {
     time: 14500,
-    action: { type: "council", message: "Catalyst: 'The simpler the diet, the longer you stick with it' — directly from the video. Converting free PDF meal plans into AI-personalized SaaS is the monetization path. Grocery list export creates daily utility loop." },
+    action: { type: "council", message: "Catalyst: The killer insight is 'simplicity = adherence'. Users don't need more nutrition data — they need fewer choices. AI-generated fixed daily templates with one-tap grocery export is the feature that drives retention." },
   },
   {
     time: 16500,
