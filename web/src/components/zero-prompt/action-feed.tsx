@@ -25,11 +25,12 @@ export function ActionFeed({ actions }: ActionFeedProps) {
   });
   const filteredCount = filteredActions.length;
 
+  const actionCount = filteredActions.length;
   useEffect(() => {
-    if (autoScroll && scrollRef.current) {
+    if (actionCount > 0 && autoScroll && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  });
+  }, [actionCount, autoScroll]);
 
   const handleScroll = () => {
     if (!scrollRef.current) return;
