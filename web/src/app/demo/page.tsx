@@ -196,6 +196,7 @@ export default function DemoPage() {
               onPassCard={passCard}
               onDeleteCard={deleteCard}
               onReExplore={reExplore}
+              autoCloseMs={5000}
             />
             <ActionFeed actions={actions} />
           </div>

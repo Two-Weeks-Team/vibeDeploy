@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { ZPCard, CardStatus } from "@/types/zero-prompt";
 import { KanbanColumn } from "./kanban-column";
 import { CardDetailModal } from "./card-detail-modal";
@@ -11,6 +11,7 @@ interface KanbanBoardProps {
   onPassCard: (cardId: string) => void;
   onDeleteCard?: (cardId: string) => void;
   onReExplore?: (cardId: string) => void;
+  autoCloseMs?: number;
 }
 
 const COLUMNS: { id: string; title: string; statuses: CardStatus[] }[] = [
@@ -21,8 +22,14 @@ const COLUMNS: { id: string; title: string; statuses: CardStatus[] }[] = [
   { id: "nogo", title: "NO-GO / Passed", statuses: ["nogo", "passed", "build_failed"] },
 ];
 
-export function KanbanBoard({ cards, onQueueBuild, onPassCard, onDeleteCard, onReExplore }: KanbanBoardProps) {
+export function KanbanBoard({ cards, onQueueBuild, onPassCard, onDeleteCard, onReExplore, autoCloseMs }: KanbanBoardProps) {
   const [selectedCard, setSelectedCard] = useState<ZPCard | null>(null);
+
+  useEffect(() => {
+    if (!selectedCard || !autoCloseMs) return;
+    const timer = setTimeout(() => setSelectedCard(null), autoCloseMs);
+    return () => clearTimeout(timer);
+  }, [selectedCard, autoCloseMs]);
 
   return (
     <>

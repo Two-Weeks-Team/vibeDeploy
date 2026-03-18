@@ -3,7 +3,7 @@ import type { ZPCard, ZPSession, ZPAction } from "@/types/zero-prompt";
 export const DEMO_SPEED_MULTIPLIER = 8;
 
 // ── 13 Demo Cards ─────────────────────────────────────────────────────────────
-// Cards 1-10 → GO (go_ready), Card 11 → stays analyzing, Card 12 → NO-GO, Card 13 → stays analyzing
+// Cards 1, 2, 4, 5, 6, 9 → GO (go_ready), Cards 3, 7, 8, 10, 12 → NO-GO, Cards 11, 13 → stays analyzing
 
 export const DEMO_CARDS: ZPCard[] = [
   {
@@ -68,6 +68,8 @@ export const DEMO_CARDS: ZPCard[] = [
       key_pages: ["Pet Profile", "Symptom Checker", "Health Timeline", "Vet Finder"],
       estimated_days: 5,
     },
+    reason: "Veterinary liability risk too high. Medical-adjacent claims without professional oversight expose the platform to lawsuits. Regulatory pathway unclear.",
+    reason_code: "liability_risk",
   },
   {
     card_id: "studymate-060111",
@@ -152,6 +154,8 @@ export const DEMO_CARDS: ZPCard[] = [
       key_pages: ["Weekly Planner", "Recipe Browser", "Grocery List", "Dietary Preferences"],
       estimated_days: 5,
     },
+    reason: "Commodity market with zero defensibility. Recipe APIs are freely available. No meaningful AI differentiation over existing meal planning apps.",
+    reason_code: "no_moat",
   },
   {
     card_id: "parkspot-771500",
@@ -173,6 +177,8 @@ export const DEMO_CARDS: ZPCard[] = [
       key_pages: ["Parking Map", "Spot Detail", "Navigation", "Saved Locations"],
       estimated_days: 6,
     },
+    reason: "Requires massive real-time parking sensor data infrastructure. City partnership dependency creates unsustainable go-to-market timeline for MVP.",
+    reason_code: "infra_dependency",
   },
   {
     card_id: "plantpal-881600",
@@ -215,6 +221,8 @@ export const DEMO_CARDS: ZPCard[] = [
       key_pages: ["Sound Mixer", "Focus Timer", "Session History", "Sound Library"],
       estimated_days: 3,
     },
+    reason: "Pure content play with no technical moat. Existing apps (Calm, Noisli, Brain.fm) have years of content libraries. Late entry with no differentiation.",
+    reason_code: "saturated_market",
   },
   {
     card_id: "routeopt-102800",
@@ -299,32 +307,36 @@ export type DemoTimelineEvent = {
 // ══════════════════════════════════════════════════════════════════════════════
 // TIMELINE DESIGN
 //
-// PHASE 1 (4000ms → ~89000ms): Discovery & GO Accumulation
-//   - 10 cards discover → analyze → go_ready, spaced ~8s apart
-//   - Card 11 (RouteOpt) discovers but stays at analyzing
-//   - Card 12 (CryptoFomo) discovers and gets NO-GO at score 42.0
-//   - Card 13 (WeatherAI) discovers but stays at analyzing
-//   - CRITICAL: NO build_queued events fire until all 10 GO cards are accumulated
+// PHASE 1 (4000ms → ~88500ms): Discovery & Verdict (GO/NO-GO per card)
+//   - 13 cards discover at ~8s intervals
+//   - Cards 1, 2, 4, 5, 6, 9 → GO (go_ready) — [counter N/4]
+//   - Cards 3, 7, 8, 10 → NO-GO (liability/moat/infra/saturation)
+//   - Card 11 (RouteOpt) discovers, stays analyzing
+//   - Card 12 (CryptoFomo) discovers, gets NO-GO at score 42.0
+//   - Card 13 (WeatherAI) discovers, stays analyzing
+//   - BUILD TRIGGERED after 4th GO (FitQuest @48500ms)
 //
-// PHASE 2 (99000ms → 200000ms): Auto-Build Processing
-//   - 10 cards queued; process one by one: go_ready → build_queued → building → deployed
-//   - Cards 5-10 remain in go_ready (visible queue) while cards 1-4 build
-//   - Each build cycle ~22 seconds with detailed sub-steps
-//   - Session never completes — exploration continues
+// PHASE 2 (50000ms → 92000ms): Auto-Build (runs in parallel with Phase 1 tail)
+//   - QueueBite: build_queued → code_gen → validate → github → deploy → deployed
+//   - SpendSense: same cycle
+//   - StudyMate, FitQuest, BookSwap, PlantPal stay in go_ready
+//
+// PHASE 3 (95000ms → 200000ms): Continued Exploration
+//   - RouteOpt and WeatherAI continue analysis
+//   - New YouTube searches fill action feed
 //
 // Card discovery times: D_N = 6500 + (N-1) × 8000ms
 // D1=6500, D2=14500, D3=22500, D4=30500, D5=38500, D6=46500,
 // D7=54500, D8=62500, D9=70500, D10=78500
 // Verdicts: V_N = D_N + 10000ms
-// V1=16500, V2=24500, V3=32500, V4=40500, V5=48500, V6=56500,
-// V7=64500, V8=72500, V9=80500, V10=88500 ← 10th GO card at 88.5s!
+// GO counter: [N/4] — build triggers at 4th GO (FitQuest, V5=48500ms)
 // ══════════════════════════════════════════════════════════════════════════════
 
 export const DEMO_TIMELINE: DemoTimelineEvent[] = [
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // PHASE 1 — Discovery & GO Accumulation
-  // All 10 GO cards reach go_ready BEFORE any build_queued event fires.
+  // PHASE 1 — Discovery & Verdict (GO/NO-GO per card)
+  // Build triggers after 4th GO card (FitQuest @48500ms) — runs in parallel.
   // ═══════════════════════════════════════════════════════════════════════════
 
   // ── Card 1: QueueBite (discover @6500, verdict @16500) ────────────────────
@@ -376,7 +388,7 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   {
     time: 16500,
     cardUpdate: { card_id: "queuebite-784480", status: "go_ready", score: 78.5, domain: "Restaurant Tech" },
-    action: { type: "verdict", message: "QueueBite scored 78.5 → GO — added to build queue [1/10]" },
+    action: { type: "verdict", message: "QueueBite scored 78.5 → GO — added to build queue [1/4]" },
   },
 
   // ── Card 2: SpendSense AI (discover @14500, verdict @24500) ──────────────
@@ -428,7 +440,7 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   {
     time: 24500,
     cardUpdate: { card_id: "spendsense-784610", status: "go_ready", score: 81.2, domain: "Personal Finance" },
-    action: { type: "verdict", message: "SpendSense AI scored 81.2 → GO — top score so far [2/10]" },
+    action: { type: "verdict", message: "SpendSense AI scored 81.2 → GO — top score so far [2/4]" },
   },
 
   // ── Card 3: PawPulse (discover @22500, verdict @32500) ───────────────────
@@ -451,7 +463,7 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   },
   {
     time: 24500,
-    action: { type: "council", message: "Vibe Council evaluating PawPulse — pet tech market analysis in progress..." },
+    action: { type: "council", message: "Vibe Council evaluating PawPulse — red flags emerging in medical-adjacent AI space..." },
   },
   {
     time: 26000,
@@ -459,7 +471,7 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   },
   {
     time: 26500,
-    action: { type: "council", message: "Scout: Pet tech booming post-pandemic — 2.5M new pet owners in 2024. Gen Z drives 40% of pet spending. Strong tailwind for the next 3 years." },
+    action: { type: "council", message: "Guardian: CRITICAL — AI veterinary advice without licensed professional oversight creates direct malpractice exposure. No disclaimer UX can mitigate lawsuit risk at scale." },
   },
   {
     time: 28000,
@@ -467,7 +479,7 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   },
   {
     time: 28500,
-    action: { type: "council", message: "Guardian: Medical-adjacent app requires clear disclaimers. 'This is not a replacement for vet visits' must be prominent — liability risk is manageable with proper UX copy." },
+    action: { type: "council", message: "Scout: FDA's Digital Health Center flagged similar AI symptom apps in 2025. Regulatory pathway requires 18-24 month approval process. MVP timeline is impossible under current rules." },
   },
   {
     time: 30000,
@@ -475,12 +487,18 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   },
   {
     time: 30500,
-    action: { type: "council", message: "Catalyst: AI symptom checker that saves unnecessary vet trips has massive emotional value. Anxiety reduction for worried pet owners = strong retention driver." },
+    action: { type: "council", message: "Advocate: Users in distress will trust AI diagnosis over seeking real vet care. This creates direct harm responsibility — even prominent disclaimers cannot eliminate this risk." },
   },
   {
     time: 32500,
-    cardUpdate: { card_id: "pawpulse-784798", status: "go_ready", score: 75.8, domain: "Pet Health" },
-    action: { type: "verdict", message: "PawPulse scored 75.8 → GO — council approved [3/10]" },
+    cardUpdate: {
+      card_id: "pawpulse-784798",
+      status: "nogo",
+      score: 45,
+      reason: "Veterinary liability risk too high. Medical-adjacent claims without professional oversight expose the platform to lawsuits. Regulatory pathway unclear.",
+      reason_code: "liability_risk",
+    },
+    action: { type: "verdict", message: "PawPulse scored 45 → NO-GO — veterinary liability risk too high, regulatory pathway unclear without licensed professional oversight" },
   },
 
   // ── Card 4: StudyMate Lite (discover @30500, verdict @40500) ─────────────
@@ -532,7 +550,7 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   {
     time: 40500,
     cardUpdate: { card_id: "studymate-060111", status: "go_ready", score: 75.0, domain: "EdTech" },
-    action: { type: "verdict", message: "StudyMate Lite scored 75.0 → GO — council approved [4/10]" },
+    action: { type: "verdict", message: "StudyMate Lite scored 75.0 → GO — council approved [3/4]" },
   },
 
   // ── Card 5: FitQuest (discover @38500, verdict @48500) ───────────────────
@@ -584,7 +602,7 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   {
     time: 48500,
     cardUpdate: { card_id: "fitquest-441200", status: "go_ready", score: 77.3, domain: "Fitness" },
-    action: { type: "verdict", message: "FitQuest scored 77.3 → GO — council approved [5/10]" },
+    action: { type: "verdict", message: "FitQuest scored 77.3 → GO — [4/4] threshold reached! Auto-build sequence triggered for all queued GO cards." },
   },
 
   // ── Card 6: BookSwap (discover @46500, verdict @56500) ───────────────────
@@ -636,7 +654,7 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   {
     time: 56500,
     cardUpdate: { card_id: "bookswap-551300", status: "go_ready", score: 73.5, domain: "Community" },
-    action: { type: "verdict", message: "BookSwap scored 73.5 → GO — council approved [6/10]" },
+    action: { type: "verdict", message: "BookSwap scored 73.5 → GO — added to go_ready [5]" },
   },
 
   // ── Card 7: MealPrep AI (discover @54500, verdict @64500) ────────────────
@@ -659,7 +677,7 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   },
   {
     time: 56500,
-    action: { type: "council", message: "Vibe Council evaluating MealPrep AI — food tech market scan in progress..." },
+    action: { type: "council", message: "Vibe Council evaluating MealPrep AI — commodity market defensibility analysis..." },
   },
   {
     time: 58000,
@@ -667,7 +685,7 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   },
   {
     time: 58500,
-    action: { type: "council", message: "Architect: Spoonacular or Edamam API handles recipe data. Nutrition calculation + grocery list export covers the complete user journey from plan to store." },
+    action: { type: "council", message: "Scout: Spoonacular, Edamam, TheMealDB — recipe APIs are freely available to any competitor. Any dev can replicate this in 2 weeks. Zero data defensibility." },
   },
   {
     time: 60000,
@@ -675,7 +693,7 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   },
   {
     time: 60500,
-    action: { type: "council", message: "Catalyst: AI meal planning eliminates the daily 'what's for dinner' decision fatigue. Weekly plan → consolidated grocery list → actual behavior change = proven retention loop." },
+    action: { type: "council", message: "Catalyst: No meaningful AI differentiation here. Mealime, Paprika, Plan to Eat — 10+ established apps with dedicated teams already own this space. We bring nothing new." },
   },
   {
     time: 62000,
@@ -683,12 +701,18 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   },
   {
     time: 62500,
-    action: { type: "council", message: "Guardian: Food allergy handling requires extreme care. Dietary advice disclaimer is legally required. Risk is low with proper UX copy and explicit allergy filter setup." },
+    action: { type: "council", message: "Guardian: Recipe API dependency means we have no moat, no proprietary data, and no switching costs. Any competitor with a better UX immediately captures our users." },
   },
   {
     time: 64500,
-    cardUpdate: { card_id: "mealprep-661400", status: "go_ready", score: 76.2, domain: "Food Tech" },
-    action: { type: "verdict", message: "MealPrep AI scored 76.2 → GO — council approved [7/10]" },
+    cardUpdate: {
+      card_id: "mealprep-661400",
+      status: "nogo",
+      score: 38,
+      reason: "Commodity market with zero defensibility. Recipe APIs are freely available. No meaningful AI differentiation over existing meal planning apps.",
+      reason_code: "no_moat",
+    },
+    action: { type: "verdict", message: "MealPrep AI scored 38 → NO-GO — commodity market, freely available APIs, no AI moat over established competitors" },
   },
 
   // ── Card 8: ParkSpot (discover @62500, verdict @72500) ───────────────────
@@ -711,7 +735,7 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   },
   {
     time: 64500,
-    action: { type: "council", message: "Vibe Council evaluating ParkSpot — urban mobility market assessment..." },
+    action: { type: "council", message: "Vibe Council evaluating ParkSpot — infrastructure dependency analysis underway..." },
   },
   {
     time: 66000,
@@ -719,7 +743,7 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   },
   {
     time: 66500,
-    action: { type: "council", message: "Scout: Parking frustration is a universal urban pain point. Strong TAM in metro areas — 1B+ parking searches per year globally. City partnerships could be the moat." },
+    action: { type: "council", message: "Guardian: City sensor data partnerships require 12-24 month procurement cycles. Without existing city API access, real-time availability data simply does not exist for an MVP." },
   },
   {
     time: 68000,
@@ -727,7 +751,7 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   },
   {
     time: 68500,
-    action: { type: "council", message: "Catalyst: AI prediction of spot availability before you arrive is the killer feature — saves fuel, eliminates circling stress, and creates genuine habitual usage." },
+    action: { type: "council", message: "Scout: SpotHero, ParkWhiz, and Google Maps already have real-time parking data with city partnerships. Without sensor infrastructure we are just an inferior information aggregator." },
   },
   {
     time: 70000,
@@ -735,12 +759,18 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   },
   {
     time: 70500,
-    action: { type: "council", message: "Advocate: One-tap 'Navigate to spot' UX is critical. Overcrowding the interface with too many options kills adoption. Ruthless simplicity wins here." },
+    action: { type: "council", message: "Architect: Real-time parking availability requires hardware partnerships or city API contracts — neither achievable in MVP timeline. The core value proposition is blocked by infrastructure." },
   },
   {
     time: 72500,
-    cardUpdate: { card_id: "parkspot-771500", status: "go_ready", score: 79.1, domain: "Urban Mobility" },
-    action: { type: "verdict", message: "ParkSpot scored 79.1 → GO — council approved [8/10]" },
+    cardUpdate: {
+      card_id: "parkspot-771500",
+      status: "nogo",
+      score: 41,
+      reason: "Requires massive real-time parking sensor data infrastructure. City partnership dependency creates unsustainable go-to-market timeline for MVP.",
+      reason_code: "infra_dependency",
+    },
+    action: { type: "verdict", message: "ParkSpot scored 41 → NO-GO — city sensor infrastructure dependency makes MVP impossible without 12-24 month partnership pre-work" },
   },
 
   // ── Card 9: PlantPal (discover @70500, verdict @80500) ───────────────────
@@ -792,7 +822,7 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   {
     time: 80500,
     cardUpdate: { card_id: "plantpal-881600", status: "go_ready", score: 82.4, domain: "Plant Care" },
-    action: { type: "verdict", message: "PlantPal scored 82.4 → GO — highest score yet! Council unanimously enthusiastic. [9/10]" },
+    action: { type: "verdict", message: "PlantPal scored 82.4 → GO — highest score yet! Council unanimously enthusiastic. Added to go_ready [6]" },
   },
 
   // ── Card 10: Soundscape (discover @78500, verdict @88500) ────────────────
@@ -815,7 +845,7 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   },
   {
     time: 80500,
-    action: { type: "council", message: "Vibe Council evaluating Soundscape — focus productivity tool market research underway..." },
+    action: { type: "council", message: "Vibe Council evaluating Soundscape — competitive saturation check in focus audio market..." },
   },
   {
     time: 82000,
@@ -823,7 +853,7 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   },
   {
     time: 82500,
-    action: { type: "council", message: "Architect: Web Audio API enables real-time multi-layer sound mixing entirely in-browser. Pure frontend MVP is fully viable — no backend required for v1." },
+    action: { type: "council", message: "Scout: Calm has $2B valuation with years of content, Noisli has 8 years of library, Brain.fm has neuroscience validation — these are entrenched players with insurmountable content moats." },
   },
   {
     time: 84000,
@@ -831,7 +861,7 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   },
   {
     time: 84500,
-    action: { type: "council", message: "Catalyst: AI-adaptive soundscapes that evolve based on user work rhythm and time-of-day patterns is genuinely next-level. Science-backed binaural beats add authority." },
+    action: { type: "council", message: "Catalyst: Web Audio API mixing is trivially replicable — any developer can fork this in a weekend. No technical moat, no content moat, no behavioral data moat. Nothing defensible." },
   },
   {
     time: 86000,
@@ -839,12 +869,18 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   },
   {
     time: 86500,
-    action: { type: "council", message: "Advocate: 'Science-backed focus boost' positioning is compelling and trustworthy. Proven productivity benefits from nature sounds + binaural beats. Strong retention hook." },
+    action: { type: "council", message: "Guardian: Binaural beats health benefit claims require peer-reviewed validation specific to our implementation. General neuroscience studies do not cover custom implementations — legal exposure." },
   },
   {
     time: 88500,
-    cardUpdate: { card_id: "soundscape-991700", status: "go_ready", score: 77.8, domain: "Productivity" },
-    action: { type: "verdict", message: "Soundscape scored 77.8 → GO — 10 cards now in GO queue! Auto-build sequence triggered. [10/10]" },
+    cardUpdate: {
+      card_id: "soundscape-991700",
+      status: "nogo",
+      score: 44,
+      reason: "Pure content play with no technical moat. Existing apps (Calm, Noisli, Brain.fm) have years of content libraries. Late entry with no differentiation.",
+      reason_code: "saturated_market",
+    },
+    action: { type: "verdict", message: "Soundscape scored 44 → NO-GO — pure content play, no technical moat, late entry against entrenched players with years of content libraries" },
   },
 
   // ── Card 11: RouteOpt (discover @86500, stays analyzing) ─────────────────
@@ -952,236 +988,308 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   },
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // PHASE 2 — Auto-Build Processing (99000ms → 200000ms)
+  // PHASE 2 — Auto-Build Processing (50000ms → 92000ms, parallel with Phase 1)
   //
-  // All 10 GO cards are now queued. Processing one by one.
-  // Cards 5-10 remain visible in go_ready while cards 1-4 build and deploy.
-  // Each build cycle: build_queued → building → deployed (~22 seconds)
+  // Build triggered by 4th GO card (FitQuest @48500ms).
+  // QueueBite and SpendSense build and deploy; StudyMate, FitQuest, BookSwap,
+  // PlantPal remain in go_ready showing the queue continues.
+  // Each build cycle: build_queued → building → deployed (~20 seconds)
   // ═══════════════════════════════════════════════════════════════════════════
 
-  // ── Build 1: QueueBite (queued @99000, deployed @119000) ─────────────────
+  // ── Build 1: QueueBite (queued @50000, deployed @70000) ──────────────────
   {
-    time: 99000,
+    time: 50000,
     cardUpdate: { card_id: "queuebite-784480", status: "build_queued" },
     action: { type: "build", message: "Generating PRD and technical specification for QueueBite..." },
   },
   {
-    time: 102000,
+    time: 53000,
     action: { type: "build", message: "PRD complete — 2,400 words, 8 user stories defined" },
   },
   {
-    time: 104000,
+    time: 55000,
     cardUpdate: { card_id: "queuebite-784480", status: "building", build_step: "code_gen" },
     action: { type: "build", message: "Blueprint: 14 files planned — FastAPI backend + Next.js frontend + PostgreSQL queue schema" },
   },
   {
-    time: 106500,
+    time: 57500,
     action: { type: "build", message: "Code generation in progress — FastAPI WebSocket queue events + PostgreSQL models..." },
   },
   {
-    time: 108000,
+    time: 59000,
     cardUpdate: { card_id: "queuebite-784480", status: "building", build_step: "validate" },
   },
   {
-    time: 109500,
+    time: 60500,
     action: { type: "build", message: "Generated 14 files — code evaluation passed (quality score 87/100)" },
   },
   {
-    time: 112500,
+    time: 63500,
     action: { type: "build", message: "Docker build succeeded — image size 245MB" },
   },
   {
-    time: 113000,
+    time: 64000,
     cardUpdate: { card_id: "queuebite-784480", status: "building", build_step: "github" },
   },
   {
-    time: 114500,
+    time: 65500,
     action: { type: "deploy", message: "Pushing to GitHub..." },
   },
   {
-    time: 116500,
+    time: 67500,
     action: { type: "deploy", message: "CI tests passed (12/12) — deploying to DO App Platform..." },
   },
   {
-    time: 117000,
+    time: 68000,
     cardUpdate: { card_id: "queuebite-784480", status: "building", build_step: "deploy" },
   },
   {
-    time: 119000,
+    time: 70000,
     cardUpdate: { card_id: "queuebite-784480", status: "deployed" },
     action: { type: "deploy", message: "QueueBite deployed → https://queuebite-784480.ondigitalocean.app" },
   },
 
-  // ── Build 2: SpendSense AI (queued @121000, deployed @141000) ────────────
+  // ── Build 2: SpendSense AI (queued @72000, deployed @92000) ──────────────
   {
-    time: 121000,
+    time: 72000,
     cardUpdate: { card_id: "spendsense-784610", status: "build_queued" },
     action: { type: "build", message: "Generating PRD and technical specification for SpendSense AI..." },
   },
   {
-    time: 124000,
+    time: 75000,
     action: { type: "build", message: "PRD complete — 2,800 words, 12 user stories defined" },
   },
   {
-    time: 126000,
+    time: 77000,
     cardUpdate: { card_id: "spendsense-784610", status: "building", build_step: "code_gen" },
     action: { type: "build", message: "Blueprint: 16 files planned — complex finance data models + Plaid-ready transaction API layer" },
   },
   {
-    time: 128500,
+    time: 79500,
     action: { type: "build", message: "Code generation in progress — FastAPI transaction categorization ML layer + Recharts spend visualizations..." },
   },
   {
-    time: 130000,
+    time: 81000,
     cardUpdate: { card_id: "spendsense-784610", status: "building", build_step: "validate" },
   },
   {
-    time: 131500,
+    time: 82500,
     action: { type: "build", message: "Generated 16 files — code evaluation passed (quality score 91/100)" },
   },
   {
-    time: 134500,
+    time: 85500,
     action: { type: "build", message: "Docker build succeeded — image size 267MB" },
   },
   {
-    time: 135000,
+    time: 86000,
     cardUpdate: { card_id: "spendsense-784610", status: "building", build_step: "github" },
   },
   {
-    time: 136500,
+    time: 87500,
     action: { type: "deploy", message: "Pushing to GitHub..." },
   },
   {
-    time: 138500,
+    time: 89500,
     action: { type: "deploy", message: "CI tests passed (14/14) — deploying to DO App Platform..." },
   },
   {
-    time: 139000,
+    time: 90000,
     cardUpdate: { card_id: "spendsense-784610", status: "building", build_step: "deploy" },
   },
   {
-    time: 141000,
+    time: 92000,
     cardUpdate: { card_id: "spendsense-784610", status: "deployed" },
     action: { type: "deploy", message: "SpendSense AI deployed → https://spendsense-784610.ondigitalocean.app" },
   },
 
-  // ── Build 3: PawPulse (queued @143000, deployed @163000) ─────────────────
+  // ═══════════════════════════════════════════════════════════════════════════
+  // PHASE 3 — Continued Exploration (95000ms → 200000ms)
+  //
+  // QueueBite and SpendSense deployed. 4 GO apps in go_ready (StudyMate,
+  // FitQuest, BookSwap, PlantPal). RouteOpt and WeatherAI continue analysis.
+  // New YouTube searches and action feed activity through 200s.
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  {
+    time: 95000,
+    action: { type: "build", message: "2 apps deployed. 4 GO cards queued — StudyMate Lite, FitQuest, BookSwap, PlantPal — auto-build continues..." },
+  },
+
+  // RouteOpt analysis continues
+  {
+    time: 100000,
+    cardUpdate: { card_id: "routeopt-102800", status: "analyzing", analysis_step: "papers", papers_found: 4 },
+  },
+  {
+    time: 101000,
+    action: { type: "council", message: "Vibe Council evaluating RouteOpt — OR-Tools integration complexity and logistics market feasibility..." },
+  },
+  {
+    time: 103000,
+    cardUpdate: { card_id: "routeopt-102800", status: "analyzing", analysis_step: "brainstorm" },
+  },
+  {
+    time: 104000,
+    action: { type: "council", message: "Architect: OR-Tools VRP solver integration is complex but well-documented. Real-time traffic via Google Maps Distance Matrix API adds meaningful cost per route query." },
+  },
+  {
+    time: 106000,
+    cardUpdate: { card_id: "routeopt-102800", status: "analyzing", analysis_step: "compete", competitors_found: "6", saturation: "medium" },
+  },
+  {
+    time: 107000,
+    action: { type: "council", message: "Scout: Route4Me, OptimoRoute, Circuit — enterprise logistics players. SMB segment is underserved but requires deep sales motion. Market is real but complex to penetrate." },
+  },
+
+  // WeatherAI analysis continues
+  {
+    time: 110000,
+    cardUpdate: { card_id: "weatherai-113900", status: "analyzing", analysis_step: "papers", papers_found: 5 },
+  },
+  {
+    time: 111000,
+    action: { type: "council", message: "Vibe Council evaluating WeatherAI — crowdsourced sensor data cold-start problem analysis..." },
+  },
+  {
+    time: 113000,
+    cardUpdate: { card_id: "weatherai-113900", status: "analyzing", analysis_step: "brainstorm" },
+  },
+  {
+    time: 114000,
+    action: { type: "council", message: "Guardian: Crowdsourced sensor network has a critical 6-month cold-start problem — no data → no users → no data. Requires subsidized sensor hardware distribution to launch." },
+  },
+  {
+    time: 116000,
+    cardUpdate: { card_id: "weatherai-113900", status: "analyzing", analysis_step: "compete", competitors_found: "3", saturation: "low" },
+  },
+  {
+    time: 117000,
+    action: { type: "council", message: "Scout: Tomorrow.io and ClimaCell already offer neighborhood-level precision with $100M+ funding. Hyperlocal weather has massive data infrastructure costs that dwarf MVP budgets." },
+  },
+
+  // New exploration activity
+  {
+    time: 120000,
+    action: { type: "explore", message: "YouTube search: 'ai scheduling assistant calendar management automation 2026' — found 9 results" },
+  },
+  {
+    time: 122000,
+    action: { type: "explore", message: "Analyzing new opportunity — AI meeting intelligence angle with automated scheduling..." },
+  },
+  {
+    time: 125000,
+    action: { type: "explore", message: "YouTube search: 'ai contract analysis legal tech startup saas b2b 2026' — found 7 results" },
+  },
+  {
+    time: 127000,
+    action: { type: "explore", message: "Scanning high-engagement creator content — legal AI space growing rapidly..." },
+  },
+  {
+    time: 130000,
+    action: { type: "explore", message: "YouTube search: 'social commerce live shopping integration creator monetization app' — found 14 results" },
+  },
+  {
+    time: 133000,
+    action: { type: "explore", message: "Analyzing video — live shopping creator tools concept..." },
+  },
+  {
+    time: 136000,
+    action: { type: "explore", message: "YouTube search: 'ai resume builder ats optimization job application automation 2026' — found 11 results" },
+  },
+  {
+    time: 138000,
+    action: { type: "explore", message: "Evaluating candidate — ATS optimization has strong demand signal but competitive space..." },
+  },
+  {
+    time: 141000,
+    action: { type: "explore", message: "YouTube search: 'micro saas niche b2b tool automation no-code startup idea' — found 16 results" },
+  },
   {
     time: 143000,
-    cardUpdate: { card_id: "pawpulse-784798", status: "build_queued" },
-    action: { type: "build", message: "Generating PRD and technical specification for PawPulse..." },
+    action: { type: "explore", message: "Scanning micro-SaaS opportunities — workflow automation niche emerging..." },
   },
   {
     time: 146000,
-    action: { type: "build", message: "PRD complete — 2,200 words, 7 user stories defined" },
+    action: { type: "build", message: "Build queue active — 4 GO apps awaiting: StudyMate Lite, FitQuest, BookSwap, PlantPal" },
   },
   {
-    time: 148000,
-    cardUpdate: { card_id: "pawpulse-784798", status: "building", build_step: "code_gen" },
-    action: { type: "build", message: "Blueprint: 13 files planned — veterinary knowledge base integration + symptom matching algorithm" },
-  },
-  {
-    time: 150500,
-    action: { type: "build", message: "Code generation in progress — FastAPI symptom checker + Next.js pet profile management + health timeline..." },
+    time: 150000,
+    action: { type: "explore", message: "YouTube search: 'hyperlocal delivery last mile logistics optimization startup 2026' — found 8 results" },
   },
   {
     time: 152000,
-    cardUpdate: { card_id: "pawpulse-784798", status: "building", build_step: "validate" },
+    action: { type: "explore", message: "Analyzing opportunity — last-mile delivery space, RouteOpt comparison..." },
   },
   {
-    time: 153500,
-    action: { type: "build", message: "Generated 13 files — code evaluation passed (quality score 84/100)" },
-  },
-  {
-    time: 156500,
-    action: { type: "build", message: "Docker build succeeded — image size 238MB" },
+    time: 155000,
+    action: { type: "explore", message: "YouTube search: 'ai code review pull request automation developer tools github 2026' — found 12 results" },
   },
   {
     time: 157000,
-    cardUpdate: { card_id: "pawpulse-784798", status: "building", build_step: "github" },
+    action: { type: "explore", message: "High-signal candidate — developer tooling shows strong market traction..." },
   },
   {
-    time: 158500,
-    action: { type: "deploy", message: "Pushing to GitHub..." },
+    time: 160000,
+    action: { type: "explore", message: "YouTube search: 'mental health journaling ai app therapy support startup 2026' — found 10 results" },
   },
   {
-    time: 160500,
-    action: { type: "deploy", message: "CI tests passed (11/11) — deploying to DO App Platform..." },
+    time: 162000,
+    action: { type: "explore", message: "Evaluating mental health space — high impact, high regulatory scrutiny..." },
   },
-  {
-    time: 161000,
-    cardUpdate: { card_id: "pawpulse-784798", status: "building", build_step: "deploy" },
-  },
-  {
-    time: 163000,
-    cardUpdate: { card_id: "pawpulse-784798", status: "deployed" },
-    action: { type: "deploy", message: "PawPulse deployed → https://pawpulse-784798.ondigitalocean.app" },
-  },
-
-  // ── Build 4: StudyMate Lite (queued @165000, deployed @185000) ───────────
   {
     time: 165000,
-    cardUpdate: { card_id: "studymate-060111", status: "build_queued" },
-    action: { type: "build", message: "Generating PRD and technical specification for StudyMate Lite..." },
+    action: { type: "explore", message: "YouTube search: 'ai photo editing mobile app startup creator tools 2026' — found 18 results" },
   },
   {
-    time: 168000,
-    action: { type: "build", message: "PRD complete — 1,900 words, 6 user stories defined" },
+    time: 167000,
+    action: { type: "explore", message: "Scanning creator economy tools — photo AI market is crowded but growing..." },
   },
   {
     time: 170000,
-    cardUpdate: { card_id: "studymate-060111", status: "building", build_step: "code_gen" },
-    action: { type: "build", message: "Blueprint: 12 files planned — SM-2 scheduler + AI flashcard generator + spaced review session UI" },
+    action: { type: "explore", message: "YouTube search: 'ai inventory management small business retail startup 2026' — found 9 results" },
   },
   {
-    time: 172500,
-    action: { type: "build", message: "Code generation in progress — FastAPI SM-2 algorithm + Next.js flip card animations + import-from-text feature..." },
+    time: 172000,
+    action: { type: "explore", message: "Analyzing retail operations AI concept — SMB market segment..." },
   },
   {
-    time: 174000,
-    cardUpdate: { card_id: "studymate-060111", status: "building", build_step: "validate" },
+    time: 175000,
+    action: { type: "build", message: "6 GO cards total: QueueBite & SpendSense deployed, StudyMate, FitQuest, BookSwap, PlantPal queued. 4 NO-GO cards filtered. Exploration at 95% depth." },
   },
   {
-    time: 175500,
-    action: { type: "build", message: "Generated 12 files — code evaluation passed (quality score 89/100)" },
+    time: 180000,
+    action: { type: "explore", message: "YouTube search: 'ai customer support chatbot saas b2b startup automation 2026' — found 15 results" },
   },
   {
-    time: 178500,
-    action: { type: "build", message: "Docker build succeeded — image size 221MB" },
-  },
-  {
-    time: 179000,
-    cardUpdate: { card_id: "studymate-060111", status: "building", build_step: "github" },
-  },
-  {
-    time: 180500,
-    action: { type: "deploy", message: "Pushing to GitHub..." },
-  },
-  {
-    time: 182500,
-    action: { type: "deploy", message: "CI tests passed (10/10) — deploying to DO App Platform..." },
-  },
-  {
-    time: 183000,
-    cardUpdate: { card_id: "studymate-060111", status: "building", build_step: "deploy" },
+    time: 182000,
+    action: { type: "explore", message: "Scanning support automation space — heavily saturated but niche verticals emerging..." },
   },
   {
     time: 185000,
-    cardUpdate: { card_id: "studymate-060111", status: "deployed" },
-    action: { type: "deploy", message: "StudyMate Lite deployed → https://studymate-060111.ondigitalocean.app" },
+    action: { type: "explore", message: "YouTube search: 'productivity tools second brain knowledge management ai startup' — found 11 results" },
   },
-
-  // ── Remaining GO cards stay queued — exploration continues ───────────────
+  {
+    time: 187000,
+    action: { type: "explore", message: "Analyzing second-brain space — Notion, Obsidian competitors well-funded..." },
+  },
   {
     time: 190000,
-    action: { type: "explore", message: "6 GO cards remaining in queue — FitQuest, BookSwap, MealPrep AI, ParkSpot, PlantPal, Soundscape" },
+    action: { type: "explore", message: "YouTube search: 'ai powered e-commerce product description generator shopify 2026' — found 13 results" },
+  },
+  {
+    time: 193000,
+    action: { type: "explore", message: "Evaluating e-commerce AI tooling — strong demand signal, accessible market..." },
   },
   {
     time: 195000,
-    action: { type: "explore", message: "YouTube search: 'smart city parking api sensor integration 2026' — found 8 results" },
+    action: { type: "explore", message: "YouTube search: 'subscription management personal finance tracker app startup 2026' — found 8 results" },
+  },
+  {
+    time: 198000,
+    action: { type: "explore", message: "New candidate under evaluation — strong overlap with SpendSense AI category..." },
   },
   {
     time: 200000,
-    action: { type: "explore", message: "Exploration continues — monitoring for new opportunities..." },
+    action: { type: "explore", message: "Exploration continues — monitoring for new opportunities beyond 200 ideas scanned..." },
   },
 ];
