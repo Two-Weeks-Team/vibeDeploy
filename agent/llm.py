@@ -410,17 +410,26 @@ def _is_retryable_llm_error(exc: Exception) -> bool:
     return any(marker in message for marker in transient_markers)
 
 
+DEFAULT_LLM_MAX_RETRIES = max(1, int(os.getenv("LLM_MAX_RETRIES", "3")))
+
+
 def get_llm(
     model: str,
     temperature: float = 0.5,
     max_tokens: int = 3000,
     request_timeout: float | None = None,
+    max_retries: int | None = None,
 ):
-    """Route LLM calls through the provider adapter registry, then DO Inference, then direct OpenAI."""
+    """Route LLM calls: provider registry → direct OpenAI → DO Inference.
+
+    Uses LangChain's built-in max_retries for transient/rate-limit errors.
+    No fallback to different models — retry the specified model only.
+    """
     from .providers.registry import registry, resolve_canonical
 
     effective_max_tokens = max(256, max_tokens)
     effective_timeout = request_timeout or DEFAULT_LLM_REQUEST_TIMEOUT_SECONDS
+    effective_retries = max_retries if max_retries is not None else DEFAULT_LLM_MAX_RETRIES
 
     canonical = resolve_canonical(model)
     result = registry.get_llm(
@@ -432,9 +441,7 @@ def get_llm(
     if result is not None:
         return result
 
-    # Priority: direct OpenAI API (OPENAI_API_KEY) > DO Inference > fallback
-    # Reason: DO Inference returns 401 for premium models (gpt-5.3-codex etc.)
-    # on free-tier subscriptions. Direct OpenAI API has full model access.
+    uses_responses = model_endpoint_type(canonical) == "responses"
     openai_key = os.getenv("OPENAI_API_KEY", "")
     inference_key = os.getenv("GRADIENT_MODEL_ACCESS_KEY", "") or os.getenv("DIGITALOCEAN_INFERENCE_KEY", "")
 
@@ -448,6 +455,8 @@ def get_llm(
             temperature=float(temperature),
             max_tokens=effective_max_tokens,
             request_timeout=effective_timeout,
+            max_retries=effective_retries,
+            use_responses_api=uses_responses,
         )
 
     if inference_key and inference_key not in ("test-key", ""):
@@ -460,7 +469,8 @@ def get_llm(
             temperature=float(temperature),
             max_tokens=effective_max_tokens,
             request_timeout=effective_timeout,
-            use_responses_api=model_endpoint_type(canonical) == "responses",
+            max_retries=effective_retries,
+            use_responses_api=uses_responses,
         )
 
     from langchain_openai import ChatOpenAI
@@ -471,4 +481,6 @@ def get_llm(
         temperature=float(temperature),
         max_tokens=effective_max_tokens,
         request_timeout=effective_timeout,
+        max_retries=effective_retries,
+        use_responses_api=uses_responses,
     )

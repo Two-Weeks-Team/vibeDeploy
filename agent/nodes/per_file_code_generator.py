@@ -13,7 +13,6 @@ from agent.llm import (
     ainvoke_with_retry,
     content_to_str,
     get_llm,
-    get_rate_limit_fallback_models,
     llm_auth_route_for_model,
     llm_credentials_available,
 )
@@ -165,6 +164,8 @@ def per_file_code_generator_node(state: dict) -> dict:
 def _build_generation_context(state: dict) -> dict:
     blueprint = state.get("blueprint") if isinstance(state, dict) else {}
     blueprint = blueprint if isinstance(blueprint, dict) else {}
+    wiring = state.get("wiring_validation") or {}
+    repair_instructions = wiring.get("repair_instructions") or []
     return {
         "api_contract": state.get("api_contract"),
         "design_system": blueprint.get("design_system", {}),
@@ -175,6 +176,10 @@ def _build_generation_context(state: dict) -> dict:
         "frontend_code": dict(state.get("frontend_code") or {}),
         "backend_code": dict(state.get("backend_code") or {}),
         "already_generated": {},
+        "repair_instructions": repair_instructions,
+        "wiring_missing": wiring.get("missing") or [],
+        "wiring_schema_mismatches": wiring.get("schema_mismatches") or [],
+        "build_errors": str(state.get("build_errors") or "").strip(),
     }
 
 
@@ -239,6 +244,36 @@ def _prompt_context_for_spec(spec: FileSpec, context: dict) -> dict:
     appendix = str(prompt_strategy.get(appendix_key) or "").strip()
     if appendix:
         prompt = f"{prompt}\n\nAdditional Strategy:\n{appendix}"
+
+    repair_lines = []
+    repair_instructions = context.get("repair_instructions") or []
+    wiring_missing = context.get("wiring_missing") or []
+    build_errors = context.get("build_errors") or ""
+
+    if target == "backend" and (repair_instructions or wiring_missing):
+        if wiring_missing:
+            repair_lines.append(
+                "CRITICAL — Previous attempt FAILED contract validation. "
+                "These endpoints are MISSING from your code and MUST be added:\n"
+                + "\n".join(f"  - {ep}" for ep in wiring_missing)
+            )
+        for instr in repair_instructions:
+            action = instr.get("action", "")
+            if action == "add_endpoint":
+                repair_lines.append(f"Add route: {instr.get('method', 'GET')} {instr.get('path', '/')}")
+            elif action == "add_model":
+                repair_lines.append(f"Add Pydantic model: {instr.get('schema', '?')}")
+            elif action == "add_field":
+                repair_lines.append(f"Add field '{instr.get('field')}' to {instr.get('schema', '?')}")
+
+    if build_errors:
+        repair_lines.append(
+            "CRITICAL — Previous attempt FAILED build validation. Fix these errors:\n" + build_errors[:1500]
+        )
+
+    if repair_lines:
+        prompt = f"{prompt}\n\n## Repair Feedback (MUST FIX)\n" + "\n".join(repair_lines)
+
     return {"template_key": template_key, "target": target, "prompt": prompt}
 
 
@@ -310,13 +345,7 @@ async def _generate_file_with_llm(spec: FileSpec, context: dict) -> str:
         },
         {"role": "user", "content": prompt_meta["prompt"]},
     ]
-    response = await ainvoke_with_retry(
-        llm,
-        messages,
-        max_attempts=4,
-        fallback_models=get_rate_limit_fallback_models(model),
-        rate_limit_switch_after_attempts=max(1, 4 - 1),
-    )
+    response = await ainvoke_with_retry(llm, messages, max_attempts=3)
     return _parse_single_file_payload(content_to_str(response.content), spec.path)
 
 
@@ -331,8 +360,25 @@ async def backend_generator_node(state: dict, config=None) -> dict:
     backend_code = dict(state.get("backend_code") or {})
     context = _build_generation_context(state)
     warnings = list(state.get("code_gen_warnings") or [])
+
+    is_retry = bool(context.get("wiring_missing") or context.get("repair_instructions") or context.get("build_errors"))
+    build_errors_text = context.get("build_errors") or ""
+    if is_retry:
+        logger.info(
+            "[BACKEND_GEN] Retry with feedback: missing=%s build_errors=%s",
+            context.get("wiring_missing") or [],
+            bool(build_errors_text),
+        )
+
     for spec in specs:
         if spec.path in backend_code and _should_preserve_existing_file(spec.path):
+            continue
+        if (
+            is_retry
+            and spec.path in backend_code
+            and spec.file_type not in {"route", "service"}
+            and spec.path not in build_errors_text
+        ):
             continue
         if _use_llm_per_file_generation() and spec.file_type in {"route", "service", "api"}:
             model = MODEL_CONFIG.get("code_gen_backend", MODEL_CONFIG["code_gen"])
@@ -376,8 +422,14 @@ async def frontend_generator_node(state: dict, config=None) -> dict:
     context = _build_generation_context(state)
     context["already_generated"].update(frontend_code)
     warnings = list(state.get("code_gen_warnings") or [])
+
+    is_retry = bool(context.get("wiring_missing") or context.get("repair_instructions") or context.get("build_errors"))
+    build_errors_text = context.get("build_errors") or ""
+
     for spec in specs:
         if spec.path in frontend_code and _should_preserve_existing_file(spec.path):
+            continue
+        if is_retry and spec.path in frontend_code and spec.path not in build_errors_text:
             continue
         if _use_llm_per_file_generation() and spec.file_type in {"page", "component", "api"}:
             model = MODEL_CONFIG.get("code_gen_frontend", MODEL_CONFIG["code_gen"])
