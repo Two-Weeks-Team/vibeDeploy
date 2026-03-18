@@ -1,8 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { Rocket, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -14,14 +12,6 @@ import { KanbanBoard } from "@/components/zero-prompt/kanban-board";
 import { ActionFeed } from "@/components/zero-prompt/action-feed";
 
 export default function ZeroPromptPage() {
-  return (
-    <Suspense fallback={<div className="min-h-screen bg-background flex items-center justify-center"><p className="text-muted-foreground">Loading...</p></div>}>
-      <ZeroPromptInner />
-    </Suspense>
-  );
-}
-
-function ZeroPromptInner() {
   const { 
     session, 
     actions, 
@@ -30,28 +20,12 @@ function ZeroPromptInner() {
     isLoading, 
     error, 
     startSession, 
-    restoreSession,
     queueBuild, 
     passCard,
     deleteCard
   } = useZeroPrompt();
   
   const [goal, setGoal] = useState<string>("");
-  const searchParams = useSearchParams();
-  const autostartFired = useRef(false);
-
-  useEffect(() => {
-    const sessionParam = searchParams.get("session");
-    if (sessionParam && !session && !isLoading && !autostartFired.current) {
-      autostartFired.current = true;
-      restoreSession(sessionParam);
-      return;
-    }
-    if (searchParams.get("autostart") === "true" && !session && !isLoading && !autostartFired.current) {
-      autostartFired.current = true;
-      startSession(10);
-    }
-  }, [searchParams, session, isLoading, startSession, restoreSession]);
 
   const handleStart = () => {
     const goalNum = parseInt(goal, 10);

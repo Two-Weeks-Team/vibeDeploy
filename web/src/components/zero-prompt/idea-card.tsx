@@ -66,31 +66,7 @@ export function IdeaCard({ card, onQueueBuild, onPassCard, onDeleteCard, onClick
         )}
 
         {card.status === "building" && (
-          <div className="mt-3 space-y-1.5">
-            <div className="flex items-center gap-1.5 text-xs text-blue-400">
-              <Loader2 className="w-3 h-3 animate-spin" />
-              <span className="font-medium">Building...</span>
-            </div>
-            <div className="space-y-1">
-              {[
-                { icon: FileCode, label: "Code Gen", done: true },
-                { icon: TestTube, label: "Validate", done: false },
-                { icon: Code, label: "GitHub", done: false },
-                { icon: Rocket, label: "Deploy", done: false },
-              ].map((step) => (
-                <div key={step.label} className="flex items-center gap-1.5 text-[10px]">
-                  {step.done ? (
-                    <CheckCircle className="w-3 h-3 text-emerald-500" />
-                  ) : (
-                    <step.icon className="w-3 h-3 text-muted-foreground/50" />
-                  )}
-                  <span className={step.done ? "text-emerald-500" : "text-muted-foreground/50"}>
-                    {step.label}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
+          <BuildProgress step={card.build_step || "code_gen"} />
         )}
 
         {(card.status === "nogo" || card.status === "passed" || card.status === "build_failed") && onDeleteCard && (
@@ -121,5 +97,47 @@ export function IdeaCard({ card, onQueueBuild, onPassCard, onDeleteCard, onClick
         )}
       </div>
     </motion.div>
+  );
+}
+
+const BUILD_STEPS = [
+  { key: "code_gen", icon: FileCode, label: "Code Gen" },
+  { key: "validate", icon: TestTube, label: "Validate" },
+  { key: "github", icon: Code, label: "GitHub" },
+  { key: "deploy", icon: Rocket, label: "Deploy" },
+] as const;
+
+function BuildProgress({ step }: { step: string }) {
+  const stepOrder = BUILD_STEPS.map((s) => s.key);
+  const currentIdx = stepOrder.indexOf(step as typeof stepOrder[number]);
+
+  return (
+    <div className="mt-3 space-y-1.5">
+      <div className="flex items-center gap-1.5 text-xs text-blue-400">
+        <Loader2 className="w-3 h-3 animate-spin" />
+        <span className="font-medium">Building...</span>
+      </div>
+      <div className="space-y-1">
+        {BUILD_STEPS.map((s, i) => {
+          const done = i < currentIdx || step === "done";
+          const active = i === currentIdx && step !== "done";
+          const Icon = s.icon;
+          return (
+            <div key={s.key} className="flex items-center gap-1.5 text-[10px]">
+              {done ? (
+                <CheckCircle className="w-3 h-3 text-emerald-500" />
+              ) : active ? (
+                <Loader2 className="w-3 h-3 animate-spin text-blue-400" />
+              ) : (
+                <Icon className="w-3 h-3 text-muted-foreground/30" />
+              )}
+              <span className={done ? "text-emerald-500" : active ? "text-blue-400 font-medium" : "text-muted-foreground/30"}>
+                {s.label}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }

@@ -14,6 +14,7 @@ export interface ZPCard {
   saturation?: string;
   novelty_boost?: number;
   thread_id?: string | null;
+  build_step?: string;
   video_summary?: string;
   insights?: string[];
   mvp_proposal?: {

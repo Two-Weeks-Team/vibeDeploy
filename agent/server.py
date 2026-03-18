@@ -19,6 +19,7 @@ import os
 import re
 import shutil
 import time
+import uuid
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -26,7 +27,7 @@ from pathlib import Path
 import httpx
 import uvicorn
 from dotenv import load_dotenv
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from starlette.responses import StreamingResponse
@@ -38,6 +39,8 @@ from .model_capabilities import load_model_capability_report, selected_runtime_m
 from .pipeline_runtime import build_brainstorm_result, build_meeting_result, stream_action_session
 from .sse import NODE_EVENTS, format_sse
 from .tools.digitalocean import list_apps as list_digitalocean_apps
+from .zero_prompt.event_bus import _event_buses as _zp_event_buses
+from .zero_prompt.event_bus import push_zp_event
 
 _AGENT_DIR = Path(__file__).resolve().parent
 load_dotenv(_AGENT_DIR / ".env.test")
@@ -581,6 +584,12 @@ async def lifespan(app: FastAPI):
     global _store
     if os.environ.get("DATABASE_URL"):
         _store = ResultStore()
+        try:
+            from .db.zp_store import ensure_tables
+
+            await ensure_tables()
+        except Exception:
+            logger.warning("[ZP] Could not create ZP tables — DB may not be ready yet")
     else:
         db_path = os.environ.get("DB_PATH", str(_AGENT_DIR / "vibedeploy.db"))
         _store = ResultStore(db_path=db_path)
@@ -975,6 +984,43 @@ async def dashboard_evaluations():
     return summary.model_dump()
 
 
+@app.get("/api/zero-prompt/dashboard")
+@app.get("/zero-prompt/dashboard")
+async def zp_dashboard():
+    try:
+        from .db.zp_store import get_dashboard
+
+        return await get_dashboard()
+    except Exception:
+        return {"session_id": None, "status": "idle", "cards": []}
+
+
+@app.get("/api/zero-prompt/events")
+@app.get("/zero-prompt/events")
+async def zp_events(request: Request):
+    client_id = str(uuid.uuid4())
+    q: asyncio.Queue = _zp_event_buses[client_id]
+
+    async def event_stream() -> AsyncGenerator[str, None]:
+        try:
+            while True:
+                try:
+                    event = await asyncio.wait_for(q.get(), timeout=15.0)
+                    yield f"data: {json.dumps(event)}\n\n"
+                except asyncio.TimeoutError:
+                    yield ": keepalive\n\n"
+        except asyncio.CancelledError:
+            pass
+        finally:
+            _zp_event_buses.pop(client_id, None)
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+    )
+
+
 _zp_orchestrator = None
 
 
@@ -1148,6 +1194,8 @@ async def zero_prompt_action(session_id: str, request: ZPActionRequest):
 
 
 async def _trigger_zp_build(orch, session_id: str, card_id: str) -> None:
+    from .db import zp_store as _zp_store
+
     try:
         session = orch.get_session(session_id)
         if session is None:
@@ -1157,7 +1205,14 @@ async def _trigger_zp_build(orch, session_id: str, card_id: str) -> None:
             return
 
         card.status = "building"
+        card.build_step = "code_gen"
         idea_title = card.title or card.video_id
+
+        try:
+            await _zp_store.update_card(card_id, status="building", build_step="code_gen")
+            push_zp_event({"type": "card.update", "card_id": card_id, "status": "building", "session_id": session_id})
+        except Exception:
+            pass
 
         build_prompt = f"Build a web app: {idea_title}."
         if card.domain and card.domain != "unknown":
@@ -1178,11 +1233,40 @@ async def _trigger_zp_build(orch, session_id: str, card_id: str) -> None:
             "prompt": build_prompt,
             "skip_council": True,
         }
-        async for _chunk in stream_action_session(action_payload):
-            pass
+        async for chunk in stream_action_session(action_payload):
+            phase = ""
+            if hasattr(chunk, "data") and isinstance(chunk.data, dict):
+                phase = chunk.data.get("phase", "")
+            elif isinstance(chunk, dict):
+                phase = chunk.get("phase", "") or chunk.get("node", "")
+            if phase:
+                if "code_gen" in phase or "code_generator" in phase:
+                    card.build_step = "code_gen"
+                elif "code_eval" in phase or "build_valid" in phase:
+                    card.build_step = "validate"
+                elif "deploy" in phase:
+                    card.build_step = "deploy"
+                try:
+                    await _zp_store.update_card(card_id, build_step=card.build_step)
+                    push_zp_event(
+                        {
+                            "type": "card.build_step",
+                            "card_id": card_id,
+                            "build_step": card.build_step,
+                            "session_id": session_id,
+                        }
+                    )
+                except Exception:
+                    pass
 
+        card.build_step = "done"
         card.status = "deployed"
         card.thread_id = f"zp-{card_id}"
+        try:
+            await _zp_store.update_card(card_id, status="deployed", build_step="done", thread_id=f"zp-{card_id}")
+            push_zp_event({"type": "card.update", "card_id": card_id, "status": "deployed", "session_id": session_id})
+        except Exception:
+            pass
         logger.info("[ZP] Build completed for card %s: %s", card_id, idea_title)
     except Exception:
         logger.exception("[ZP] Build failed for card %s", card_id)
@@ -1191,6 +1275,13 @@ async def _trigger_zp_build(orch, session_id: str, card_id: str) -> None:
             card = next((c for c in session.cards if c.card_id == card_id), None)
             if card:
                 card.status = "build_failed"
+                try:
+                    await _zp_store.update_card(card_id, status="build_failed")
+                    push_zp_event(
+                        {"type": "card.update", "card_id": card_id, "status": "build_failed", "session_id": session_id}
+                    )
+                except Exception:
+                    pass
 
 
 async def _resume_exploration(orch, session_id: str) -> None:

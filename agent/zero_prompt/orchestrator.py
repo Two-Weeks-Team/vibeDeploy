@@ -1,8 +1,11 @@
+import asyncio
+import logging
 import uuid
 from collections import deque
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timezone
 
+from agent.zero_prompt.event_bus import push_zp_event
 from agent.zero_prompt.events import (
     brainstorm_complete_event,
     brainstorm_start_event,
@@ -21,7 +24,39 @@ from agent.zero_prompt.events import (
 from agent.zero_prompt.queue_manager import BuildQueue
 from agent.zero_prompt.schemas import ZPCard, ZPSession
 
+logger = logging.getLogger(__name__)
+
 VerdictFn = Callable[[str, str, str], Awaitable[tuple[str, int, str, str]]]
+
+
+def _fire(coro: object) -> None:
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(coro)  # type: ignore[arg-type]
+    except RuntimeError:
+        if hasattr(coro, "close"):
+            coro.close()  # type: ignore[union-attr]
+    except Exception:
+        if hasattr(coro, "close"):
+            coro.close()  # type: ignore[union-attr]
+
+
+async def _db_update_card_safe(card_id: str, **fields: object) -> None:
+    try:
+        from agent.db import zp_store
+
+        await zp_store.update_card(card_id, **fields)
+    except Exception:
+        pass
+
+
+async def _db_update_session_safe(session_id: str, status: str) -> None:
+    try:
+        from agent.db import zp_store
+
+        await zp_store.update_session_status(session_id, status)
+    except Exception:
+        pass
 
 
 class SessionManager:
@@ -131,7 +166,16 @@ class StreamingOrchestrator:
         self._sessions[session_id] = session
         self._build_queues[session_id] = BuildQueue()
         event = session_start_event(session_id, goal)
+        _fire(self._db_create_session(session_id, goal))
         return session, event
+
+    async def _db_create_session(self, session_id: str, goal: int) -> None:
+        try:
+            from agent.db import zp_store
+
+            await zp_store.ensure_session(session_id, goal)
+        except Exception:
+            pass
 
     def get_session(self, session_id: str) -> ZPSession | None:
         return self._sessions.get(session_id)
@@ -161,6 +205,14 @@ class StreamingOrchestrator:
         session.cards.append(card)
         events: list[dict] = []
 
+        try:
+            from agent.db import zp_store
+
+            await zp_store.add_card(session_id, card_id, video_id, video_title or video_id)
+        except Exception:
+            pass
+        push_zp_event({"type": "card.update", "card_id": card_id, "status": "analyzing", "session_id": session_id})
+
         events.append(transcript_start_event(video_id))
         try:
             from agent.zero_prompt.transcript import fetch_transcript_artifact
@@ -186,6 +238,11 @@ class StreamingOrchestrator:
             idea = AppIdea(name=video_title or video_id, domain="unknown", description="", target_audience="")
             events.append(insight_complete_event("unknown", 0, 0.0))
 
+        try:
+            await _db_update_card_safe(card_id, domain=idea.domain if idea else "unknown")
+        except Exception:
+            pass
+
         idea_query = f"{idea.name} {idea.domain}" if idea.name else video_title
         events.append(paper_search_event(idea_query, ["openalex", "arxiv"]))
         try:
@@ -196,6 +253,11 @@ class StreamingOrchestrator:
         except Exception:
             papers = []
             events.append(paper_found_event(0, "error"))
+
+        try:
+            await _db_update_card_safe(card_id, papers_found=len(papers) if papers else 0)
+        except Exception:
+            pass
 
         events.append(brainstorm_start_event(idea.name or video_title, len(papers)))
         try:
@@ -209,6 +271,11 @@ class StreamingOrchestrator:
         except Exception:
             novelty_boost = 0.0
             events.append(brainstorm_complete_event(0, 0, 0.0))
+
+        try:
+            await _db_update_card_safe(card_id, novelty_boost=novelty_boost)
+        except Exception:
+            pass
 
         events.append(compete_start_event(idea.name or video_title))
         market = None
@@ -224,12 +291,23 @@ class StreamingOrchestrator:
             market_opportunity = 50
             events.append(compete_complete_event(0, "medium", "llm_only"))
 
+        try:
+            await _db_update_card_safe(
+                card_id,
+                competitors_found=str(len(market.competitors)) if market else "0",
+                saturation=market.saturation_level if market else "",
+            )
+        except Exception:
+            pass
+
         if verdict_fn is not None:
             try:
                 decision, score, reason, reason_code = await verdict_fn(session_id, video_id, card_id)
             except Exception:
                 card.status = "nogo"
                 events.append(verdict_nogo_event(0, "analysis_error", "verdict_exception"))
+                _fire(_db_update_card_safe(card_id, status="nogo"))
+                push_zp_event({"type": "card.update", "card_id": card_id, "status": "nogo", "session_id": session_id})
                 return events
         else:
             try:
@@ -265,6 +343,26 @@ class StreamingOrchestrator:
             events.append(verdict_go_event(score, reason, reason_code))
 
             try:
+                await _db_update_card_safe(
+                    card_id,
+                    title=card.title,
+                    status="go_ready",
+                    score=score,
+                    reason=reason,
+                    reason_code=reason_code,
+                    domain=card.domain,
+                    papers_found=card.papers_found,
+                    competitors_found=card.competitors_found,
+                    saturation=card.saturation,
+                    novelty_boost=novelty_boost,
+                )
+                push_zp_event(
+                    {"type": "card.update", "card_id": card_id, "status": "go_ready", "session_id": session_id}
+                )
+            except Exception:
+                pass
+
+            try:
                 from agent.zero_prompt.card_enrichment import enrich_card_with_gemini
 
                 enrichment = await enrich_card_with_gemini(
@@ -280,11 +378,40 @@ class StreamingOrchestrator:
                 card.video_summary = enrichment.get("video_summary", "")
                 card.insights = enrichment.get("insights", [])
                 card.mvp_proposal = enrichment.get("mvp_proposal", {})
+                try:
+                    await _db_update_card_safe(
+                        card_id,
+                        video_summary=card.video_summary,
+                        insights=card.insights,
+                        mvp_proposal=card.mvp_proposal,
+                    )
+                    push_zp_event(
+                        {"type": "card.enriched", "card_id": card_id, "status": "go_ready", "session_id": session_id}
+                    )
+                except Exception:
+                    pass
             except Exception:
                 logger.exception("[ZP] Card enrichment failed for %s", card_id)
         else:
             card.status = "nogo"
             events.append(verdict_nogo_event(score, reason, reason_code))
+            try:
+                await _db_update_card_safe(
+                    card_id,
+                    title=card.title,
+                    status="nogo",
+                    score=score,
+                    reason=reason,
+                    reason_code=reason_code,
+                    domain=card.domain,
+                    papers_found=card.papers_found,
+                    competitors_found=card.competitors_found,
+                    saturation=card.saturation,
+                    novelty_boost=novelty_boost,
+                )
+                push_zp_event({"type": "card.update", "card_id": card_id, "status": "nogo", "session_id": session_id})
+            except Exception:
+                pass
 
         return events
 
@@ -307,6 +434,8 @@ class StreamingOrchestrator:
             session.build_queue.append(card_id)
 
         card.status = "build_queued"
+        _fire(_db_update_card_safe(card_id, status="build_queued"))
+        push_zp_event({"type": "card.update", "card_id": card_id, "status": "build_queued", "session_id": session_id})
         return {"type": "zp.action.queue_build", "card_id": card_id, "queue_length": len(session.build_queue)}
 
     def pass_card(self, session_id: str, card_id: str) -> dict:
@@ -329,6 +458,8 @@ class StreamingOrchestrator:
             bq.remove(card_id)
 
         card.status = "passed"
+        _fire(_db_update_card_safe(card_id, status="passed"))
+        push_zp_event({"type": "card.update", "card_id": card_id, "status": "passed", "session_id": session_id})
         return {"type": "zp.action.pass_card", "card_id": card_id}
 
     def delete_card(self, session_id: str, card_id: str) -> dict:
@@ -344,6 +475,8 @@ class StreamingOrchestrator:
             return {"type": "zp.action.error", "error": "card_not_deletable"}
 
         card.status = "deleted"
+        _fire(_db_update_card_safe(card_id, status="deleted"))
+        push_zp_event({"type": "card.update", "card_id": card_id, "status": "deleted", "session_id": session_id})
         return {"type": "zp.action.delete_card", "card_id": card_id}
 
     def pause(self, session_id: str) -> dict:
@@ -352,6 +485,7 @@ class StreamingOrchestrator:
             return {"type": "zp.action.error", "error": "session_not_found"}
 
         session.status = "paused"
+        _fire(_db_update_session_safe(session_id, "paused"))
         return {"type": "zp.action.pause", "session_id": session_id}
 
     def resume(self, session_id: str) -> dict:
@@ -363,6 +497,7 @@ class StreamingOrchestrator:
             return {"type": "zp.action.error", "error": "session_not_paused"}
 
         session.status = "exploring"
+        _fire(_db_update_session_safe(session_id, "exploring"))
         return {"type": "zp.action.resume", "session_id": session_id}
 
     def start_next_build(self, session_id: str) -> str | None:
@@ -388,6 +523,8 @@ class StreamingOrchestrator:
                 card.status = "building"
                 break
 
+        _fire(_db_update_card_safe(card_id, status="building"))
+        push_zp_event({"type": "card.update", "card_id": card_id, "status": "building", "session_id": session_id})
         return card_id
 
     def finish_build(
@@ -404,11 +541,18 @@ class StreamingOrchestrator:
         if session.active_build == card_id:
             session.active_build = None
 
+        final_status = "deployed" if success else "build_failed"
         for card in session.cards:
             if card.card_id == card_id:
-                card.status = "deployed" if success else "build_failed"
+                card.status = final_status  # type: ignore[assignment]
                 if thread_id is not None:
                     card.thread_id = thread_id
                 break
+
+        db_fields: dict[str, object] = {"status": final_status}
+        if thread_id is not None:
+            db_fields["thread_id"] = thread_id
+        _fire(_db_update_card_safe(card_id, **db_fields))
+        push_zp_event({"type": "card.update", "card_id": card_id, "status": final_status, "session_id": session_id})
 
         return {"type": "zp.build.complete" if success else "zp.build.failed", "card_id": card_id}

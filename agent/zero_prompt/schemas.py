@@ -113,6 +113,7 @@ class ZPCard(BaseModel):
     video_summary: str = ""
     insights: list[str] = []
     mvp_proposal: dict = {}
+    build_step: str = ""
 
 
 class ZPSession(BaseModel):
