@@ -1125,7 +1125,7 @@ async def zero_prompt_start(request: ZPStartRequest):
 
         async def _analyze_all():
             for vid_id, vid_title, vid_desc in batch:
-                if not await orch.should_continue_exploring(session_id):
+                if not orch.should_continue_exploring(session_id):
                     break
                 step_events = await orch.exploration_step(
                     session_id, vid_id, video_title=vid_title, video_description=vid_desc
