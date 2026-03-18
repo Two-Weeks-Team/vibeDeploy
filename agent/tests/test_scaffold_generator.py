@@ -32,6 +32,7 @@ def test_scaffold_returns_all_nine_files():
         "web/next.config.ts",
         "web/postcss.config.js",
         "web/src/app/globals.css",
+        "web/src/app/layout.tsx",
         "agent/main.py",
         "agent/models.py",
         "agent/ai_service.py",

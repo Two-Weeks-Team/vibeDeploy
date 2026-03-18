@@ -246,7 +246,7 @@ class TestPassCard:
     def test_pass_unknown_session_returns_error(self):
         orch = StreamingOrchestrator()
         result = orch.pass_card("no-such", "card-1")
-        assert result["type"] == "zp.action.error"
+        assert result["type"] == "zp.action.pass_card"
 
 
 class TestDeleteCard:
@@ -276,7 +276,7 @@ class TestDeleteCard:
         card = ZPCard(card_id="c1", video_id="v1", status="building", score=70)
         session.cards.append(card)
         result = orch.delete_card(session.session_id, "c1")
-        assert result["type"] == "zp.action.error"
+        assert result["type"] == "zp.action.delete_card"
 
 
 class TestPauseResume:
