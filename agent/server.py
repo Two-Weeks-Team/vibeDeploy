@@ -1226,14 +1226,18 @@ async def zero_prompt_action(session_id: str, request: ZPActionRequest):
     elif action == "force_go":
         from .db import zp_store as _zps
 
-        await _zps.update_card(card_id, status="go_ready", score=75)
+        await _zps.update_card(card_id, status="go_ready", score=75, build_step="")
         session = await orch.ensure_session(session_id)
         if session:
             for card in session.cards:
                 if card.card_id == card_id:
                     card.status = "go_ready"
                     card.score = 75
+                    card.build_step = ""
+                    card.build_queue = []
                     break
+            if card_id in session.build_queue:
+                session.build_queue.remove(card_id)
         push_zp_event({"type": "card.update", "card_id": card_id, "status": "go_ready", "session_id": session_id})
         result = {"type": "zp.action.force_go", "card_id": card_id}
     elif action == "queue_build":
