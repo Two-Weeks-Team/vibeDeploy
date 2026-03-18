@@ -51,6 +51,8 @@ function formatEventMessage(data: Record<string, unknown>): string {
     return steps[String(data.build_step)] || `Build step: ${data.build_step}`;
   }
   if (type === "zp.build.done") return data.status === "deployed" ? "App deployed and live!" : "Build failed — will retry or skip";
+  if (type === "zp.council.message") return `${data.agent}: ${data.message}`;
+  if (type === "zp.auto_build.triggered") return `Auto-build triggered for "${data.title}" (score: ${data.score}) — goal reached!`;
   return type;
 }
 
