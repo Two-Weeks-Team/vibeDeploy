@@ -1275,6 +1275,8 @@ async def _trigger_pending_builds(orch, session_id: str) -> None:
     session = orch.get_session(session_id)
     if not session or not session.build_queue:
         return
+    if any(c.status == "building" for c in session.cards):
+        return
     for card_id in list(session.build_queue):
         card = next((c for c in session.cards if c.card_id == card_id), None)
         if card and card.status == "build_queued":

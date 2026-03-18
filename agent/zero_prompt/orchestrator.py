@@ -569,7 +569,8 @@ class StreamingOrchestrator:
                 pass
 
             go_cards = [c for c in session.cards if c.status == "go_ready"]
-            if len(go_cards) >= session.goal_go_cards:
+            already_committed = any(c.status in ("build_queued", "building", "deployed") for c in session.cards)
+            if not already_committed and len(go_cards) >= session.goal_go_cards:
                 best_card = max(go_cards, key=lambda c: c.score)
                 if best_card.card_id not in session.build_queue:
                     bq = self._build_queues.get(session_id)
