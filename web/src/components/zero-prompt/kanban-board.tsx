@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import type { ZPCard, CardStatus } from "@/types/zero-prompt";
 import { KanbanColumn } from "./kanban-column";
 import { CardDetailModal } from "./card-detail-modal";
@@ -12,6 +12,9 @@ interface KanbanBoardProps {
   onPassCard: (cardId: string) => void;
   onDeleteCard?: (cardId: string) => void;
   onReExplore?: (cardId: string) => void;
+  autoCloseMs?: number;
+  selectedCardId?: string | null;
+  onSelectedCardChange?: (cardId: string | null) => void;
 }
 
 const COLUMNS: { id: string; title: string; statuses: CardStatus[] }[] = [
@@ -22,8 +25,25 @@ const COLUMNS: { id: string; title: string; statuses: CardStatus[] }[] = [
   { id: "nogo", title: "NO-GO / Passed", statuses: ["nogo", "passed", "build_failed"] },
 ];
 
-export function KanbanBoard({ cards, sessionId, onQueueBuild, onPassCard, onDeleteCard, onReExplore }: KanbanBoardProps) {
-  const [selectedCard, setSelectedCard] = useState<ZPCard | null>(null);
+export function KanbanBoard({ cards, sessionId, onQueueBuild, onPassCard, onDeleteCard, onReExplore, autoCloseMs, selectedCardId, onSelectedCardChange }: KanbanBoardProps) {
+  const [internalSelectedCard, setInternalSelectedCard] = useState<ZPCard | null>(null);
+  const selectedCard = onSelectedCardChange
+    ? cards.find((card) => card.card_id === selectedCardId) ?? null
+    : internalSelectedCard;
+
+  const setSelectedCard = useCallback((card: ZPCard | null) => {
+    if (onSelectedCardChange) {
+      onSelectedCardChange(card?.card_id ?? null);
+      return;
+    }
+    setInternalSelectedCard(card);
+  }, [onSelectedCardChange]);
+
+  useEffect(() => {
+    if (!selectedCard || !autoCloseMs) return;
+    const timer = setTimeout(() => setSelectedCard(null), autoCloseMs);
+    return () => clearTimeout(timer);
+  }, [selectedCard, autoCloseMs, setSelectedCard]);
 
   return (
     <>
