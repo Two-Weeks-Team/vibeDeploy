@@ -250,6 +250,29 @@ def _prompt_context_for_spec(spec: FileSpec, context: dict) -> dict:
     wiring_missing = context.get("wiring_missing") or []
     build_errors = context.get("build_errors") or ""
 
+    if target == "frontend" and _is_page_file(spec.path):
+        available_exports = context.get("available_exports") or {}
+        if available_exports:
+            export_lines = []
+            for file_path, info in sorted(available_exports.items()):
+                module = (
+                    "@/" + file_path.replace("src/", "", 1).rsplit(".", 1)[0]
+                    if file_path.startswith("src/")
+                    else file_path.rsplit(".", 1)[0]
+                )
+                defaults = info.get("default") or []
+                named = info.get("named") or []
+                props_map = info.get("props") or {}
+                if defaults:
+                    sig = props_map.get(defaults[0], "")
+                    props_note = f"  // props: {sig}" if sig else "  // default export"
+                    export_lines.append(f'  import {defaults[0]} from "{module}";{props_note}')
+                if named:
+                    for n in named:
+                        sig = props_map.get(n, "")
+                        props_note = f"  // props: {sig}" if sig else ""
+                        export_lines.append(f'  import {{ {n} }} from "{module}";{props_note}')
+
     if target == "backend" and (repair_instructions or wiring_missing):
         if wiring_missing:
             repair_lines.append(
@@ -335,14 +358,27 @@ async def _generate_file_with_llm(spec: FileSpec, context: dict) -> str:
     model_key = "code_gen_backend" if target == "backend" else "code_gen_frontend"
     model = MODEL_CONFIG.get(model_key, MODEL_CONFIG["code_gen"])
     llm = get_llm(model=model, temperature=0.1, max_tokens=12000)
+    is_page = target == "frontend" and _is_page_file(spec.path)
+    available_exports = context.get("available_exports") or {}
+    if is_page and available_exports:
+        import_rule = (
+            "CRITICAL IMPORT RULE: Only import from the exact module paths and export names listed "
+            "in the '## Available Component Exports' section below. "
+            "Do NOT invent or assume any export that is not explicitly listed there. "
+            "If a module exports a default, use `import Name from 'path'`. "
+            "If a module exports named, use `import { Name } from 'path'`. "
+            "Mixing these up causes build failures."
+        )
+    else:
+        import_rule = ""
+    system_content = (
+        "Generate exactly one file. Return ONLY valid JSON with this shape: "
+        '{"content":"full file content"}. No markdown fences, no prose.'
+    )
+    if import_rule:
+        system_content = f"{system_content}\n\n{import_rule}"
     messages = [
-        {
-            "role": "system",
-            "content": (
-                "Generate exactly one file. Return ONLY valid JSON with this shape: "
-                '{"content":"full file content"}. No markdown fences, no prose.'
-            ),
-        },
+        {"role": "system", "content": system_content},
         {"role": "user", "content": prompt_meta["prompt"]},
     ]
     response = await ainvoke_with_retry(llm, messages, max_attempts=3)
@@ -426,11 +462,25 @@ async def frontend_generator_node(state: dict, config=None) -> dict:
     is_retry = bool(context.get("wiring_missing") or context.get("repair_instructions") or context.get("build_errors"))
     build_errors_text = context.get("build_errors") or ""
 
+    specs = sorted(specs, key=lambda s: (1 if _is_page_file(s.path) else 0, s.path))
+
     for spec in specs:
         if spec.path in frontend_code and _should_preserve_existing_file(spec.path):
             continue
         if is_retry and spec.path in frontend_code and spec.path not in build_errors_text:
             continue
+        if _is_page_file(spec.path):
+            all_frontend = dict(context.get("frontend_code") or {})
+            all_frontend.update(context["already_generated"])
+            component_code = {p: c for p, c in all_frontend.items() if not _is_page_file(p)}
+            exports = _extract_component_exports(component_code)
+            context["available_exports"] = exports
+            logger.info(
+                "[FRONTEND_GEN] page.tsx injection: %d files, api_client=%s, exports=%s",
+                len(component_code),
+                "src/lib/api-client.ts" in component_code,
+                {p: list((v.get("default") or []) + (v.get("named") or [])) for p, v in exports.items()},
+            )
         if _use_llm_per_file_generation() and spec.file_type in {"page", "component", "api"}:
             model = MODEL_CONFIG.get("code_gen_frontend", MODEL_CONFIG["code_gen"])
             if not llm_credentials_available(model):
@@ -950,6 +1000,63 @@ def _style_template(description: str) -> str:
 def _is_backend_path(path: str) -> bool:
     normalized = path.replace("\\", "/").lower()
     return normalized.endswith(".py") or normalized == "requirements.txt"
+
+
+def _is_page_file(path: str) -> bool:
+    normalized = path.replace("\\", "/")
+    return "page.tsx" in normalized or "page.ts" in normalized
+
+
+def _extract_props_signature(content: str, component_name: str) -> str:
+    pattern = re.compile(
+        rf"(?:type|interface)\s+{re.escape(component_name)}Props\s*(?:=\s*\{{([^}}]{{1,400}})\}}|\{{([^}}]{{1,400}})\}})",
+        re.DOTALL,
+    )
+    match = pattern.search(content)
+    if match:
+        body = (match.group(1) or match.group(2) or "").strip()
+        props = []
+        for line in body.splitlines():
+            line = line.strip().rstrip(";,")
+            if line and ":" in line and not line.startswith("//"):
+                props.append(line)
+        if props:
+            return "{ " + "; ".join(props[:6]) + " }"
+    return ""
+
+
+def _extract_component_exports(code: dict[str, str]) -> dict[str, dict[str, list[str] | dict[str, str]]]:
+    exports_by_file: dict[str, dict] = {}
+    default_pattern = re.compile(r"export\s+default\s+(?:function|class|const)?\s*(\w+)")
+    named_pattern = re.compile(r"export\s+(?:function|class|const|type|interface|enum)\s+(\w+)")
+    reexport_pattern = re.compile(r"export\s+\{([^}]+)\}")
+    for path, content in code.items():
+        if not path.endswith((".tsx", ".ts", ".js", ".jsx")):
+            continue
+        default_exports: list[str] = []
+        named_exports: list[str] = []
+        props_signatures: dict[str, str] = {}
+        for match in default_pattern.finditer(content):
+            if match.group(1):
+                default_exports.append(match.group(1))
+        for match in named_pattern.finditer(content):
+            named_exports.append(match.group(1))
+        for match in reexport_pattern.finditer(content):
+            for item in match.group(1).split(","):
+                stripped = item.split(" as ")[0].strip()
+                if stripped:
+                    named_exports.append(stripped)
+        for name in default_exports + named_exports:
+            sig = _extract_props_signature(content, name)
+            if sig:
+                props_signatures[name] = sig
+        if default_exports or named_exports:
+            exports_by_file[path] = {
+                "default": default_exports,
+                "named": named_exports,
+                "props": props_signatures,
+            }
+    return exports_by_file
 
 
 def _should_preserve_existing_file(path: str) -> bool:
