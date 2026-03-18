@@ -134,6 +134,10 @@ async def test_deploy_gate_blocks_skipped_build():
 def test_staged_graph_compiles():
     graph = create_staged_graph()
     assert graph is not None
+    if hasattr(graph, "nodes"):
+        node_names = set(graph.nodes.keys())
+        for expected in ("api_contract_generator", "spec_freeze_gate", "backend_generator", "deploy_gate"):
+            assert expected in node_names, f"Missing staged node: {expected}"
 
 
 def test_generated_api_contract_is_valid_json():

@@ -4,6 +4,7 @@ from typing import Any
 
 
 async def design_system_generator(state: dict[str, Any], config=None) -> dict:
+    """Extract and normalize design system context from the blueprint for downstream code generation."""
     blueprint = state.get("blueprint") or {}
     design_system = blueprint.get("design_system") or {}
     experience_contract = blueprint.get("experience_contract") or {}
@@ -14,6 +15,6 @@ async def design_system_generator(state: dict[str, Any], config=None) -> dict:
             "experience_contract": experience_contract,
             "shared_constants": shared_constants,
         },
-        "design_preset": str((design_system or {}).get("visual_direction") or ""),
+        "design_preset": str(design_system.get("visual_direction") or ""),
         "phase": "design_system_generated",
     }

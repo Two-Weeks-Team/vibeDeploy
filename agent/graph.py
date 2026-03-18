@@ -256,6 +256,7 @@ def create_staged_graph():
     workflow.add_edge("prompt_strategist", "backend_generator")
     workflow.add_edge("backend_generator", "frontend_generator")
     workflow.add_edge("frontend_generator", "contract_validator")
+    # Staged pipeline remaps logical "code_generator" → actual "backend_generator" for per-file generation
     workflow.add_conditional_edges(
         "contract_validator",
         route_after_contract,
@@ -264,6 +265,7 @@ def create_staged_graph():
             "code_generator": "backend_generator",
         },
     )
+    # Staged pipeline remaps logical "code_generator" → actual "backend_generator" for per-file generation
     workflow.add_conditional_edges(
         "code_evaluator",
         route_code_eval_staged,
@@ -272,6 +274,7 @@ def create_staged_graph():
             "backend_generator": "backend_generator",
         },
     )
+    # Staged pipeline remaps logical "code_generator" → actual "backend_generator" for per-file generation
     workflow.add_conditional_edges(
         "build_validator",
         route_after_build,

@@ -6,7 +6,7 @@ from agent.nodes.scaffold_generator import generate_scaffold
 def test_main_py_includes_router_import():
     files = generate_scaffold({"app_name": "test-app"})
     content = files["agent/main.py"]
-    assert "from .routes import router as api_router" in content
+    assert "from routes import router as api_router" in content
 
 
 def test_main_py_includes_api_router_registration():

@@ -22,7 +22,11 @@ def _write_files(base: Path, files: dict[str, str]) -> None:
     for rel_path, content in files.items():
         if not isinstance(content, str):
             continue
-        target = base / rel_path
+        resolved_base = base.resolve()
+        resolved_target = (base / rel_path).resolve(strict=False)
+        if not resolved_target.is_relative_to(resolved_base):
+            raise ValueError(f"Path traversal detected: {rel_path}")
+        target = resolved_target
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content)
 
@@ -73,14 +77,14 @@ async def local_runtime_validator(state: dict[str, Any], config=None) -> dict:
                 stderr = (proc.stderr.read() if proc.stderr else "")[:500]
                 errors.append(f"backend_process_exited:{stderr}")
             else:
-                ok, detail = _http_ok(f"http://127.0.0.1:{port}/health")
+                ok, detail = await asyncio.to_thread(_http_ok, f"http://127.0.0.1:{port}/health")
                 if not ok:
                     errors.append(f"backend_health_failed:{detail}")
         finally:
             if proc.poll() is None:
                 proc.terminate()
                 try:
-                    proc.wait(timeout=5)
+                    await asyncio.to_thread(proc.wait, 5)
                 except subprocess.TimeoutExpired:
                     proc.kill()
 

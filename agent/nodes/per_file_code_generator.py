@@ -307,7 +307,7 @@ async def _generate_file_with_llm(spec: FileSpec, context: dict) -> str:
         messages,
         max_attempts=4,
         fallback_models=get_rate_limit_fallback_models(model),
-        rate_limit_switch_after_attempts=4,
+        rate_limit_switch_after_attempts=max(1, 4 - 1),
     )
     return _parse_single_file_payload(content_to_str(response.content), spec.path)
 
