@@ -49,7 +49,7 @@ export default function DashboardPage() {
     scoreTrend,
   } = useDashboard();
 
-  const { activePipelines, events, nodeStatuses, connected } = usePipelineMonitor();
+  const { activePipelines, events, nodeStatuses, nodeMetadata, connected } = usePipelineMonitor();
 
   const highestScore = useMemo(() => {
     if (!results.length) return 0;
@@ -253,7 +253,7 @@ export default function DashboardPage() {
                     <Badge variant="outline" className="border-cyan-500/20 bg-cyan-500/10 text-cyan-200">Git Push · CI Test · App Spec · Build · Deploy · Verified Live</Badge>
                   </div>
                 </div>
-                <PipelineViz pipeline="evaluation" />
+                <PipelineViz pipeline="evaluation" activeNodes={nodeStatuses} nodeMetadata={nodeMetadata} />
               </motion.div>
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -349,6 +349,7 @@ export default function DashboardPage() {
                     activePipelines={activePipelines}
                     events={events}
                     nodeStatuses={nodeStatuses}
+                    nodeMetadata={nodeMetadata}
                     connected={connected}
                   />
                 </motion.div>

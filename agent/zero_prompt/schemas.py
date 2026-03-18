@@ -101,7 +101,20 @@ class ZPCard(BaseModel):
         "build_failed",
     ] = "analyzing"
     score: int = 0
+    title: str = ""
     thread_id: str | None = None
+    reason: str = ""
+    reason_code: str = ""
+    domain: str = ""
+    papers_found: int = 0
+    competitors_found: str = ""
+    saturation: str = ""
+    novelty_boost: float = 0.0
+    video_summary: str = ""
+    insights: list[str] = []
+    mvp_proposal: dict = {}
+    build_step: str = ""
+    analysis_step: str = ""
 
 
 class ZPSession(BaseModel):
@@ -112,3 +125,4 @@ class ZPSession(BaseModel):
     active_build: str | None = None
     goal_go_cards: int = 10
     created_at: str
+    remaining_videos: list[list[str]] = []

@@ -2,6 +2,8 @@ import json
 import logging
 import re
 
+from langchain_core.callbacks.manager import adispatch_custom_event
+
 from ..state import VibeDeployState
 from .task_contracts import build_repair_tasks_from_eval, build_task_distribution
 
@@ -69,7 +71,7 @@ _SHALLOW_CONTENT_PATTERNS = (
 _MIN_UNIQUE_API_ENDPOINTS = 2
 
 
-async def code_evaluator(state: VibeDeployState) -> dict:
+async def code_evaluator(state: VibeDeployState, config=None) -> dict:
     blueprint = state.get("blueprint", {})
     frontend_code = state.get("frontend_code", {})
     backend_code = state.get("backend_code", {})
@@ -150,6 +152,27 @@ async def code_evaluator(state: VibeDeployState) -> dict:
         experience,
         "PASS" if eval_result["passed"] else f"FAIL (iter {iteration}/{MAX_CODE_EVAL_ITERATIONS})",
     )
+
+    if config is not None:
+        await adispatch_custom_event(
+            "code_eval.result",
+            {
+                "type": "code_eval.result",
+                "node": "code_evaluator",
+                "phase": "code_evaluation",
+                "message": f"Code evaluation {'PASSED' if eval_result['passed'] else f'iteration {iteration}/{MAX_CODE_EVAL_ITERATIONS}'}",
+                "passed": eval_result["passed"],
+                "iteration": iteration,
+                "max_iterations": MAX_CODE_EVAL_ITERATIONS,
+                "match_rate": match_rate,
+                "completeness": round(completeness, 1),
+                "consistency": round(consistency, 1),
+                "runnability": round(runnability, 1),
+                "experience": round(experience, 1),
+                "blockers": blockers,
+            },
+            config=config,
+        )
 
     return {
         "code_eval_result": eval_result,

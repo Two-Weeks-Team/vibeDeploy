@@ -16,11 +16,13 @@ export default function ZeroPromptPage() {
     session, 
     actions, 
     isConnected, 
+    isCompleted,
     isLoading, 
     error, 
     startSession, 
     queueBuild, 
-    passCard 
+    passCard,
+    deleteCard
   } = useZeroPrompt();
   
   const [goal, setGoal] = useState<string>("");
@@ -30,7 +32,9 @@ export default function ZeroPromptPage() {
     startSession(isNaN(goalNum) ? undefined : goalNum);
   };
 
-  if (!session) {
+  const showKanban = session || isLoading || actions.length > 0;
+
+  if (!showKanban) {
     return (
       <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-4">
         <motion.div 
@@ -44,7 +48,7 @@ export default function ZeroPromptPage() {
               Zero-Prompt Mode
             </h1>
             <p className="text-muted-foreground">
-              Autonomous YouTube exploration and app deployment.
+              AI discovers trending YouTube videos, validates with papers, and deploys apps autonomously.
             </p>
           </div>
 
@@ -57,26 +61,28 @@ export default function ZeroPromptPage() {
 
           <div className="space-y-4 bg-card border border-border/50 p-6 rounded-xl shadow-sm">
             <div className="space-y-2 text-left">
-              <label htmlFor="goal-input" className="text-sm font-medium">Target Apps (Optional)</label>
+              <label htmlFor="goal-input" className="text-sm font-medium">Target GO Ideas</label>
               <Input 
                 id="goal-input"
                 type="number" 
-                placeholder="e.g. 5" 
+                placeholder="10" 
                 value={goal}
                 onChange={(e) => setGoal(e.target.value)}
                 min={1}
+                max={30}
               />
               <p className="text-xs text-muted-foreground">
-                How many apps should the agent try to deploy before stopping?
+                How many validated app ideas should the agent collect?
               </p>
             </div>
             
             <Button 
-              className="w-full h-12 text-lg font-semibold" 
+              className="w-full h-12 text-lg font-semibold bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600" 
               onClick={handleStart}
               disabled={isLoading}
             >
-              {isLoading ? "Starting..." : "Start Autonomous Agent"}
+              <Rocket className="w-5 h-5 mr-2" />
+              {isLoading ? "Starting..." : "Start Zero-Prompt"}
             </Button>
           </div>
         </motion.div>
@@ -94,17 +100,42 @@ export default function ZeroPromptPage() {
               Zero-Prompt Dashboard
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Session: {session.session_id} • Status: {session.status}
+              {session 
+                ? `Session: ${session.session_id.slice(0, 8)}... • Status: ${session.status}` 
+                : "Connecting to agent..."}
             </p>
+          </div>
+          <div className="flex items-center gap-2 text-sm">
+            {isConnected ? (
+              <>
+                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                <span className="text-green-500">Live — Exploring</span>
+              </>
+            ) : isCompleted ? (
+              <>
+                <span className="w-2 h-2 rounded-full bg-blue-500" />
+                <span className="text-blue-500">Complete</span>
+              </>
+            ) : isLoading ? (
+              <>
+                <span className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse" />
+                <span className="text-yellow-500">Connecting...</span>
+              </>
+            ) : null}
           </div>
         </header>
 
         <StatusBar session={session} isConnected={isConnected} />
         
         <KanbanBoard 
-          cards={session.cards || []} 
+          cards={session?.cards || []} 
           onQueueBuild={queueBuild} 
-          onPassCard={passCard} 
+          onPassCard={passCard}
+          onDeleteCard={deleteCard}
+          onReExplore={(cardId) => {
+            deleteCard(cardId);
+            startSession(1);
+          }}
         />
         
         <ActionFeed actions={actions} />

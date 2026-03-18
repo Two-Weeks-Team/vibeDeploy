@@ -217,6 +217,24 @@ export default function ResultPage() {
               localBackendUrl={result.deployment?.localBackendUrl}
               localFrontendUrl={result.deployment?.localFrontendUrl}
             />
+            {!result.deployment?.liveUrl && (
+              <div className="mt-4">
+                <button
+                  type="button"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  onClick={async () => {
+                    try {
+                      const { resumeMeeting } = await import("@/lib/api");
+                      await resumeMeeting(params.id, "deploy");
+                    } catch (e) {
+                      console.error("Deploy failed", e);
+                    }
+                  }}
+                >
+                  Deploy Now
+                </button>
+              </div>
+            )}
           </TabsContent>
         </Tabs>
         </motion.div>

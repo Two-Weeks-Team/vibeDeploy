@@ -9,17 +9,19 @@ interface KanbanBoardProps {
   cards: ZPCard[];
   onQueueBuild: (cardId: string) => void;
   onPassCard: (cardId: string) => void;
+  onDeleteCard?: (cardId: string) => void;
+  onReExplore?: (cardId: string) => void;
 }
 
 const COLUMNS: { id: string; title: string; statuses: CardStatus[] }[] = [
-  { id: "analyzing", title: "탐색 중", statuses: ["analyzing"] },
-  { id: "go_ready", title: "GO 대기", statuses: ["go_ready"] },
-  { id: "building", title: "빌드 중", statuses: ["build_queued", "building"] },
-  { id: "deployed", title: "배포됨", statuses: ["deployed"] },
-  { id: "nogo", title: "NO-GO / 패스", statuses: ["nogo", "passed", "build_failed"] },
+  { id: "analyzing", title: "Exploring", statuses: ["analyzing"] },
+  { id: "go_ready", title: "GO Ready", statuses: ["go_ready"] },
+  { id: "building", title: "Building", statuses: ["build_queued", "building"] },
+  { id: "deployed", title: "Deployed", statuses: ["deployed"] },
+  { id: "nogo", title: "NO-GO / Passed", statuses: ["nogo", "passed", "build_failed"] },
 ];
 
-export function KanbanBoard({ cards, onQueueBuild, onPassCard }: KanbanBoardProps) {
+export function KanbanBoard({ cards, onQueueBuild, onPassCard, onDeleteCard, onReExplore }: KanbanBoardProps) {
   const [selectedCard, setSelectedCard] = useState<ZPCard | null>(null);
 
   return (
@@ -34,6 +36,8 @@ export function KanbanBoard({ cards, onQueueBuild, onPassCard }: KanbanBoardProp
             cards={cards}
             onQueueBuild={onQueueBuild}
             onPassCard={onPassCard}
+            onDeleteCard={onDeleteCard}
+            onReExplore={onReExplore}
             onCardClick={setSelectedCard}
           />
         ))}

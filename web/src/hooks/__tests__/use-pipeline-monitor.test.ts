@@ -37,5 +37,12 @@ describe("usePipelineMonitor", () => {
     expect(result.current).toHaveProperty("connected");
   });
 
+  it("includes nodeMetadata in returned interface", () => {
+    const { result } = renderHook(() => usePipelineMonitor());
+
+    expect(result.current).toHaveProperty("nodeMetadata");
+    expect(result.current.nodeMetadata).toEqual({});
+  });
+
 });
 

@@ -401,7 +401,23 @@ def get_llm(
     if result is not None:
         return result
 
+    # Priority: direct OpenAI API (OPENAI_API_KEY) > DO Inference > fallback
+    # Reason: DO Inference returns 401 for premium models (gpt-5.3-codex etc.)
+    # on free-tier subscriptions. Direct OpenAI API has full model access.
+    openai_key = os.getenv("OPENAI_API_KEY", "")
     inference_key = os.getenv("GRADIENT_MODEL_ACCESS_KEY", "") or os.getenv("DIGITALOCEAN_INFERENCE_KEY", "")
+
+    if openai_key and openai_key not in ("test-key", ""):
+        from langchain_openai import ChatOpenAI
+
+        stripped = canonical[len("openai-") :] if canonical.startswith("openai-") else canonical
+        return ChatOpenAI(
+            model=stripped,
+            api_key=openai_key,
+            temperature=float(temperature),
+            max_tokens=effective_max_tokens,
+            request_timeout=effective_timeout,
+        )
 
     if inference_key and inference_key not in ("test-key", ""):
         from langchain_openai import ChatOpenAI
@@ -424,5 +440,4 @@ def get_llm(
         temperature=float(temperature),
         max_tokens=effective_max_tokens,
         request_timeout=effective_timeout,
-        use_responses_api=model_endpoint_type(canonical) == "responses",
     )

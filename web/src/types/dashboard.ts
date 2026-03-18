@@ -109,6 +109,26 @@ export interface DashboardEvent {
 
 export type PipelineNodeStatus = "idle" | "active" | "complete" | "error";
 
+export interface NodeMetadata {
+  iteration?: number;
+  maxIterations?: number;
+  matchRate?: number;
+  completeness?: number;
+  consistency?: number;
+  runnability?: number;
+  experience?: number;
+  blockers?: string[];
+  passed?: boolean;
+  skipped?: boolean;
+  backendOk?: boolean;
+  frontendOk?: boolean;
+  ciUrl?: string;
+  ciStatus?: string;
+  repairAttempt?: number;
+  maxRepairs?: number;
+  message?: string;
+}
+
 export interface ScoreDistributionBin {
   range: string;
   count: number;

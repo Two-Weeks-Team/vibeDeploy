@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import confetti from "canvas-confetti";
 import { CouncilMember } from "@/components/council-member";
@@ -11,7 +12,7 @@ import { VibeScore } from "@/components/vibe-score";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { DASHBOARD_API_URL } from "@/lib/api";
+import { DASHBOARD_API_URL, resumeMeeting } from "@/lib/api";
 import { createSSEClient, type SSEEvent } from "@/lib/sse-client";
 
 type AgentKey = "architect" | "scout" | "guardian" | "catalyst" | "advocate" | "strategist";
@@ -55,6 +56,7 @@ const phaseToIndex: Record<string, number> = {
 type SSEEventWithId = SSEEvent & { _uid: string };
 
 export function MeetingView({ meetingId }: { meetingId: string }) {
+  const router = useRouter();
   const [events, setEvents] = useState<SSEEventWithId[]>([]);
   const eventSeq = useRef(0);
   const [phaseIndex, setPhaseIndex] = useState(0);
@@ -180,12 +182,13 @@ export function MeetingView({ meetingId }: { meetingId: string }) {
       onComplete: () => {
         setStreamCompleted(true);
         setPhaseIndex(6);
+        setTimeout(() => router.push(`/result/${meetingId}`), 2000);
       },
       onError: (streamError) => setError(streamError.message),
     });
 
     return stop;
-  }, [handleEvent, meetingId]);
+  }, [handleEvent, meetingId, router]);
 
   useEffect(() => {
     if (verdict?.decision !== "GO") return;
@@ -315,6 +318,7 @@ export function MeetingView({ meetingId }: { meetingId: string }) {
                   <DecisionGate
                     verdict={verdict.decision === "NO_GO" ? "NO-GO" : verdict.decision}
                     score={verdict.score}
+                    onProceed={() => resumeMeeting(meetingId, "deploy")}
                     suggestions={
                       verdict.decision === "CONDITIONAL"
                         ? [

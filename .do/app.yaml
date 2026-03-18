@@ -56,7 +56,7 @@ services:
     http_port: 8080
     instance_count: 1
     instance_size_slug: professional-xs
-    build_command: pip install -r requirements.txt
+    build_command: pip install langchain-gradient>=0.1.24 --no-deps
     run_command: python run_server.py
     envs:
       - key: DATABASE_URL
@@ -92,6 +92,10 @@ services:
         scope: RUN_TIME
         type: SECRET
         value: REPLACE_WITH_ADK_AUTH_TOKEN
+      - key: GOOGLE_API_KEY
+        scope: RUN_TIME
+        type: SECRET
+        value: REPLACE_WITH_GOOGLE_API_KEY
 
   - name: web
     environment_slug: node-js

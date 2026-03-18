@@ -6,6 +6,25 @@ export interface ZPCard {
   title: string;
   status: CardStatus;
   score: number;
+  reason?: string;
+  reason_code?: string;
+  domain?: string;
+  papers_found?: number;
+  competitors_found?: string;
+  saturation?: string;
+  novelty_boost?: number;
+  thread_id?: string | null;
+  build_step?: string;
+  analysis_step?: string;
+  video_summary?: string;
+  insights?: string[];
+  mvp_proposal?: {
+    app_name?: string;
+    core_feature?: string;
+    tech_stack?: string;
+    key_pages?: string[];
+    estimated_days?: number;
+  };
 }
 
 export interface ZPSession {

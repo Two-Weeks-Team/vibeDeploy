@@ -14,10 +14,12 @@ Run: python -m agent.server
 import asyncio
 import hmac
 import json
+import logging
 import os
 import re
 import shutil
 import time
+import uuid
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -25,7 +27,7 @@ from pathlib import Path
 import httpx
 import uvicorn
 from dotenv import load_dotenv
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from starlette.responses import StreamingResponse
@@ -37,9 +39,13 @@ from .model_capabilities import load_model_capability_report, selected_runtime_m
 from .pipeline_runtime import build_brainstorm_result, build_meeting_result, stream_action_session
 from .sse import NODE_EVENTS, format_sse
 from .tools.digitalocean import list_apps as list_digitalocean_apps
+from .zero_prompt.event_bus import _event_buses as _zp_event_buses
+from .zero_prompt.event_bus import push_zp_event
 
 _AGENT_DIR = Path(__file__).resolve().parent
 load_dotenv(_AGENT_DIR / ".env.test")
+
+logger = logging.getLogger(__name__)
 
 _store: ResultStore | None = None
 
@@ -578,6 +584,12 @@ async def lifespan(app: FastAPI):
     global _store
     if os.environ.get("DATABASE_URL"):
         _store = ResultStore()
+        try:
+            from .db.zp_store import ensure_tables
+
+            await ensure_tables()
+        except Exception:
+            logger.warning("[ZP] Could not create ZP tables — DB may not be ready yet")
     else:
         db_path = os.environ.get("DB_PATH", str(_AGENT_DIR / "vibedeploy.db"))
         _store = ResultStore(db_path=db_path)
@@ -972,6 +984,43 @@ async def dashboard_evaluations():
     return summary.model_dump()
 
 
+@app.get("/api/zero-prompt/dashboard")
+@app.get("/zero-prompt/dashboard")
+async def zp_dashboard():
+    try:
+        from .db.zp_store import get_dashboard
+
+        return await get_dashboard()
+    except Exception:
+        return {"session_id": None, "status": "idle", "cards": []}
+
+
+@app.get("/api/zero-prompt/events")
+@app.get("/zero-prompt/events")
+async def zp_events(request: Request):
+    client_id = str(uuid.uuid4())
+    q: asyncio.Queue = _zp_event_buses[client_id]
+
+    async def event_stream() -> AsyncGenerator[str, None]:
+        try:
+            while True:
+                try:
+                    event = await asyncio.wait_for(q.get(), timeout=15.0)
+                    yield f"data: {json.dumps(event)}\n\n"
+                except asyncio.TimeoutError:
+                    yield ": keepalive\n\n"
+        except asyncio.CancelledError:
+            pass
+        finally:
+            _zp_event_buses.pop(client_id, None)
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+    )
+
+
 _zp_orchestrator = None
 
 
@@ -1009,23 +1058,89 @@ async def zero_prompt_start(request: ZPStartRequest):
 
     async def event_stream() -> AsyncGenerator[str, None]:
         yield _fmt(ZP_SESSION_START, start_event)
+        yield _fmt("zp.discovery.start", {"type": "zp.discovery.start", "message": "Searching for trending videos..."})
 
-        video_counter = 0
-        while orch.should_continue_exploring(session_id):
-            video_id = f"auto-discovery-{video_counter}"
-            video_counter += 1
-            step_events = await orch.exploration_step(session_id, video_id)
-            for evt in step_events:
-                yield _fmt(evt.get("type", "zp.step"), evt)
-            await asyncio.sleep(0.1)
+        videos: list[tuple[str, str, str]] = []
 
-        yield _fmt("zp.session.complete", {"session_id": session_id, "type": "zp.session.complete"})
+        try:
+            from .zero_prompt.discovery import YouTubeDiscovery
+
+            discovery = YouTubeDiscovery()
+            candidates = await discovery.fetch_candidate_pool(
+                max_results=30, min_views=5000, min_likes=100, min_engagement_rate=0.01
+            )
+            videos = [(c.video_id, c.title, c.description) for c in candidates]
+            logger.info("[ZP] YouTube API discovery: %d videos", len(videos))
+        except Exception as exc:
+            logger.warning("[ZP] YouTube API failed: %s", str(exc)[:200])
+
+        if not videos:
+            yield _fmt(
+                "zp.discovery.grounding",
+                {"type": "zp.discovery.grounding", "message": "Using Gemini AI to discover trending videos..."},
+            )
+            try:
+                from .zero_prompt.grounding_discovery import discover_videos_via_grounding
+
+                videos = await discover_videos_via_grounding(max_results=20)
+                logger.info("[ZP] Gemini grounding discovery: %d videos", len(videos))
+            except Exception as exc:
+                logger.warning("[ZP] Gemini grounding failed: %s", str(exc)[:200])
+
+        if not videos:
+            fallback_topics = [
+                "AI fitness tracker app",
+                "Recipe sharing with AI recommendations",
+                "Smart budget expense tracker",
+                "Language learning spaced repetition",
+                "Pet health monitoring symptom checker",
+                "Project management remote teams",
+                "AI resume builder job matching",
+                "Meditation guided sessions tracker",
+                "Restaurant queue management AI",
+                "Sustainable grocery delivery optimizer",
+                "AI flashcard study assistant",
+                "Social media sentiment dashboard",
+                "AR interior design visualizer",
+                "Code review automation tool",
+                "Handmade crafts marketplace",
+            ]
+            videos = [(f"fallback-{i}", topic, topic) for i, topic in enumerate(fallback_topics)]
+            logger.info("[ZP] Using hardcoded fallback topics")
+
+        goal = request.goal or 10
+        batch = videos[: goal + 5]
+
+        for vid_id, vid_title, vid_desc in batch:
+            await orch.register_card(session_id, vid_id, vid_title)
+            yield _fmt("zp.card.registered", {"type": "zp.card.registered", "video_id": vid_id, "title": vid_title})
+
+        async def _analyze_all():
+            for vid_id, vid_title, vid_desc in batch:
+                if not await orch.should_continue_exploring(session_id):
+                    break
+                step_events = await orch.exploration_step(
+                    session_id, vid_id, video_title=vid_title, video_description=vid_desc
+                )
+                for evt in step_events:
+                    push_zp_event(evt)
+
+        asyncio.create_task(_analyze_all())
+        yield _fmt("zp.exploration.started", {"type": "zp.exploration.started", "total_videos": len(batch)})
 
     return StreamingResponse(
         event_stream(),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
     )
+
+
+@app.get("/api/zero-prompt/active")
+@app.get("/zero-prompt/active")
+async def zero_prompt_active():
+    orch = _get_zp_orchestrator()
+    sessions = [s.model_dump() for s in orch._sessions.values()]
+    return {"sessions": sessions, "count": len(sessions)}
 
 
 @app.get("/api/zero-prompt/{session_id}")
@@ -1051,8 +1166,13 @@ async def zero_prompt_action(session_id: str, request: ZPActionRequest):
 
     if action == "queue_build":
         result = orch.queue_build(session_id, card_id)
+        asyncio.create_task(_trigger_zp_build(orch, session_id, card_id))
+        if orch.should_continue_exploring(session_id):
+            asyncio.create_task(_resume_exploration(orch, session_id))
     elif action == "pass_card":
         result = orch.pass_card(session_id, card_id)
+        if orch.should_continue_exploring(session_id):
+            asyncio.create_task(_resume_exploration(orch, session_id))
     elif action == "delete_card":
         result = orch.delete_card(session_id, card_id)
     elif action == "pause":
@@ -1071,6 +1191,134 @@ async def zero_prompt_action(session_id: str, request: ZPActionRequest):
         raise HTTPException(status_code=422, detail=result["error"])
 
     return result
+
+
+async def _trigger_zp_build(orch, session_id: str, card_id: str) -> None:
+    from .db import zp_store as _zp_store
+
+    try:
+        session = orch.get_session(session_id)
+        if session is None:
+            return
+        card = next((c for c in session.cards if c.card_id == card_id), None)
+        if card is None:
+            return
+
+        card.status = "building"
+        card.build_step = "code_gen"
+        idea_title = card.title or card.video_id
+
+        try:
+            await _zp_store.update_card(card_id, status="building", build_step="code_gen")
+            push_zp_event({"type": "card.update", "card_id": card_id, "status": "building", "session_id": session_id})
+        except Exception:
+            pass
+
+        build_prompt = f"Build a web app: {idea_title}."
+        if card.domain and card.domain != "unknown":
+            build_prompt += f" Domain: {card.domain}."
+        if card.reason:
+            build_prompt += f" Validation: {card.reason}"
+        build_prompt += (
+            " Create a complete Next.js frontend with Tailwind CSS"
+            " and a FastAPI backend with health endpoint."
+            " Include realistic seed data and a clean dashboard UI."
+        )
+
+        from .pipeline_runtime import stream_action_session
+
+        action_payload = {
+            "action": "evaluate",
+            "thread_id": f"zp-{card_id}",
+            "prompt": build_prompt,
+            "skip_council": True,
+        }
+        async for chunk in stream_action_session(action_payload):
+            phase = ""
+            if hasattr(chunk, "data") and isinstance(chunk.data, dict):
+                phase = chunk.data.get("phase", "")
+            elif isinstance(chunk, dict):
+                phase = chunk.get("phase", "") or chunk.get("node", "")
+            if phase:
+                if "code_gen" in phase or "code_generator" in phase:
+                    card.build_step = "code_gen"
+                elif "code_eval" in phase or "build_valid" in phase:
+                    card.build_step = "validate"
+                elif "deploy" in phase:
+                    card.build_step = "deploy"
+                try:
+                    await _zp_store.update_card(card_id, build_step=card.build_step)
+                    push_zp_event(
+                        {
+                            "type": "card.build_step",
+                            "card_id": card_id,
+                            "build_step": card.build_step,
+                            "session_id": session_id,
+                        }
+                    )
+                except Exception:
+                    pass
+
+        card.build_step = "done"
+        card.status = "deployed"
+        thread_id = f"zp-{card_id}"
+        card.thread_id = thread_id
+
+        live_url = ""
+        try:
+            result = await _store.get_result(thread_id) if _store else None
+            if result and isinstance(result, dict):
+                deploy = result.get("deployment", {})
+                if isinstance(deploy, dict):
+                    live_url = deploy.get("liveUrl", "") or deploy.get("live_url", "")
+        except Exception:
+            pass
+
+        try:
+            await _zp_store.update_card(card_id, status="deployed", build_step="done", thread_id=live_url or thread_id)
+            push_zp_event(
+                {
+                    "type": "card.update",
+                    "card_id": card_id,
+                    "status": "deployed",
+                    "title": card.title,
+                    "session_id": session_id,
+                }
+            )
+        except Exception:
+            pass
+        logger.info("[ZP] Build completed for card %s: %s (url=%s)", card_id, idea_title, live_url)
+    except Exception:
+        logger.exception("[ZP] Build failed for card %s", card_id)
+        session = orch.get_session(session_id)
+        if session:
+            card = next((c for c in session.cards if c.card_id == card_id), None)
+            if card:
+                card.status = "build_failed"
+                try:
+                    await _zp_store.update_card(card_id, status="build_failed")
+                    push_zp_event(
+                        {"type": "card.update", "card_id": card_id, "status": "build_failed", "session_id": session_id}
+                    )
+                except Exception:
+                    pass
+
+
+async def _resume_exploration(orch, session_id: str) -> None:
+    try:
+        session = orch.get_session(session_id)
+        if session is None or not session.remaining_videos:
+            return
+
+        while orch.should_continue_exploring(session_id) and session.remaining_videos:
+            vid = session.remaining_videos.pop(0)
+            vid_id, vid_title, vid_desc = vid[0], vid[1], vid[2] if len(vid) > 2 else ""
+            await orch.exploration_step(session_id, vid_id, video_title=vid_title, video_description=vid_desc)
+            await asyncio.sleep(0.05)
+
+        logger.info("[ZP] Exploration resumed for session %s", session_id)
+    except Exception:
+        logger.exception("[ZP] Exploration resume failed for session %s", session_id)
 
 
 if __name__ == "__main__":

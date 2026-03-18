@@ -4,6 +4,8 @@ import logging
 import tempfile
 from pathlib import Path
 
+from langchain_core.callbacks.manager import adispatch_custom_event
+
 from ..state import VibeDeployState
 
 logger = logging.getLogger(__name__)
@@ -109,17 +111,62 @@ async def _run_docker_frontend(frontend_code: dict, docker_client) -> tuple[bool
             return False, str(stderr) or str(exc)
 
 
-async def build_validator(state: VibeDeployState) -> dict:
+async def _emit_build_event(
+    event_name: str,
+    *,
+    config,
+    node: str,
+    phase: str,
+    message: str,
+    **extra,
+) -> None:
+    if config is None:
+        return
+    payload = {
+        "type": event_name,
+        "node": node,
+        "stage": node,
+        "phase": phase,
+        "message": message,
+        **extra,
+    }
+    await adispatch_custom_event(event_name, payload, config=config)
+
+
+async def build_validator(state: VibeDeployState, config=None) -> dict:
     backend_code = state.get("backend_code") or {}
     frontend_code = state.get("frontend_code") or {}
 
+    await _emit_build_event(
+        "build.node.start",
+        config=config,
+        node="build_validator",
+        phase="build_validation",
+        message="Validating build...",
+    )
+
     if backend_code:
+        await _emit_build_event(
+            "build.step.start",
+            config=config,
+            node="build_validator",
+            phase="build_validation",
+            message="Checking Python syntax...",
+        )
         syntax_errors = _ast_check_python_files(backend_code)
         if syntax_errors:
             logger.warning("[BUILD_VALIDATOR] Python syntax errors detected: %s", syntax_errors)
             combined_stderr = "\n".join(syntax_errors)
             trimmed = _trim_build_errors(combined_stderr)
             repair_prompt = _build_repair_prompt(trimmed, backend_code)
+            await _emit_build_event(
+                "build.node.error",
+                config=config,
+                node="build_validator",
+                phase="build_validation",
+                message="Python syntax errors detected",
+                errors=syntax_errors,
+            )
             return {
                 "build_validation": {
                     "passed": False,
@@ -137,6 +184,14 @@ async def build_validator(state: VibeDeployState) -> dict:
         import docker.errors  # type: ignore[import]
     except ImportError:
         logger.warning("[BUILD_VALIDATOR] docker SDK not installed; skipping container validation")
+        await _emit_build_event(
+            "build.node.complete",
+            config=config,
+            node="build_validator",
+            phase="build_validation",
+            message="Build validation skipped: Docker not available",
+            skipped=True,
+        )
         return {
             "build_validation": {
                 "passed": True,
@@ -150,6 +205,14 @@ async def build_validator(state: VibeDeployState) -> dict:
         docker_client.ping()
     except Exception as exc:
         logger.warning("[BUILD_VALIDATOR] Docker daemon not reachable (%s); skipping container validation", exc)
+        await _emit_build_event(
+            "build.node.complete",
+            config=config,
+            node="build_validator",
+            phase="build_validation",
+            message="Build validation skipped: Docker not available",
+            skipped=True,
+        )
         return {
             "build_validation": {
                 "passed": True,
@@ -164,6 +227,13 @@ async def build_validator(state: VibeDeployState) -> dict:
 
     if backend_code and "requirements.txt" in backend_code and "main.py" in backend_code:
         logger.info("[BUILD_VALIDATOR] Running backend build validation in Docker")
+        await _emit_build_event(
+            "build.step.start",
+            config=config,
+            node="build_validator",
+            phase="build_validation",
+            message="Running backend build in Docker...",
+        )
         backend_ok, backend_err = await _run_docker_backend(backend_code, docker_client)
         if not backend_ok:
             logger.warning("[BUILD_VALIDATOR] Backend Docker validation failed: %s", backend_err[:500])
@@ -171,6 +241,13 @@ async def build_validator(state: VibeDeployState) -> dict:
 
     if frontend_code and "package.json" in frontend_code:
         logger.info("[BUILD_VALIDATOR] Running frontend build validation in Docker")
+        await _emit_build_event(
+            "build.step.start",
+            config=config,
+            node="build_validator",
+            phase="build_validation",
+            message="Running frontend build in Docker...",
+        )
         frontend_ok, frontend_err = await _run_docker_frontend(frontend_code, docker_client)
         if not frontend_ok:
             logger.warning("[BUILD_VALIDATOR] Frontend Docker validation failed: %s", frontend_err[:500])
@@ -178,6 +255,16 @@ async def build_validator(state: VibeDeployState) -> dict:
 
     passed = backend_ok and frontend_ok
     if passed:
+        await _emit_build_event(
+            "build.node.complete",
+            config=config,
+            node="build_validator",
+            phase="build_validation",
+            message="Build validation passed",
+            passed=True,
+            backend_ok=backend_ok,
+            frontend_ok=frontend_ok,
+        )
         return {
             "build_validation": {
                 "passed": True,
@@ -194,6 +281,18 @@ async def build_validator(state: VibeDeployState) -> dict:
     if not frontend_ok:
         failing_files.update(frontend_code)
     repair_prompt = _build_repair_prompt(trimmed, failing_files)
+    await _emit_build_event(
+        "build.node.error",
+        config=config,
+        node="build_validator",
+        phase="build_validation",
+        message="Build validation failed",
+        passed=False,
+        backend_ok=backend_ok,
+        frontend_ok=frontend_ok,
+        errors=errors,
+        attempt=state.get("build_attempt_count", 0) + 1,
+    )
 
     return {
         "build_validation": {
