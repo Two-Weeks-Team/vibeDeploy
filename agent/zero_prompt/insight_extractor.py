@@ -57,6 +57,7 @@ _FEATURE_PATTERNS: list[re.Pattern[str]] = [
 # Confidence: length contributes up to 0.6 (scaled against _CONF_MAX_WORDS)
 # and keyword density contributes up to 0.4
 _CONF_MAX_WORDS = 500
+_METADATA_CONF_MAX_WORDS = 160
 
 
 def _detect_domain(text: str) -> str:
@@ -93,7 +94,9 @@ def _compute_confidence(text: str, domain: str) -> float:
     word_count = len(text.split())
     if word_count == 0:
         return 0.0
-    length_score = min(word_count, _CONF_MAX_WORDS) / _CONF_MAX_WORDS * 0.6
+    is_metadata_context = text.startswith("Video Title:") or "Description:\n" in text
+    conf_max_words = _METADATA_CONF_MAX_WORDS if is_metadata_context else _CONF_MAX_WORDS
+    length_score = min(word_count, conf_max_words) / conf_max_words * 0.6
     if domain != "general":
         domain_kws = _DOMAIN_KEYWORDS.get(domain, [])
         lower = text.lower()

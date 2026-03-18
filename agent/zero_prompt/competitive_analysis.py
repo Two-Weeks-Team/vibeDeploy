@@ -26,19 +26,21 @@ def _estimate_saturation(results: list[SearchResult]) -> str:
 
 
 def _compute_opportunity_score(results: list[SearchResult], saturation: str) -> int:
-    base = 50
-    if saturation == "high":
-        base = 30
-    elif saturation == "low":
-        base = 70
+    result_count = len(results)
+    base = max(30, 78 - result_count * 4)
 
     high_confidence_count = sum(1 for r in results if r.confidence == "high")
-    if high_confidence_count >= 3:
+    if high_confidence_count >= 4:
         base -= 10
-    elif high_confidence_count == 0 and len(results) > 0:
-        base += 10
+    elif high_confidence_count == 0 and result_count > 0:
+        base += 6
 
-    return max(0, min(100, base))
+    if saturation == "low":
+        base += 6
+    elif saturation == "high":
+        base -= 6
+
+    return max(25, min(85, base))
 
 
 def _determine_search_confidence(results: list[SearchResult]) -> str:

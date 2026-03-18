@@ -271,7 +271,9 @@ class StreamingOrchestrator:
             return False
         committed_statuses = {"go_ready", "build_queued", "building", "deployed"}
         committed_count = sum(1 for card in session.cards if card.status in committed_statuses)
-        return committed_count < session.goal_go_cards
+        rejected_statuses = {"nogo", "passed", "build_failed"}
+        rejected_count = sum(1 for card in session.cards if card.status in rejected_statuses)
+        return committed_count < session.goal_go_cards and rejected_count < 10
 
     async def register_card(self, session_id: str, video_id: str, title: str = "") -> str:
         card_id = str(uuid.uuid4())
@@ -530,10 +532,10 @@ class StreamingOrchestrator:
                 paper_bonus = min(len(papers) * 0.15, 0.45) if papers else 0.0
                 engagement = min(1.0, transcript_base + paper_bonus)
 
-                feature_bonus = min(len(idea.key_features) * 6, 24) if idea else 0
+                feature_bonus = min(len(idea.key_features) * 7, 28) if idea else 0
                 gap_bonus = min(len(market.gaps) * 8, 24) if market else 0
-                competitor_penalty = min((len(market.competitors) if market else 0) * 4, 28)
-                differentiation = max(10, min(90, 35 + feature_bonus + gap_bonus - competitor_penalty))
+                competitor_penalty = min((len(market.competitors) if market else 0) * 2, 16)
+                differentiation = max(18, min(90, 40 + feature_bonus + gap_bonus - competitor_penalty))
 
                 score = compute_verdict_score(
                     confidence, engagement, market_opportunity, novelty_boost, differentiation

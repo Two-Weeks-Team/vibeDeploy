@@ -1131,6 +1131,11 @@ def _count_pending_cards(session) -> int:
     return sum(1 for c in session.cards if c.status in pending)
 
 
+def _count_rejected_cards(session) -> int:
+    rejected = {"nogo", "passed", "build_failed"}
+    return sum(1 for c in session.cards if c.status in rejected)
+
+
 async def _run_zp_pipeline(orch, session_id: str, goal: int) -> None:
     try:
         seen_video_ids: set[str] = set()
@@ -1142,6 +1147,24 @@ async def _run_zp_pipeline(orch, session_id: str, goal: int) -> None:
             session = orch.get_session(session_id)
             if session and _count_go_cards(session) >= goal:
                 logger.info("[ZP] Goal reached (%d GO cards) for session %s", goal, session_id)
+                break
+            if session and _count_rejected_cards(session) >= 10:
+                session.status = "paused"
+                logger.info("[ZP] Rejected cap reached (10 cards) for session %s", session_id)
+                try:
+                    from .db import zp_store as _zps
+
+                    await _zps.update_session(session_id, status="paused")
+                except Exception:
+                    logger.exception("[ZP] Failed to persist paused status for %s", session_id)
+                push_zp_event(
+                    {
+                        "type": "zp.session.pause",
+                        "reason": "rejected_cap_reached",
+                        "rejected_cards": _count_rejected_cards(session),
+                        "session_id": session_id,
+                    }
+                )
                 break
 
             available_slots = max_pending_cards
@@ -1190,6 +1213,24 @@ async def _run_zp_pipeline(orch, session_id: str, goal: int) -> None:
                 session = orch.get_session(session_id)
                 if session and _count_go_cards(session) >= goal:
                     logger.info("[ZP] Goal reached mid-round (%d GO cards)", goal)
+                    break
+                if session and _count_rejected_cards(session) >= 10:
+                    session.status = "paused"
+                    logger.info("[ZP] Rejected cap reached mid-round for session %s", session_id)
+                    try:
+                        from .db import zp_store as _zps
+
+                        await _zps.update_session(session_id, status="paused")
+                    except Exception:
+                        logger.exception("[ZP] Failed to persist paused status for %s", session_id)
+                    push_zp_event(
+                        {
+                            "type": "zp.session.pause",
+                            "reason": "rejected_cap_reached",
+                            "rejected_cards": _count_rejected_cards(session),
+                            "session_id": session_id,
+                        }
+                    )
                     break
 
         logger.info("[ZP] Pipeline complete for session %s", session_id)
