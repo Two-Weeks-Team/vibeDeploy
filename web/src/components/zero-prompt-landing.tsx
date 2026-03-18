@@ -96,8 +96,8 @@ export function ZeroPromptLanding({ youtubeUrl, onYoutubeUrlChange, startAction,
           <motion.div variants={fadeUp} className="flex flex-col items-center gap-4 pt-6">
             <div className="flex flex-col sm:flex-row items-center gap-3">
               {startAction}
-              <div className="relative">
-                <Link href="/demo" className="group/demo">
+              <div className="group/demo relative">
+                <Link href="/demo">
                   <Button aria-describedby={demoTooltipId} size="lg" variant="outline" className="h-14 px-8 text-lg font-semibold gap-2 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300">
                     <Play className="w-5 h-5 fill-current" />
                     Watch Demo
