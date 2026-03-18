@@ -1,6 +1,29 @@
 import { DASHBOARD_API_URL } from "./api";
 import type { ZPSession } from "@/types/zero-prompt";
 
+function parseStartSessionResponse(raw: string): ZPSession {
+  const trimmed = raw.trim();
+  if (!trimmed) throw new Error("Empty start session response");
+  if (trimmed.startsWith("{")) return JSON.parse(trimmed) as ZPSession;
+
+  for (const line of trimmed.split(/\r?\n/)) {
+    if (!line.startsWith("data: ")) continue;
+    const payload = JSON.parse(line.slice(6));
+    if (payload.type === "zp.session.start") {
+      return {
+        session_id: String(payload.session_id),
+        status: String(payload.session_status || "exploring"),
+        goal_go_cards: Number(payload.goal_go_cards || 0),
+        cards: [],
+        build_queue: [],
+        active_build: null,
+      } as ZPSession;
+    }
+  }
+
+  throw new Error("No zp.session.start event found");
+}
+
 export async function startSession(goal?: number): Promise<ZPSession> {
   const response = await fetch(`${DASHBOARD_API_URL}/zero-prompt/start`, {
     method: "POST",
@@ -8,7 +31,7 @@ export async function startSession(goal?: number): Promise<ZPSession> {
     body: JSON.stringify({ goal }),
   });
   if (!response.ok) throw new Error("Failed to start session");
-  return response.json();
+  return parseStartSessionResponse(await response.text());
 }
 
 export async function getDashboard(): Promise<ZPSession & { session_id: string | null }> {
