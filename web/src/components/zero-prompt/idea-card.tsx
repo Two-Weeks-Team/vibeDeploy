@@ -82,7 +82,7 @@ export function IdeaCard({ card, onQueueBuild, onPassCard, onDeleteCard, onReExp
           <div className="mt-3 space-y-2">
             {card.domain && <p className="text-[10px] text-muted-foreground">Domain: {card.domain}</p>}
             <Button size="sm" variant="outline" className="w-full h-8 text-xs border-emerald-500/30 text-emerald-500 hover:bg-emerald-500/10" asChild>
-              <a href={card.thread_id?.startsWith("http") ? card.thread_id : `https://${card.card_id}.ondigitalocean.app`} target="_blank" rel="noopener noreferrer" onClick={(event) => event.stopPropagation()}>
+              <a data-view-app-card-id={card.card_id} href={card.thread_id?.startsWith("http") ? card.thread_id : `https://${card.card_id}.ondigitalocean.app`} target="_blank" rel="noopener noreferrer" onClick={(event) => event.stopPropagation()}>
                 <ExternalLink className="w-3 h-3 mr-1" /> View App
               </a>
             </Button>

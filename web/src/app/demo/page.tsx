@@ -85,6 +85,8 @@ export default function DemoPage() {
   const zeroPromptStartRef = useRef<HTMLButtonElement | null>(null);
   const sequenceTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const buildDialogShownRef = useRef(false);
+  const buildClickShownRef = useRef(false);
+  const viewAppClickShownRef = useRef(false);
 
   const clearSequenceTimers = useCallback(() => {
     sequenceTimersRef.current.forEach(clearTimeout);
@@ -112,6 +114,8 @@ export default function DemoPage() {
     autoFired.current = true;
     clearSequenceTimers();
     buildDialogShownRef.current = false;
+    buildClickShownRef.current = false;
+    viewAppClickShownRef.current = false;
 
     queueTimer(() => moveCursorToElement(introInputRef.current), 600);
     queueTimer(() => setCursor((prev) => ({ ...prev, clicking: true })), 900);
@@ -160,6 +164,49 @@ export default function DemoPage() {
     }, 760);
     queueTimer(() => setCursor((prev) => ({ ...prev, clicking: false })), 980);
   }, [actions, moveCursorToElement, queueTimer, session, stage]);
+
+  useEffect(() => {
+    if (stage !== "dashboard" || !session || buildClickShownRef.current) return;
+
+    const targetCard = session.cards.find((card) => card.card_id === "nutriplan-aADukT");
+    const studyMateGoSeen = actions.some((action) => action.message.includes("StudyMate Lite scored 75.0 → GO"));
+
+    if (!targetCard || targetCard.status !== "go_ready" || selectedCardId || !studyMateGoSeen || !buildDialogShownRef.current) {
+      return;
+    }
+
+    buildClickShownRef.current = true;
+    queueTimer(() => {
+      const goButton = document.querySelector('[data-go-card-id="nutriplan-aADukT"]');
+      moveCursorToElement(goButton);
+    }, 300);
+    queueTimer(() => {
+      setCursor((prev) => ({ ...prev, clicking: true }));
+      queueBuild("nutriplan-aADukT");
+    }, 620);
+    queueTimer(() => setCursor((prev) => ({ ...prev, clicking: false })), 860);
+  }, [actions, moveCursorToElement, queueBuild, queueTimer, selectedCardId, session, stage]);
+
+  useEffect(() => {
+    if (stage !== "dashboard" || !session || viewAppClickShownRef.current) return;
+
+    const targetCard = session.cards.find((card) => card.card_id === "nutriplan-aADukT");
+    if (!targetCard || targetCard.status !== "deployed") return;
+
+    viewAppClickShownRef.current = true;
+    queueTimer(() => {
+      const viewAppLink = document.querySelector('[data-view-app-card-id="nutriplan-aADukT"]');
+      moveCursorToElement(viewAppLink);
+    }, 400);
+    queueTimer(() => {
+      setCursor((prev) => ({ ...prev, clicking: true }));
+      const viewAppLink = document.querySelector('[data-view-app-card-id="nutriplan-aADukT"]');
+      if (viewAppLink instanceof HTMLElement) {
+        viewAppLink.click();
+      }
+    }, 720);
+    queueTimer(() => setCursor((prev) => ({ ...prev, clicking: false })), 960);
+  }, [moveCursorToElement, queueTimer, session, stage]);
 
   useEffect(() => () => clearSequenceTimers(), [clearSequenceTimers]);
 
