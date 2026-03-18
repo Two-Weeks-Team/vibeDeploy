@@ -1,85 +1,106 @@
-# vibeDeploy — Devpost Submission
+# vibeDeploy - Devpost Description
 
 ## Inspiration
 
-Every AI code generator produces code — but none validates whether the idea is worth building, and none deploys the result. We wanted to create the complete pipeline: from a single sentence to a live, deployed application — with AI experts debating the idea's viability before a single line of code is written.
+Most AI coding tools stop at code. They do not help users discover which idea is worth building, they do not show the decision process live, and they still leave validation and deployment work to the user.
+
+We built `vibeDeploy` to close that gap: start from an idea, validate it with AI and research, then move all the way to a live deployed app on DigitalOcean.
 
 ## What it does
 
-vibeDeploy takes a sentence describing your app idea and turns it into a **live deployed application** on DigitalOcean. Between your idea and the deployed app, **The Vibe Council** — six specialized AI agents — holds a structured debate to evaluate feasibility, market fit, and technical risk.
+`vibeDeploy` is an autonomous AI product workflow with three modes:
 
-**Two modes:**
-- **Evaluate Mode**: 6 AI agents analyze, debate, and score your idea (Vibe Score 0-100). If GO → auto-generate code → deploy to DigitalOcean.
-- **Brainstorm Mode**: Same 6 agents switch to creative ideation — generating possibilities instead of scores.
+- `Zero-Prompt Start`: one click launches idea discovery from YouTube, research-backed evaluation, competitive analysis, and a live Kanban of GO / NO-GO cards. The user chooses any GO card to build.
+- `Evaluate`: a specific idea goes through the Vibe Council, a six-agent review that scores feasibility, market signal, risk, and user value.
+- `Brainstorm`: the same system shifts into idea expansion and produces a structured concept brief instead of a build verdict.
+
+The core product experience is the Zero-Prompt Kanban: discovery starts automatically, the board fills live, and a GO card can be built and deployed from the same workflow.
 
 ## How we built it
 
-**Architecture:**
-- **Gradient ADK** hosts the core agent pipeline with LangGraph StateGraph for multi-agent orchestration
-- **App Platform** runs the FastAPI API server (10+ endpoints) + Next.js frontend + Managed PostgreSQL
-- **Serverless Inference** powers all LLM calls — mixing DO-native models (Llama 3.3 70B) with OpenAI models (GPT-5.3 Codex for code generation)
-- **Knowledge Base** provides RAG over DigitalOcean docs for deployment guidance
-- **Function Calling** enables agents to use tools for real-time market research and tech stack validation
+`vibeDeploy` is a dual-runtime system:
 
-**The Vibe Council agents:**
-| Agent | Role | Model |
-|-------|------|-------|
-| Architect | Technical Lead | Llama 3.3 70B (DO-native) |
-| Scout | Market Analyst | Llama 3.3 70B (DO-native) |
-| Guardian | Risk Assessor | Llama 3.3 70B (DO-native) |
-| Catalyst | Innovation Officer | Llama 3.3 70B (DO-native) |
-| Advocate | UX Champion | Llama 3.3 70B (DO-native) |
-| Strategist | Session Lead | GPT-5.2 (OpenAI via DO) |
+- `web/` is a Next.js 16.1.7 frontend for Zero-Prompt, evaluation, brainstorm, and monitoring views.
+- `agent/` is a Python 3.12.4 backend that combines Gradient ADK, FastAPI, and LangGraph.
 
-## DigitalOcean Gradient AI Features Used (10)
+The build pipeline follows a contract-first approach:
 
-1. **ADK (Agent Development Kit)** — Agent system hosting with @entrypoint
-2. **Serverless Inference (Text)** — 6 council agents + code generation via DO endpoint
-3. **Serverless Inference (Image)** — AI-generated app logos and UI mockups
-4. **Knowledge Bases (RAG)** — DO docs + framework best practices for deployment guidance
-5. **Multi-Agent Routing** — LangGraph Send API for parallel agent execution
-6. **Function Calling** — Agents use bound tools (@tool + bind_tools) for real-time research
-7. **Evaluations** — 10-case test suite measuring decision accuracy and scoring calibration
-8. **Tracing** — Automatic pipeline debugging via ADK + LangGraph integration
-9. **Streaming** — Real-time SSE for live meeting experience
-10. **Guardrails** — PII filtering + prompt injection protection on all inputs
+1. Idea refinement
+2. Council review or Zero-Prompt evaluation
+3. OpenAPI contract generation
+4. Layered code generation
+5. Validation (syntax, imports, build, contract checks)
+6. Deploy plus health verification
+
+This structure lets us keep the user-facing story simple while the underlying system remains observable and testable.
+
+## DigitalOcean usage
+
+We currently document `13` DigitalOcean capabilities across Gradient AI and the deployment stack:
+
+1. Gradient ADK
+2. Knowledge Bases
+3. Evaluations
+4. Guardrails
+5. Tracing
+6. Multi-Agent Routing
+7. A2A handoff
+8. Serverless Inference
+9. App Platform
+10. Spaces
+11. Image Generation
+12. Agent Versioning
+13. MCP Integration
+
+The product also uses Managed PostgreSQL for session and lineage data.
+
+## Models in the current build
+
+- `gemini-3.1-flash-lite-preview` for Zero-Prompt discovery and lightweight brainstorming
+- `claude-sonnet-4-6` for council analysis and cross-examination
+- `gpt-5.4` for strategist synthesis and document generation
+- `gpt-5.3-codex` for code generation
+- `gpt-5.2` for CI repair
 
 ## Challenges we ran into
 
-- **ADK single endpoint limitation**: The ADK only exposes POST /run, but our system has 10+ API endpoints. Solution: deploy ADK for the core pipeline and App Platform Service for the full API server.
-- **Model diversity**: Balancing DO-native models (fast, no external keys) with OpenAI models (stronger reasoning) required careful role assignment.
-- **CI auto-repair**: Generated projects sometimes had CI failures. We built a 3-iteration repair loop using GPT-5.3 Codex to automatically fix CI errors.
+- Keeping a dual-runtime system consistent across a streaming UI, FastAPI gateway, and ADK runtime
+- Moving from one-shot generation to contract-first, layered generation
+- Validating generated apps before deploy instead of trusting raw output
+- Handling SSE and long-running jobs without making the product feel opaque
+- Coordinating YouTube discovery, paper search, and competitive analysis inside one visible workflow
 
-## Accomplishments that we're proud of
+## Accomplishments we're proud of
 
-- **Complete pipeline**: Idea → AI debate → code generation → GitHub repo → CI pass → live URL. No manual steps.
-- **Real AI debate**: Not just sequential analysis — agents cross-examine each other's findings.
-- **10 Gradient AI features**: Deep platform integration, not surface-level usage.
-- **CI auto-repair loop**: Generated projects self-heal when CI fails.
+- A public Zero-Prompt experience that shows discovery and ranking live on a Kanban board
+- Four public generated demo apps with working URLs at the time of the latest submission audit
+- A single product that covers discovery, evaluation, generation, validation, and deployment
+- A clearer split between the user-facing Zero-Prompt flow and the operational dashboard
 
 ## What we learned
 
-- LangGraph's Send API enables elegant parallel multi-agent execution
-- Mixing DO-native and OpenAI models through DO Inference provides both cost efficiency and quality
-- The ADK's automatic tracing removes the need for manual instrumentation
-- Guardrails (PII filtering, prompt injection detection) are essential for any user-facing AI system
+- Reviewers trust consistent evidence more than large claim counts
+- Contract-first generation makes frontend and backend changes easier to keep in sync
+- A visible live workflow is easier to understand than a hidden batch job
+- Submission copy needs the same level of rigor as the codebase itself
 
 ## What's next for vibeDeploy
 
-- **More deployment targets**: Kubernetes, Vercel, AWS
-- **Collaborative meetings**: Multiple users watch and influence the AI debate in real-time
-- **Project iteration**: Feed deployed app analytics back to improve future builds
-- **Template marketplace**: Save and share successful project templates
+- Improve the handoff from GO card selection to deployed app preview
+- Expand reusable generation templates and evaluation criteria
+- Add stronger iteration loops after deployment feedback
+- Keep tightening the Zero-Prompt submission experience around a single clear story
 
 ## Built With
 
-- digitalocean-app-platform
-- digitalocean-gradient-adk
-- digitalocean-serverless-inference
-- digitalocean-managed-postgresql
-- python
-- fastapi
-- langgraph
-- nextjs
-- typescript
-- tailwindcss
+- Python 3.12.4
+- Next.js 16.1.7
+- FastAPI
+- LangGraph
+- DigitalOcean Gradient ADK
+- DigitalOcean App Platform
+- Managed PostgreSQL
+- Docker SDK
+- Google Gemini
+- Anthropic Claude
+- OpenAI GPT
