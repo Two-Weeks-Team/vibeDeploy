@@ -4,7 +4,9 @@ import { motion } from "framer-motion";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Rocket, Youtube, FlaskConical, Code2, Globe } from "lucide-react";
+import { Rocket, Youtube, FlaskConical, Code2, Globe, Play, ExternalLink } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import Image from "next/image";
 
 const COUNCIL_AGENTS = [
   { emoji: "🏗️", name: "Architect", role: "Technical Lead" },
@@ -82,6 +84,74 @@ export default function LandingPage() {
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3, duration: 0.5 }}
+        >
+          <div className="relative my-10">
+            <div className="absolute inset-0 flex items-center" aria-hidden="true">
+              <div className="w-full border-t border-border/50" />
+            </div>
+            <div className="relative flex justify-center">
+              <span className="bg-background px-4 text-sm text-muted-foreground">Or start from a YouTube video</span>
+            </div>
+          </div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.35, duration: 0.5 }}
+        >
+          <Card className="border-border/50 overflow-hidden">
+            <CardContent className="pt-6 space-y-4">
+              <div className="flex gap-2">
+                <Input
+                  defaultValue="https://www.youtube.com/watch?v=aADukThvjXQ"
+                  readOnly
+                  className="font-mono text-sm"
+                />
+                <Button className="shrink-0 gap-2 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400">
+                  <Play className="w-4 h-4 fill-current" />
+                  Start
+                </Button>
+              </div>
+
+              <a
+                href="https://www.youtube.com/watch?v=aADukThvjXQ"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block group"
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <Youtube className="w-5 h-5 text-red-500" />
+                  <span className="text-sm font-medium">YouTube</span>
+                  <span className="text-sm text-muted-foreground">| trainer winny</span>
+                </div>
+                <p className="text-sm text-blue-400 group-hover:underline mb-3 flex items-center gap-1">
+                  How To Simplify Your Nutrition (Free Meal Plan)
+                  <ExternalLink className="w-3 h-3" />
+                </p>
+                <div className="relative aspect-video rounded-lg overflow-hidden bg-muted">
+                  <Image
+                    src="https://img.youtube.com/vi/aADukThvjXQ/maxresdefault.jpg"
+                    alt="How To Simplify Your Nutrition (Free Meal Plan) — trainer winny"
+                    fill
+                    className="object-cover"
+                    unoptimized
+                  />
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/30 transition-colors">
+                    <div className="w-16 h-16 rounded-full bg-black/60 flex items-center justify-center">
+                      <Play className="w-8 h-8 text-white fill-white ml-1" />
+                    </div>
+                  </div>
+                </div>
+              </a>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.4, duration: 0.5 }}
         >
           <div className="relative my-10">
             <div className="absolute inset-0 flex items-center" aria-hidden="true">
