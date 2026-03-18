@@ -71,6 +71,7 @@ export function KanbanBoard({ cards, sessionId, onQueueBuild, onPassCard, onDele
         onClose={() => setSelectedCard(null)}
         onQueueBuild={onQueueBuild}
         onPassCard={onPassCard}
+        onDeleteCard={onDeleteCard}
       />
     </>
   );

@@ -3,7 +3,7 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Play, X, ExternalLink, Youtube, BookOpen, TrendingUp, Zap } from "lucide-react";
+import { Play, X, ExternalLink, Youtube, BookOpen, TrendingUp, Zap, Trash2 } from "lucide-react";
 import type { ZPCard } from "@/types/zero-prompt";
 
 interface CardDetailModalProps {
@@ -12,9 +12,10 @@ interface CardDetailModalProps {
   onClose: () => void;
   onQueueBuild: (cardId: string) => void;
   onPassCard: (cardId: string) => void;
+  onDeleteCard?: (cardId: string) => void;
 }
 
-export function CardDetailModal({ card, isOpen, onClose, onQueueBuild, onPassCard }: CardDetailModalProps) {
+export function CardDetailModal({ card, isOpen, onClose, onQueueBuild, onPassCard, onDeleteCard }: CardDetailModalProps) {
   if (!card) return null;
 
   const isRealVideo = card.video_id && !card.video_id.startsWith("fallback-");
@@ -205,6 +206,17 @@ export function CardDetailModal({ card, isOpen, onClose, onQueueBuild, onPassCar
                 </Button>
               )}
             </div>
+          )}
+          {(card.status === "nogo" || card.status === "passed" || card.status === "build_failed") && onDeleteCard && (
+            <Button
+              variant="destructive"
+              onClick={() => {
+                onDeleteCard(card.card_id);
+                onClose();
+              }}
+            >
+              <Trash2 className="w-4 h-4 mr-2" /> Delete
+            </Button>
           )}
         </div>
       </DialogContent>
