@@ -342,7 +342,7 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   // ── Card 1: QueueBite (discover @6500, verdict @16500) ────────────────────
   {
     time: 4000,
-    action: { type: "explore", message: "YouTube search: 'restaurant queue management app idea 2026' — found 12 results" },
+    action: { type: "explore", message: "YouTube search: 'how to build restaurant queue app' — filter: Recently uploaded — 12 results" },
   },
   {
     time: 5000,
@@ -394,7 +394,7 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   // ── Card 2: SpendSense AI (discover @14500, verdict @24500) ──────────────
   {
     time: 12000,
-    action: { type: "explore", message: "YouTube search: 'expense tracking ai categorization app tutorial' — found 9 results" },
+    action: { type: "explore", message: "YouTube search: 'how to make expense tracker with ai' — filter: Recently uploaded — 9 results" },
   },
   {
     time: 13000,
@@ -446,7 +446,7 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   // ── Card 3: PawPulse (discover @22500, verdict @32500) ───────────────────
   {
     time: 20000,
-    action: { type: "explore", message: "YouTube search: 'pet health monitoring app startup idea 2026' — found 8 results" },
+    action: { type: "explore", message: "YouTube search: 'how to build pet health app' — filter: Recently uploaded — 8 results" },
   },
   {
     time: 21000,
@@ -504,7 +504,7 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   // ── Card 4: StudyMate Lite (discover @30500, verdict @40500) ─────────────
   {
     time: 28000,
-    action: { type: "explore", message: "YouTube search: 'ai flashcard generator spaced repetition sm2 app' — found 14 results" },
+    action: { type: "explore", message: "YouTube search: 'how to create flashcard app with ai' — filter: Recently uploaded — 14 results" },
   },
   {
     time: 29000,
@@ -556,7 +556,7 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   // ── Card 5: FitQuest (discover @38500, verdict @48500) ───────────────────
   {
     time: 36000,
-    action: { type: "explore", message: "YouTube search: 'ai fitness trainer pose detection real-time correction app 2026' — found 15 results" },
+    action: { type: "explore", message: "YouTube search: 'how to build ai fitness trainer app' — filter: Recently uploaded — 15 results" },
   },
   {
     time: 37000,
@@ -608,7 +608,7 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   // ── Card 6: BookSwap (discover @46500, verdict @56500) ───────────────────
   {
     time: 44000,
-    action: { type: "explore", message: "YouTube search: 'neighborhood book sharing community app geolocation map' — found 6 results" },
+    action: { type: "explore", message: "YouTube search: 'how to make book sharing app' — filter: Recently uploaded — 6 results" },
   },
   {
     time: 45000,
@@ -660,7 +660,7 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   // ── Card 7: MealPrep AI (discover @54500, verdict @64500) ────────────────
   {
     time: 52000,
-    action: { type: "explore", message: "YouTube search: 'ai weekly meal planning grocery list automation app idea' — found 11 results" },
+    action: { type: "explore", message: "YouTube search: 'how to build meal planning app with ai' — filter: Recently uploaded — 11 results" },
   },
   {
     time: 53000,
@@ -718,7 +718,7 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   // ── Card 8: ParkSpot (discover @62500, verdict @72500) ───────────────────
   {
     time: 60000,
-    action: { type: "explore", message: "YouTube search: 'ai parking finder real-time availability smart city app 2026' — found 10 results" },
+    action: { type: "explore", message: "YouTube search: 'how to create parking finder app' — filter: Recently uploaded — 10 results" },
   },
   {
     time: 61000,
@@ -776,7 +776,7 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   // ── Card 9: PlantPal (discover @70500, verdict @80500) ───────────────────
   {
     time: 68000,
-    action: { type: "explore", message: "YouTube search: 'plant care app ai photo disease detection diagnosis startup' — found 7 results" },
+    action: { type: "explore", message: "YouTube search: 'how to build plant care app with ai' — filter: Recently uploaded — 7 results" },
   },
   {
     time: 69000,
@@ -828,7 +828,7 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   // ── Card 10: Soundscape (discover @78500, verdict @88500) ────────────────
   {
     time: 76000,
-    action: { type: "explore", message: "YouTube search: 'ai ambient sound generator focus productivity binaural beats app' — found 13 results" },
+    action: { type: "explore", message: "YouTube search: 'how to make ambient sound app' — filter: Recently uploaded — 13 results" },
   },
   {
     time: 77000,
@@ -886,7 +886,7 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   // ── Card 11: RouteOpt (discover @86500, stays analyzing) ─────────────────
   {
     time: 84000,
-    action: { type: "explore", message: "YouTube search: 'delivery route optimization machine learning logistics startup app' — found 8 results" },
+    action: { type: "explore", message: "YouTube search: 'how to build delivery route optimizer' — filter: Recently uploaded — 8 results" },
   },
   {
     time: 85000,
@@ -905,7 +905,7 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   // ── Card 12: CryptoFomo (discover @88000, NO-GO @97500) ──────────────────
   {
     time: 86000,
-    action: { type: "explore", message: "YouTube search: 'crypto price prediction real-time dashboard trading app tutorial' — found 23 results" },
+    action: { type: "explore", message: "YouTube search: 'how to make crypto price prediction app' — filter: Recently uploaded — 23 results" },
   },
   {
     time: 87000,
@@ -971,7 +971,7 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   // ── Card 13: WeatherAI (discover @96500, stays analyzing) ────────────────
   {
     time: 94000,
-    action: { type: "explore", message: "YouTube search: 'hyperlocal weather prediction machine learning ml startup app idea' — found 5 results" },
+    action: { type: "explore", message: "YouTube search: 'how to build weather prediction app with ml' — filter: Recently uploaded — 5 results" },
   },
   {
     time: 95000,
@@ -1170,7 +1170,7 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   // New exploration activity
   {
     time: 120000,
-    action: { type: "explore", message: "YouTube search: 'ai scheduling assistant calendar management automation 2026' — found 9 results" },
+    action: { type: "explore", message: "YouTube search: 'how to build ai scheduling assistant' — filter: Recently uploaded — 9 results" },
   },
   {
     time: 122000,
@@ -1178,7 +1178,7 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   },
   {
     time: 125000,
-    action: { type: "explore", message: "YouTube search: 'ai contract analysis legal tech startup saas b2b 2026' — found 7 results" },
+    action: { type: "explore", message: "YouTube search: 'how to create legal contract analyzer' — filter: Recently uploaded — 7 results" },
   },
   {
     time: 127000,
@@ -1186,7 +1186,7 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   },
   {
     time: 130000,
-    action: { type: "explore", message: "YouTube search: 'social commerce live shopping integration creator monetization app' — found 14 results" },
+    action: { type: "explore", message: "YouTube search: 'how to build social commerce app' — filter: Recently uploaded — 14 results" },
   },
   {
     time: 133000,
@@ -1194,7 +1194,7 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   },
   {
     time: 136000,
-    action: { type: "explore", message: "YouTube search: 'ai resume builder ats optimization job application automation 2026' — found 11 results" },
+    action: { type: "explore", message: "YouTube search: 'how to make ai resume builder' — filter: Recently uploaded — 11 results" },
   },
   {
     time: 138000,
@@ -1202,7 +1202,7 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   },
   {
     time: 141000,
-    action: { type: "explore", message: "YouTube search: 'micro saas niche b2b tool automation no-code startup idea' — found 16 results" },
+    action: { type: "explore", message: "YouTube search: 'how to build micro saas tool' — filter: Recently uploaded — 16 results" },
   },
   {
     time: 143000,
@@ -1214,7 +1214,7 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   },
   {
     time: 150000,
-    action: { type: "explore", message: "YouTube search: 'hyperlocal delivery last mile logistics optimization startup 2026' — found 8 results" },
+    action: { type: "explore", message: "YouTube search: 'how to optimize last mile delivery' — filter: Recently uploaded — 8 results" },
   },
   {
     time: 152000,
@@ -1222,7 +1222,7 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   },
   {
     time: 155000,
-    action: { type: "explore", message: "YouTube search: 'ai code review pull request automation developer tools github 2026' — found 12 results" },
+    action: { type: "explore", message: "YouTube search: 'how to automate code review with ai' — filter: Recently uploaded — 12 results" },
   },
   {
     time: 157000,
@@ -1230,7 +1230,7 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   },
   {
     time: 160000,
-    action: { type: "explore", message: "YouTube search: 'mental health journaling ai app therapy support startup 2026' — found 10 results" },
+    action: { type: "explore", message: "YouTube search: 'how to build mental health journal app' — filter: Recently uploaded — 10 results" },
   },
   {
     time: 162000,
@@ -1238,7 +1238,7 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   },
   {
     time: 165000,
-    action: { type: "explore", message: "YouTube search: 'ai photo editing mobile app startup creator tools 2026' — found 18 results" },
+    action: { type: "explore", message: "YouTube search: 'how to create ai photo editor app' — filter: Recently uploaded — 18 results" },
   },
   {
     time: 167000,
@@ -1246,7 +1246,7 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   },
   {
     time: 170000,
-    action: { type: "explore", message: "YouTube search: 'ai inventory management small business retail startup 2026' — found 9 results" },
+    action: { type: "explore", message: "YouTube search: 'how to build inventory management system' — filter: Recently uploaded — 9 results" },
   },
   {
     time: 172000,
@@ -1258,7 +1258,7 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   },
   {
     time: 180000,
-    action: { type: "explore", message: "YouTube search: 'ai customer support chatbot saas b2b startup automation 2026' — found 15 results" },
+    action: { type: "explore", message: "YouTube search: 'how to make ai customer support chatbot' — filter: Recently uploaded — 15 results" },
   },
   {
     time: 182000,
@@ -1266,7 +1266,7 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   },
   {
     time: 185000,
-    action: { type: "explore", message: "YouTube search: 'productivity tools second brain knowledge management ai startup' — found 11 results" },
+    action: { type: "explore", message: "YouTube search: 'how to build second brain app with ai' — filter: Recently uploaded — 11 results" },
   },
   {
     time: 187000,
@@ -1274,7 +1274,7 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   },
   {
     time: 190000,
-    action: { type: "explore", message: "YouTube search: 'ai powered e-commerce product description generator shopify 2026' — found 13 results" },
+    action: { type: "explore", message: "YouTube search: 'how to generate product descriptions with ai' — filter: Recently uploaded — 13 results" },
   },
   {
     time: 193000,
@@ -1282,7 +1282,7 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   },
   {
     time: 195000,
-    action: { type: "explore", message: "YouTube search: 'subscription management personal finance tracker app startup 2026' — found 8 results" },
+    action: { type: "explore", message: "YouTube search: 'how to track subscriptions and save money' — filter: Recently uploaded — 8 results" },
   },
   {
     time: 198000,
