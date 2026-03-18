@@ -412,14 +412,47 @@ def _has_truncated_jsx(content: str, path: str) -> bool:
     return False
 
 
+async def _generate_file_via_responses_api(
+    model: str,
+    instructions: str,
+    user_prompt: str,
+    path: str,
+) -> str:
+    import openai
+
+    openai_key = os.environ.get("OPENAI_API_KEY", "")
+    if not openai_key or openai_key in ("test-key", ""):
+        raise ValueError("OPENAI_API_KEY not set for direct responses API call")
+
+    client = openai.AsyncOpenAI(api_key=openai_key)
+    for attempt in range(1, 4):
+        response = await client.responses.create(
+            model=model,
+            instructions=instructions,
+            input=user_prompt,
+            reasoning={"effort": "medium"},
+        )
+        content = _parse_single_file_payload(response.output_text, path)
+        if not _has_truncated_jsx(content, path):
+            return content
+        logger.warning("[PER_FILE_RESPONSES] truncated JSX in %s (attempt %d), retrying", path, attempt)
+        user_prompt = (
+            "CRITICAL: Previous output was TRUNCATED. Generate the SAME file but COMPLETE without cutoff.\n\n"
+            + user_prompt
+        )
+    return content
+
+
 async def _generate_file_with_llm(spec: FileSpec, context: dict) -> str:
+    from agent.model_capabilities import model_endpoint_type
+
     prompt_meta = _prompt_context_for_spec(spec, context)
     target = prompt_meta["target"]
     model_key = "code_gen_backend" if target == "backend" else "code_gen_frontend"
     model = MODEL_CONFIG.get(model_key, MODEL_CONFIG["code_gen"])
-    llm = get_llm(model=model, temperature=0.1, max_tokens=12000)
     is_page = target == "frontend" and _is_page_file(spec.path)
     available_exports = context.get("available_exports") or {}
+
     if is_page and available_exports:
         import_rule = (
             "CRITICAL IMPORT RULE: Only import from the exact module paths and export names listed "
@@ -431,16 +464,28 @@ async def _generate_file_with_llm(spec: FileSpec, context: dict) -> str:
         )
     else:
         import_rule = ""
+
     system_content = (
-        "Generate exactly one file. Return ONLY valid JSON with this shape: "
-        '{"content":"full file content"}. No markdown fences, no prose. '
-        "Keep code CONCISE: no comments, short variable names, minimal whitespace. "
-        "Every JSX element MUST be properly closed. File MUST end with closing brace."
+        "Generate exactly one file. Return ONLY the raw file content — no JSON wrapping, no markdown fences, no prose. "
+        "Every JSX element MUST be properly closed. File MUST end with closing brace or export statement."
     )
     if import_rule:
         system_content = f"{system_content}\n\n{import_rule}"
+
+    if model_endpoint_type(model) == "responses" or model.startswith("gpt-5"):
+        try:
+            return await _generate_file_via_responses_api(
+                model=model,
+                instructions=system_content,
+                user_prompt=prompt_meta["prompt"],
+                path=spec.path,
+            )
+        except Exception as exc:
+            logger.warning("[PER_FILE_LLM] responses API failed for %s (%s), falling back to LangChain", spec.path, exc)
+
+    llm = get_llm(model=model, temperature=0.1, max_tokens=12000)
     messages = [
-        {"role": "system", "content": system_content},
+        {"role": "system", "content": system_content.replace("raw file content", 'valid JSON: {"content":"..."}')},
         {"role": "user", "content": prompt_meta["prompt"]},
     ]
     for attempt in range(1, 4):
@@ -448,23 +493,11 @@ async def _generate_file_with_llm(spec: FileSpec, context: dict) -> str:
         content = _parse_single_file_payload(content_to_str(response.content), spec.path)
         if not _has_truncated_jsx(content, spec.path):
             return content
-        logger.warning(
-            "[PER_FILE_LLM] truncated JSX detected in %s (attempt %d), retrying with concise directive",
-            spec.path,
-            attempt,
-        )
-        messages = [
-            {
-                "role": "system",
-                "content": (
-                    system_content + "\nCRITICAL: Previous response was TRUNCATED (output cut off). "
-                    "You MUST generate a COMPLETE, CONCISE file. "
-                    "Use shorter variable names, fewer inline comments, and combine related elements. "
-                    "Every JSX tag MUST be properly closed. The file MUST end with a closing brace or return statement."
-                ),
-            },
-            {"role": "user", "content": prompt_meta["prompt"]},
-        ]
+        logger.warning("[PER_FILE_LLM] truncated JSX in %s (attempt %d), retrying", spec.path, attempt)
+        messages[0] = {
+            "role": "system",
+            "content": system_content + "\nCRITICAL: Previous response was TRUNCATED. Generate COMPLETE file.",
+        }
     return content
 
 
