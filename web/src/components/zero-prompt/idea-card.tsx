@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Play, X, ExternalLink, Loader2 } from "lucide-react";
+import { Play, X, ExternalLink, Loader2, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { ZPCard } from "@/types/zero-prompt";
@@ -10,10 +10,11 @@ interface IdeaCardProps {
   card: ZPCard;
   onQueueBuild: (cardId: string) => void;
   onPassCard: (cardId: string) => void;
+  onDeleteCard?: (cardId: string) => void;
   onClick?: (card: ZPCard) => void;
 }
 
-export function IdeaCard({ card, onQueueBuild, onPassCard, onClick }: IdeaCardProps) {
+export function IdeaCard({ card, onQueueBuild, onPassCard, onDeleteCard, onClick }: IdeaCardProps) {
   return (
     <motion.div
       layoutId={card.card_id}
@@ -61,6 +62,19 @@ export function IdeaCard({ card, onQueueBuild, onPassCard, onClick }: IdeaCardPr
           <div className="flex items-center justify-center gap-2 mt-3 text-xs text-muted-foreground bg-muted/50 py-1.5 rounded">
             <Loader2 className="w-3 h-3 animate-spin" />
             {card.status === "build_queued" ? "Queued..." : "Building..."}
+          </div>
+        )}
+
+        {(card.status === "nogo" || card.status === "passed" || card.status === "build_failed") && onDeleteCard && (
+          <div className="flex gap-2 mt-3" onClick={(e) => e.stopPropagation()}>
+            <Button 
+              size="sm" 
+              variant="ghost" 
+              className="flex-1 h-8 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+              onClick={() => onDeleteCard(card.card_id)}
+            >
+              <Trash2 className="w-3 h-3 mr-1" /> 삭제
+            </Button>
           </div>
         )}
 

@@ -32,7 +32,8 @@ function ZeroPromptInner() {
     startSession, 
     restoreSession,
     queueBuild, 
-    passCard 
+    passCard,
+    deleteCard
   } = useZeroPrompt();
   
   const [goal, setGoal] = useState<string>("");
@@ -155,7 +156,8 @@ function ZeroPromptInner() {
         <KanbanBoard 
           cards={session?.cards || []} 
           onQueueBuild={queueBuild} 
-          onPassCard={passCard} 
+          onPassCard={passCard}
+          onDeleteCard={deleteCard}
         />
         
         <ActionFeed actions={actions} />

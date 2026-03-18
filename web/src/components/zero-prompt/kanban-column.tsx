@@ -11,10 +11,11 @@ interface KanbanColumnProps {
   cards: ZPCard[];
   onQueueBuild: (cardId: string) => void;
   onPassCard: (cardId: string) => void;
+  onDeleteCard?: (cardId: string) => void;
   onCardClick?: (card: ZPCard) => void;
 }
 
-export function KanbanColumn({ title, statuses, cards, onQueueBuild, onPassCard, onCardClick }: KanbanColumnProps) {
+export function KanbanColumn({ title, statuses, cards, onQueueBuild, onPassCard, onDeleteCard, onCardClick }: KanbanColumnProps) {
   const columnCards = cards.filter((c) => statuses.includes(c.status));
 
   return (
@@ -24,7 +25,7 @@ export function KanbanColumn({ title, statuses, cards, onQueueBuild, onPassCard,
         <Badge variant="secondary" className="text-xs">{columnCards.length}</Badge>
       </div>
       
-      <div className="flex flex-col gap-3 flex-1 max-h-[600px] overflow-y-auto pr-1">
+      <div className="flex flex-col gap-3 flex-1 max-h-[688px] overflow-y-auto pr-1">
         {columnCards.length === 0 ? (
           <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground border-2 border-dashed border-border/50 rounded-lg p-4">
             Empty
@@ -36,6 +37,7 @@ export function KanbanColumn({ title, statuses, cards, onQueueBuild, onPassCard,
               card={card} 
               onQueueBuild={onQueueBuild} 
               onPassCard={onPassCard}
+              onDeleteCard={onDeleteCard}
               onClick={onCardClick}
             />
           ))

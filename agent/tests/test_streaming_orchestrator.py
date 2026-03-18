@@ -2,7 +2,7 @@ import pytest
 
 from agent.zero_prompt.events import ZP_GO, ZP_NOGO, ZP_SESSION_START
 from agent.zero_prompt.orchestrator import StreamingOrchestrator
-from agent.zero_prompt.schemas import ZPSession
+from agent.zero_prompt.schemas import ZPCard, ZPSession
 
 
 async def _go_verdict(session_id: str, video_id: str, card_id: str) -> tuple[str, int, str, str]:
@@ -261,12 +261,21 @@ class TestDeleteCard:
         assert card.status == "deleted"
 
     @pytest.mark.asyncio
-    async def test_delete_non_go_ready_returns_error(self):
+    async def test_delete_nogo_card_succeeds(self):
         orch = StreamingOrchestrator()
         session, _ = orch.create_session()
         await orch.exploration_step(session.session_id, "v1", verdict_fn=_nogo_verdict)
         card = session.cards[0]
         result = orch.delete_card(session.session_id, card.card_id)
+        assert result["type"] == "zp.action.delete_card"
+        assert card.status == "deleted"
+
+    def test_delete_building_card_returns_error(self):
+        orch = StreamingOrchestrator()
+        session, _ = orch.create_session()
+        card = ZPCard(card_id="c1", video_id="v1", status="building", score=70)
+        session.cards.append(card)
+        result = orch.delete_card(session.session_id, "c1")
         assert result["type"] == "zp.action.error"
 
 
