@@ -1273,17 +1273,29 @@ async def _trigger_zp_build(orch, session_id: str, card_id: str) -> None:
         card.thread_id = thread_id
 
         live_url = ""
+        repo_url = ""
         try:
             result = await _store.get_result(thread_id) if _store else None
             if result and isinstance(result, dict):
                 deploy = result.get("deployment", {})
                 if isinstance(deploy, dict):
                     live_url = deploy.get("liveUrl", "") or deploy.get("live_url", "")
+                    repo_url = deploy.get("repoUrl", "") or deploy.get("repo_url", "")
         except Exception:
             pass
 
+        card.live_url = live_url
+        card.repo_url = repo_url
+
         try:
-            await _zp_store.update_card(card_id, status="deployed", build_step="done", thread_id=live_url or thread_id)
+            await _zp_store.update_card(
+                card_id,
+                status="deployed",
+                build_step="done",
+                thread_id=thread_id,
+                live_url=live_url,
+                repo_url=repo_url,
+            )
             push_zp_event(
                 {
                     "type": "card.update",

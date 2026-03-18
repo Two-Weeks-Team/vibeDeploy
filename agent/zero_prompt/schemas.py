@@ -115,6 +115,8 @@ class ZPCard(BaseModel):
     mvp_proposal: dict = {}
     build_step: str = ""
     analysis_step: str = ""
+    repo_url: str = ""
+    live_url: str = ""
 
 
 class ZPSession(BaseModel):
