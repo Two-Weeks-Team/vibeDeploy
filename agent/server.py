@@ -1076,6 +1076,10 @@ async def zero_prompt_start(request: ZPStartRequest):
                 yield _fmt(evt.get("type", "zp.step"), evt)
             await asyncio.sleep(0.05)
 
+        session = orch.get_session(session_id)
+        if session is not None:
+            session.remaining_videos = [[v[0], v[1], v[2]] for v in videos[video_idx:]]
+
         yield _fmt("zp.session.complete", {"session_id": session_id, "type": "zp.session.complete"})
 
     return StreamingResponse(
@@ -1117,8 +1121,12 @@ async def zero_prompt_action(session_id: str, request: ZPActionRequest):
     if action == "queue_build":
         result = orch.queue_build(session_id, card_id)
         asyncio.create_task(_trigger_zp_build(orch, session_id, card_id))
+        if orch.should_continue_exploring(session_id):
+            asyncio.create_task(_resume_exploration(orch, session_id))
     elif action == "pass_card":
         result = orch.pass_card(session_id, card_id)
+        if orch.should_continue_exploring(session_id):
+            asyncio.create_task(_resume_exploration(orch, session_id))
     elif action == "delete_card":
         result = orch.delete_card(session_id, card_id)
     elif action == "pause":
@@ -1183,6 +1191,23 @@ async def _trigger_zp_build(orch, session_id: str, card_id: str) -> None:
             card = next((c for c in session.cards if c.card_id == card_id), None)
             if card:
                 card.status = "build_failed"
+
+
+async def _resume_exploration(orch, session_id: str) -> None:
+    try:
+        session = orch.get_session(session_id)
+        if session is None or not session.remaining_videos:
+            return
+
+        while orch.should_continue_exploring(session_id) and session.remaining_videos:
+            vid = session.remaining_videos.pop(0)
+            vid_id, vid_title, vid_desc = vid[0], vid[1], vid[2] if len(vid) > 2 else ""
+            await orch.exploration_step(session_id, vid_id, video_title=vid_title, video_description=vid_desc)
+            await asyncio.sleep(0.05)
+
+        logger.info("[ZP] Exploration resumed for session %s", session_id)
+    except Exception:
+        logger.exception("[ZP] Exploration resume failed for session %s", session_id)
 
 
 if __name__ == "__main__":

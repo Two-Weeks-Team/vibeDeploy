@@ -120,3 +120,4 @@ class ZPSession(BaseModel):
     active_build: str | None = None
     goal_go_cards: int = 10
     created_at: str
+    remaining_videos: list[list[str]] = []
