@@ -13,6 +13,12 @@ import { useDemoZeroPrompt } from "@/hooks/use-demo-zero-prompt";
 type DemoStage = "landing" | "dashboard";
 
 const DEMO_VIDEO_URL = "https://www.youtube.com/watch?v=aADukThvjXQ";
+const DEMO_INPUT_CLICK_DELAY_MS = 900;
+const DEMO_INPUT_TYPING_START_MS = 1300;
+const DEMO_INPUT_TYPING_STEP_MS = 32;
+const DEMO_START_BUTTON_MOVE_DELAY_MS = 700;
+const DEMO_START_BUTTON_CLICK_DELAY_MS = 1050;
+const DEMO_SESSION_START_DELAY_MS = 1360;
 
 const INITIAL_CURSOR = {
   visible: false,
@@ -23,7 +29,7 @@ const INITIAL_CURSOR = {
 
 export default function DemoPage() {
   const [stage, setStage] = useState<DemoStage>("landing");
-  const [youtubeUrl, setYoutubeUrl] = useState(DEMO_VIDEO_URL);
+  const [youtubeUrl, setYoutubeUrl] = useState("");
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [cursor, setCursor] = useState(INITIAL_CURSOR);
 
@@ -46,6 +52,7 @@ export default function DemoPage() {
   const buildDialogShownRef = useRef(false);
   const buildClickShownRef = useRef(false);
   const viewAppClickShownRef = useRef(false);
+  const sessionStartedRef = useRef(false);
 
   const clearSequenceTimers = useCallback(() => {
     sequenceTimersRef.current.forEach(clearTimeout);
@@ -74,22 +81,41 @@ export default function DemoPage() {
     buildDialogShownRef.current = false;
     buildClickShownRef.current = false;
     viewAppClickShownRef.current = false;
+    sessionStartedRef.current = false;
 
-    queueTimer(() => moveCursorToElement(zeroPromptStartRef.current), 700);
-    queueTimer(() => setCursor((prev) => ({ ...prev, clicking: true })), 980);
-    queueTimer(() => setCursor((prev) => ({ ...prev, clicking: false })), 1180);
+    queueTimer(() => setYoutubeUrl(""), 0);
+
+    queueTimer(() => moveCursorToElement(introInputRef.current), 600);
+    queueTimer(() => setCursor((prev) => ({ ...prev, clicking: true })), DEMO_INPUT_CLICK_DELAY_MS);
+    queueTimer(() => setCursor((prev) => ({ ...prev, clicking: false })), 1120);
+
+    DEMO_VIDEO_URL.split("").forEach((_, index) => {
+      queueTimer(() => {
+        setYoutubeUrl(DEMO_VIDEO_URL.slice(0, index + 1));
+      }, DEMO_INPUT_TYPING_START_MS + index * DEMO_INPUT_TYPING_STEP_MS);
+    });
+
+    const typingCompleteAt = DEMO_INPUT_TYPING_START_MS + DEMO_VIDEO_URL.length * DEMO_INPUT_TYPING_STEP_MS;
+
+    queueTimer(() => moveCursorToElement(zeroPromptStartRef.current), typingCompleteAt + DEMO_START_BUTTON_MOVE_DELAY_MS);
+    queueTimer(() => setCursor((prev) => ({ ...prev, clicking: true })), typingCompleteAt + DEMO_START_BUTTON_CLICK_DELAY_MS);
+    queueTimer(() => setCursor((prev) => ({ ...prev, clicking: false })), typingCompleteAt + 1240);
     queueTimer(() => {
+      if (sessionStartedRef.current) return;
+      sessionStartedRef.current = true;
       startSession();
-    }, 1250);
+    }, typingCompleteAt + DEMO_SESSION_START_DELAY_MS);
     queueTimer(() => {
       setStage("dashboard");
-    }, 2150);
+    }, typingCompleteAt + DEMO_SESSION_START_DELAY_MS + 900);
 
     return clearSequenceTimers;
   }, [clearSequenceTimers, moveCursorToElement, queueTimer, stage, startSession]);
 
   useEffect(() => {
     if (stage === "dashboard" && !session && !isLoading) {
+      if (sessionStartedRef.current) return;
+      sessionStartedRef.current = true;
       startSession();
     }
   }, [stage, session, isLoading, startSession]);
