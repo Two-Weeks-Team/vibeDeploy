@@ -4,6 +4,9 @@ from agent.nodes.code_evaluator import (
     _check_consistency,
     _check_experience,
     _check_runnability,
+    _is_staged_pipeline,
+    _staged_consistency,
+    _staged_quality_blockers,
     code_evaluator,
     route_code_eval,
 )
@@ -402,3 +405,155 @@ async def test_code_evaluator_emits_result_event_when_config_provided():
     assert "iteration" in event["payload"]
     assert "passed" in event["payload"]
     assert event["payload"]["node"] == "code_evaluator"
+
+
+def test_is_staged_pipeline_detects_staged_state():
+    assert _is_staged_pipeline({"spec_frozen": True, "wiring_validation": {"passed": True}}) is True
+    assert _is_staged_pipeline({"spec_frozen": False, "wiring_validation": {"passed": True}}) is False
+    assert _is_staged_pipeline({"spec_frozen": True}) is False
+    assert _is_staged_pipeline({}) is False
+
+
+def test_staged_consistency_boosts_score_when_wiring_passed():
+    state = {"spec_frozen": True, "wiring_validation": {"passed": True, "total_endpoints": 5, "matched": 5}}
+    score = _staged_consistency(state, legacy_score=60.0)
+    assert score >= 90.0
+
+
+def test_staged_consistency_uses_mismatch_data_when_wiring_failed():
+    state = {
+        "spec_frozen": True,
+        "wiring_validation": {
+            "passed": False,
+            "total_endpoints": 4,
+            "matched": 2,
+            "schema_mismatches": [{"issue": "missing field"}],
+        },
+    }
+    score = _staged_consistency(state, legacy_score=50.0)
+    assert 30 < score < 80
+
+
+def test_staged_quality_blockers_drops_fallback_scaffold_blocker():
+    state = {"spec_frozen": True, "wiring_validation": {"passed": True}}
+    blockers = ["deterministic fallback scaffold detected", "raw object or JSON dump rendered into the UI"]
+    filtered = _staged_quality_blockers(blockers, state)
+    assert "deterministic fallback scaffold detected" not in filtered
+    assert "raw object or JSON dump rendered into the UI" in filtered
+
+
+def test_staged_quality_blockers_preserves_all_in_legacy_mode():
+    state = {}
+    blockers = ["deterministic fallback scaffold detected"]
+    assert _staged_quality_blockers(blockers, state) == blockers
+
+
+@pytest.mark.asyncio
+async def test_code_evaluator_passes_in_staged_mode_with_wiring_passed():
+    state = {
+        "spec_frozen": True,
+        "wiring_validation": {"passed": True, "total_endpoints": 3, "matched": 3, "missing": [], "extra": []},
+        "blueprint": {
+            "frontend_files": {
+                "package.json": {},
+                "src/app/layout.tsx": {},
+                "src/app/page.tsx": {},
+                "src/app/globals.css": {},
+            },
+            "backend_files": {"main.py": {}, "requirements.txt": {}},
+        },
+        "frontend_code": {
+            ".vibedeploy-fallback-frontend.json": '{"kind":"frontend"}',
+            "package.json": '{"dependencies":{"next":"15.0.0"}}',
+            "src/app/layout.tsx": "export default function Layout({ children }) { return <html><body>{children}</body></html>; }",
+            "src/app/page.tsx": (
+                '"use client";\nimport { useState } from "react";\n'
+                "export default function Page() { const [x, setX] = useState(0); return <main>Hello</main>; }"
+            ),
+            "src/app/globals.css": "body { margin: 0; }",
+        },
+        "backend_code": {
+            "main.py": (
+                "from fastapi import FastAPI\napp = FastAPI()\n"
+                "@app.get('/api/items')\nasync def get_items(): return []\n"
+                "if __name__ == '__main__':\n    import uvicorn\n"
+            ),
+            "requirements.txt": "fastapi\nuvicorn\n",
+        },
+    }
+
+    result = await code_evaluator(state)
+    eval_result = result["code_eval_result"]
+
+    assert eval_result["staged_pipeline"] is True
+    assert eval_result["passed"] is True
+    assert eval_result["consistency"] >= 90.0
+    assert "deterministic fallback scaffold detected" not in eval_result["blockers"]
+
+
+@pytest.mark.asyncio
+async def test_code_evaluator_staged_mode_includes_provenance():
+    state = {
+        "spec_frozen": True,
+        "wiring_validation": {"passed": True, "total_endpoints": 2, "matched": 2},
+        "code_gen_warnings": [
+            "per_file_backend_llm_unavailable:gpt-5.3-codex",
+            "per_file_frontend_llm_used:gpt-5.3-codex:openai_direct",
+        ],
+        "blueprint": {
+            "frontend_files": {"package.json": {}, "src/app/page.tsx": {}},
+            "backend_files": {"main.py": {}, "requirements.txt": {}},
+        },
+        "frontend_code": {
+            "package.json": '{"dependencies":{"next":"15.0.0"}}',
+            "src/app/page.tsx": "export default function Page(){ return <main>Hello</main>; }",
+        },
+        "backend_code": {
+            "main.py": "from fastapi import FastAPI\napp = FastAPI()\n",
+            "requirements.txt": "fastapi\nuvicorn\n",
+        },
+    }
+
+    result = await code_evaluator(state)
+    provenance = result["code_eval_result"].get("provenance")
+
+    assert provenance is not None
+    assert provenance["mode"] == "staged"
+    assert provenance["spec_frozen"] is True
+    assert provenance["wiring_passed"] is True
+    assert provenance["llm_generated_count"] == 1
+    assert provenance["deterministic_count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_code_evaluator_legacy_mode_unaffected_by_staged_changes():
+    state = {
+        "blueprint": {
+            "frontend_files": {
+                "package.json": {},
+                "src/app/layout.tsx": {},
+                "src/app/page.tsx": {},
+                "src/app/globals.css": {},
+            },
+            "backend_files": {"main.py": {}, "requirements.txt": {}},
+        },
+        "frontend_code": {
+            ".vibedeploy-fallback-frontend.json": '{"kind":"frontend"}',
+            "package.json": '{"dependencies":{"next":"15.0.0"}}',
+            "src/app/layout.tsx": "export default function Layout({ children }) { return <html><body>{children}</body></html>; }",
+            "src/app/page.tsx": "export default function Page() { return <main>Fallback</main>; }",
+            "src/app/globals.css": "body { margin: 0; }",
+        },
+        "backend_code": {
+            "main.py": "from fastapi import FastAPI\napp = FastAPI()\n",
+            "requirements.txt": "fastapi\nuvicorn\n",
+        },
+    }
+
+    result = await code_evaluator(state)
+    eval_result = result["code_eval_result"]
+
+    assert eval_result["staged_pipeline"] is False
+    assert eval_result["passed"] is False
+    assert "deterministic fallback scaffold detected" in eval_result["blockers"]
+    assert "provenance" not in eval_result
