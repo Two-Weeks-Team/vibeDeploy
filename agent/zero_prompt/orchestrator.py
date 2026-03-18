@@ -263,6 +263,25 @@ class StreamingOrchestrator:
         if decision == "GO":
             card.status = "go_ready"
             events.append(verdict_go_event(score, reason, reason_code))
+
+            try:
+                from agent.zero_prompt.card_enrichment import enrich_card_with_gemini
+
+                enrichment = await enrich_card_with_gemini(
+                    video_title=video_title,
+                    transcript_text=transcript_text,
+                    idea_name=idea.name if idea else "",
+                    idea_domain=idea.domain if idea else "",
+                    idea_features=idea.key_features if idea else [],
+                    paper_titles=[p.title for p in papers[:3]] if papers else [],
+                    market_gaps=market.gaps if market else [],
+                    competitors_count=len(market.competitors) if market else 0,
+                )
+                card.video_summary = enrichment.get("video_summary", "")
+                card.insights = enrichment.get("insights", [])
+                card.mvp_proposal = enrichment.get("mvp_proposal", {})
+            except Exception:
+                logger.exception("[ZP] Card enrichment failed for %s", card_id)
         else:
             card.status = "nogo"
             events.append(verdict_nogo_event(score, reason, reason_code))

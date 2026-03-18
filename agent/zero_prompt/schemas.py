@@ -110,6 +110,9 @@ class ZPCard(BaseModel):
     competitors_found: str = ""
     saturation: str = ""
     novelty_boost: float = 0.0
+    video_summary: str = ""
+    insights: list[str] = []
+    mvp_proposal: dict = {}
 
 
 class ZPSession(BaseModel):

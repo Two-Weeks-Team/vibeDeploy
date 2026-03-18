@@ -103,6 +103,65 @@ export function CardDetailModal({ card, isOpen, onClose, onQueueBuild, onPassCar
               Watch source video
             </a>
           )}
+
+          {card.video_summary && (
+            <div className="space-y-1.5">
+              <h4 className="text-sm font-semibold flex items-center gap-1.5">
+                <Youtube className="w-4 h-4 text-red-400" />
+                영상 요약
+              </h4>
+              <p className="text-sm text-muted-foreground leading-relaxed bg-muted/20 p-3 rounded-lg">
+                {card.video_summary}
+              </p>
+            </div>
+          )}
+
+          {card.insights && card.insights.length > 0 && (
+            <div className="space-y-1.5">
+              <h4 className="text-sm font-semibold flex items-center gap-1.5">
+                <Zap className="w-4 h-4 text-yellow-400" />
+                핵심 인사이트
+              </h4>
+              <ul className="space-y-1">
+                {card.insights.map((insight, i) => (
+                  <li key={i} className="text-sm text-muted-foreground flex items-start gap-2">
+                    <span className="text-yellow-500 mt-0.5">•</span>
+                    <span>{insight}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {card.mvp_proposal && card.mvp_proposal.app_name && (
+            <div className="space-y-2">
+              <h4 className="text-sm font-semibold flex items-center gap-1.5">
+                <Play className="w-4 h-4 text-emerald-400" />
+                MVP 제안
+              </h4>
+              <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-lg p-3 space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="font-semibold text-emerald-400">{card.mvp_proposal.app_name}</span>
+                  {card.mvp_proposal.estimated_days && (
+                    <Badge variant="outline" className="text-xs">{card.mvp_proposal.estimated_days}일 예상</Badge>
+                  )}
+                </div>
+                {card.mvp_proposal.core_feature && (
+                  <p className="text-sm text-muted-foreground">{card.mvp_proposal.core_feature}</p>
+                )}
+                {card.mvp_proposal.tech_stack && (
+                  <p className="text-xs text-muted-foreground/70">Tech: {card.mvp_proposal.tech_stack}</p>
+                )}
+                {card.mvp_proposal.key_pages && card.mvp_proposal.key_pages.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-1">
+                    {card.mvp_proposal.key_pages.map((page, i) => (
+                      <Badge key={i} variant="secondary" className="text-xs">{page}</Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="flex justify-end gap-2 mt-2">

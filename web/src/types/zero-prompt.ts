@@ -14,6 +14,15 @@ export interface ZPCard {
   saturation?: string;
   novelty_boost?: number;
   thread_id?: string | null;
+  video_summary?: string;
+  insights?: string[];
+  mvp_proposal?: {
+    app_name?: string;
+    core_feature?: string;
+    tech_stack?: string;
+    key_pages?: string[];
+    estimated_days?: number;
+  };
 }
 
 export interface ZPSession {
