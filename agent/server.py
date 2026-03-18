@@ -1153,6 +1153,20 @@ async def zero_prompt_start(request: ZPStartRequest):
     )
 
 
+@app.post("/api/zero-prompt/reset")
+@app.post("/zero-prompt/reset")
+async def zero_prompt_reset():
+    from .db import zp_store as _zps
+
+    dashboard = await _zps.get_dashboard()
+    if dashboard.get("session_id"):
+        await _zps.reset_session(dashboard["session_id"])
+    orch = _get_zp_orchestrator()
+    orch._sessions.clear()
+    orch._build_queues.clear()
+    return {"type": "zp.reset", "deleted_session": dashboard.get("session_id")}
+
+
 @app.get("/api/zero-prompt/active")
 @app.get("/zero-prompt/active")
 async def zero_prompt_active():

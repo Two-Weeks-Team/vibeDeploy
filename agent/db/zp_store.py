@@ -92,7 +92,7 @@ async def get_session(session_id: str) -> dict | None:
         if not row:
             return None
         cards = await conn.fetch(
-            "SELECT * FROM zp_cards WHERE session_id = $1 ORDER BY created_at",
+            "SELECT * FROM zp_cards WHERE session_id = $1 AND status != 'deleted' ORDER BY created_at",
             session_id,
         )
         return {
@@ -110,7 +110,7 @@ async def get_dashboard() -> dict:
         if not row:
             return {"session_id": None, "status": "idle", "cards": []}
         cards = await conn.fetch(
-            "SELECT * FROM zp_cards WHERE session_id = $1 ORDER BY created_at",
+            "SELECT * FROM zp_cards WHERE session_id = $1 AND status != 'deleted' ORDER BY created_at",
             row["id"],
         )
         return {
@@ -119,6 +119,13 @@ async def get_dashboard() -> dict:
             "goal_go_cards": row["goal_go_cards"],
             "cards": [_card_row_to_dict(c) for c in cards],
         }
+
+
+async def reset_session(session_id: str) -> None:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute("DELETE FROM zp_cards WHERE session_id = $1", session_id)
+        await conn.execute("DELETE FROM zp_sessions WHERE id = $1", session_id)
 
 
 async def add_card(session_id: str, card_id: str, video_id: str, title: str = "") -> dict:
