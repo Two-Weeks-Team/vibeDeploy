@@ -38,11 +38,27 @@ async def ensure_tables() -> None:
                 mvp_proposal JSONB DEFAULT '{}'::jsonb,
                 build_step TEXT DEFAULT '',
                 analysis_step TEXT DEFAULT '',
+                repo_url TEXT DEFAULT '',
+                live_url TEXT DEFAULT '',
                 thread_id TEXT,
                 created_at TIMESTAMPTZ DEFAULT NOW()
             )
             """
         )
+
+        migrations = [
+            "ALTER TABLE zp_cards ADD COLUMN IF NOT EXISTS analysis_step TEXT DEFAULT ''",
+            "ALTER TABLE zp_cards ADD COLUMN IF NOT EXISTS repo_url TEXT DEFAULT ''",
+            "ALTER TABLE zp_cards ADD COLUMN IF NOT EXISTS live_url TEXT DEFAULT ''",
+            "ALTER TABLE zp_cards ADD COLUMN IF NOT EXISTS build_events JSONB DEFAULT '[]'::jsonb",
+            "ALTER TABLE zp_cards ADD COLUMN IF NOT EXISTS build_phase TEXT DEFAULT ''",
+            "ALTER TABLE zp_cards ADD COLUMN IF NOT EXISTS build_node TEXT DEFAULT ''",
+        ]
+        for migration in migrations:
+            try:
+                await conn.execute(migration)
+            except Exception:
+                pass
 
 
 async def create_session(goal: int = 10) -> dict:
@@ -76,7 +92,7 @@ async def get_session(session_id: str) -> dict | None:
         if not row:
             return None
         cards = await conn.fetch(
-            "SELECT * FROM zp_cards WHERE session_id = $1 ORDER BY created_at",
+            "SELECT * FROM zp_cards WHERE session_id = $1 AND status != 'deleted' ORDER BY created_at",
             session_id,
         )
         return {
@@ -94,7 +110,7 @@ async def get_dashboard() -> dict:
         if not row:
             return {"session_id": None, "status": "idle", "cards": []}
         cards = await conn.fetch(
-            "SELECT * FROM zp_cards WHERE session_id = $1 ORDER BY created_at",
+            "SELECT * FROM zp_cards WHERE session_id = $1 AND status != 'deleted' ORDER BY created_at",
             row["id"],
         )
         return {
@@ -103,6 +119,13 @@ async def get_dashboard() -> dict:
             "goal_go_cards": row["goal_go_cards"],
             "cards": [_card_row_to_dict(c) for c in cards],
         }
+
+
+async def reset_session(session_id: str) -> None:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute("DELETE FROM zp_cards WHERE session_id = $1", session_id)
+        await conn.execute("DELETE FROM zp_sessions WHERE id = $1", session_id)
 
 
 async def add_card(session_id: str, card_id: str, video_id: str, title: str = "") -> dict:

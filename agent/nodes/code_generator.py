@@ -608,6 +608,7 @@ def _build_frontend_prompt_messages(
             "- Storyboard, operations console, studio, atlas, and notebook products must not collapse into the same repeated scaffold.\n"
             "- Use the domain's own nouns and surface names. Do not default to the same hero/workspace/feature/collection wording across unrelated products.\n"
             "- Build the first-run experience for judges seeing the app for the first time in a live demo.\n"
+            "- CRITICAL: The app must be FUNCTIONAL, not a static mockup. Every button must call an API. Every data display must fetch from the backend. page.tsx must use useEffect to load initial data on mount and useState for all dynamic content. If you create an API-wired component, you MUST import and render it in the main page.\n"
         ),
     ]
     if strategy_appendix and _should_repeat_strategy_in_user(prompt_strategy, "frontend"):

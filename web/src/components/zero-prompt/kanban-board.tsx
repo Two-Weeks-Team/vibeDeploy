@@ -7,6 +7,7 @@ import { CardDetailModal } from "./card-detail-modal";
 
 interface KanbanBoardProps {
   cards: ZPCard[];
+  sessionId?: string;
   onQueueBuild: (cardId: string) => void;
   onPassCard: (cardId: string) => void;
   onDeleteCard?: (cardId: string) => void;
@@ -24,7 +25,7 @@ const COLUMNS: { id: string; title: string; statuses: CardStatus[] }[] = [
   { id: "nogo", title: "NO-GO / Passed", statuses: ["nogo", "passed", "build_failed"] },
 ];
 
-export function KanbanBoard({ cards, onQueueBuild, onPassCard, onDeleteCard, onReExplore, autoCloseMs, selectedCardId, onSelectedCardChange }: KanbanBoardProps) {
+export function KanbanBoard({ cards, sessionId, onQueueBuild, onPassCard, onDeleteCard, onReExplore, autoCloseMs, selectedCardId, onSelectedCardChange }: KanbanBoardProps) {
   const [internalSelectedCard, setInternalSelectedCard] = useState<ZPCard | null>(null);
   const selectedCard = onSelectedCardChange
     ? cards.find((card) => card.card_id === selectedCardId) ?? null
@@ -54,6 +55,7 @@ export function KanbanBoard({ cards, onQueueBuild, onPassCard, onDeleteCard, onR
             title={col.title}
             statuses={col.statuses}
             cards={cards}
+            sessionId={sessionId}
             onQueueBuild={onQueueBuild}
             onPassCard={onPassCard}
             onDeleteCard={onDeleteCard}

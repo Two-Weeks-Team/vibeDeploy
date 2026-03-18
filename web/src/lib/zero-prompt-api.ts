@@ -48,3 +48,7 @@ export async function deleteCard(sessionId: string, cardId: string): Promise<voi
   });
   if (!response.ok) throw new Error("Failed to delete card");
 }
+
+export function getBuildEventsUrl(sessionId: string, cardId: string): string {
+  return `${DASHBOARD_API_URL}/zero-prompt/${sessionId}/build/${cardId}/events`;
+}

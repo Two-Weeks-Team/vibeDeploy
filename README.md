@@ -257,6 +257,7 @@ Every app was generated from a **single sentence**, debated by the Vibe Council,
 | **SpendSense AI** | "Expense tracking with AI categorization & savings" | 81.2 | Next.js + FastAPI + PostgreSQL | [Live](https://spendsense-ai-784610-pgpjp.ondigitalocean.app) |
 | **PawPulse** | "Pet health monitoring with AI symptom checker" | 75.8 | Next.js + FastAPI + PostgreSQL | [Live](https://pawpulse-784798-f5nm2.ondigitalocean.app) |
 | **StudyMate Lite** | "AI flashcard generator with spaced repetition" | 75.0 | Next.js + FastAPI + PostgreSQL | [Live](https://studymate-lite-060111-5pth7.ondigitalocean.app) |
+| **NutriPlan** | "AI meal planner with macro calculator and grocery list" | 83.7 | Next.js + FastAPI + PostgreSQL | [Live](https://nutriplan-meal-planning-818722-dei83.ondigitalocean.app) |
 
 Every generated app includes: FastAPI with `/health` endpoint, Next.js with OKLCH design tokens and next/font typography, PostgreSQL, AI service via DO Inference, and CI/CD on DO App Platform.
 

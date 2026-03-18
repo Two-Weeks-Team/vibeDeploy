@@ -9,44 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { DASHBOARD_API_URL, getBrainstormResult, type BrainstormResult } from "@/lib/api";
 import { createSSEClient, type SSEEvent } from "@/lib/sse-client";
 import { cn } from "@/lib/utils";
-
-type AgentKey = "architect" | "scout" | "guardian" | "catalyst" | "advocate";
-
-const AGENTS: Record<
-  AgentKey,
-  { name: string; emoji: string; color: string; gradient: string }
-> = {
-  architect: {
-    name: "Architect",
-    emoji: "\u{1F3D7}\uFE0F",
-    color: "border-amber-400/40 bg-amber-500/10 text-amber-200",
-    gradient: "from-amber-500/20 to-amber-600/5",
-  },
-  scout: {
-    name: "Scout",
-    emoji: "\u{1F52D}",
-    color: "border-blue-400/40 bg-blue-500/10 text-blue-200",
-    gradient: "from-blue-500/20 to-blue-600/5",
-  },
-  guardian: {
-    name: "Guardian",
-    emoji: "\u{1F6E1}\uFE0F",
-    color: "border-emerald-400/40 bg-emerald-500/10 text-emerald-200",
-    gradient: "from-emerald-500/20 to-emerald-600/5",
-  },
-  catalyst: {
-    name: "Catalyst",
-    emoji: "\u26A1",
-    color: "border-purple-400/40 bg-purple-500/10 text-purple-200",
-    gradient: "from-purple-500/20 to-purple-600/5",
-  },
-  advocate: {
-    name: "Advocate",
-    emoji: "\u{1F3AF}",
-    color: "border-rose-400/40 bg-rose-500/10 text-rose-200",
-    gradient: "from-rose-500/20 to-rose-600/5",
-  },
-};
+import { AGENT_MAP, type AgentKey, toAgentKey } from "@/config/agents";
 
 type PhaseStep = {
   key: string;
@@ -199,7 +162,7 @@ export function BrainstormView({ sessionId }: { sessionId: string }) {
           <AnimatePresence>
             {displayInsights.map((insight, index) => {
               const agentKey = toAgentKey(insight.agent);
-              const agent = agentKey ? AGENTS[agentKey] : null;
+              const agent = agentKey ? AGENT_MAP[agentKey] : null;
               return (
                 <motion.div
                   key={insight.agent}
@@ -380,7 +343,7 @@ export function BrainstormView({ sessionId }: { sessionId: string }) {
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {synthesis.top_ideas.map((idea, idx) => {
                   const sourceKey = toAgentKey(idea.source_agent);
-                  const sourceAgent = sourceKey ? AGENTS[sourceKey] : null;
+                  const sourceAgent = sourceKey ? AGENT_MAP[sourceKey] : null;
                   return (
                     <motion.div
                       key={idea.title}
@@ -502,15 +465,4 @@ function ProgressBar({ phases }: { phases: PhaseStep[] }) {
 
 function asString(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
-}
-
-function toAgentKey(value: string | undefined): AgentKey | null {
-  if (!value) return null;
-  const normalized = value.toLowerCase();
-  if (normalized.includes("architect")) return "architect";
-  if (normalized.includes("scout")) return "scout";
-  if (normalized.includes("guardian")) return "guardian";
-  if (normalized.includes("catalyst")) return "catalyst";
-  if (normalized.includes("advocate")) return "advocate";
-  return null;
 }

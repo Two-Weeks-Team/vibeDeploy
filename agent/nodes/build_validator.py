@@ -1,6 +1,7 @@
 import ast
 import asyncio
 import logging
+import re
 import tempfile
 from pathlib import Path
 
@@ -14,6 +15,13 @@ _DOCKER_BUILD_TIMEOUT_SECONDS = 120
 
 TEMPERATURE_SCHEDULE = [0.1, 0.05, 0.02]
 MAX_BUILD_ATTEMPTS = 3
+
+_DESIGN_FORBIDDEN_PATTERNS: list[tuple[re.Pattern, str, str]] = [
+    (re.compile(r"\bbg-white\b"), "bg-white", "use bg-background"),
+    (re.compile(r"#ffffff", re.IGNORECASE), "#ffffff", "use CSS variable"),
+    (re.compile(r"#fff(?![0-9a-fA-F])", re.IGNORECASE), "#fff", "use CSS variable"),
+]
+_DESIGN_CHECKED_EXTENSIONS = {"tsx", "ts", "css"}
 
 
 def _trim_build_errors(stderr: str | None) -> str:
@@ -54,6 +62,31 @@ def _ast_check_python_files(backend_code: dict) -> list[str]:
             ast.parse(content)
         except SyntaxError as exc:
             errors.append(f"{filename}: SyntaxError at line {exc.lineno}: {exc.msg}")
+    return errors
+
+
+def _check_design_quality(frontend_code: dict) -> list[str]:
+    errors: list[str] = []
+
+    globals_content = frontend_code.get("src/app/globals.css") or frontend_code.get("globals.css") or ""
+    if globals_content:
+        css_var_count = len(re.findall(r"--[\w-]+\s*:", globals_content))
+        if css_var_count < 12:
+            errors.append(f"DESIGN: globals.css has only {css_var_count} CSS variables (minimum 12)")
+        if ".dark" not in globals_content:
+            errors.append("DESIGN: globals.css is missing .dark block (dark mode required)")
+
+    for filepath, content in frontend_code.items():
+        if not isinstance(content, str):
+            continue
+        ext = filepath.rsplit(".", 1)[-1] if "." in filepath else ""
+        if ext not in _DESIGN_CHECKED_EXTENSIONS:
+            continue
+        filename = filepath.rsplit("/", 1)[-1]
+        for pattern, label, suggestion in _DESIGN_FORBIDDEN_PATTERNS:
+            if pattern.search(content):
+                errors.append(f"DESIGN: {filename} contains {label} ({suggestion})")
+
     return errors
 
 
@@ -224,6 +257,7 @@ async def build_validator(state: VibeDeployState, config=None) -> dict:
     errors: list[str] = []
     backend_ok = True
     frontend_ok = True
+    design_ok = True
 
     if backend_code and "requirements.txt" in backend_code and "main.py" in backend_code:
         logger.info("[BUILD_VALIDATOR] Running backend build validation in Docker")
@@ -253,7 +287,14 @@ async def build_validator(state: VibeDeployState, config=None) -> dict:
             logger.warning("[BUILD_VALIDATOR] Frontend Docker validation failed: %s", frontend_err[:500])
             errors.append(f"frontend: {frontend_err[:500]}")
 
-    passed = backend_ok and frontend_ok
+    if frontend_code:
+        design_errors = _check_design_quality(frontend_code)
+        if design_errors:
+            logger.warning("[BUILD_VALIDATOR] Design quality errors detected: %s", design_errors)
+            errors.extend(design_errors)
+            design_ok = False
+
+    passed = backend_ok and frontend_ok and design_ok
     if passed:
         await _emit_build_event(
             "build.node.complete",
@@ -278,7 +319,7 @@ async def build_validator(state: VibeDeployState, config=None) -> dict:
     failing_files: dict[str, str] = {}
     if not backend_ok:
         failing_files.update(backend_code)
-    if not frontend_ok:
+    if not frontend_ok or not design_ok:
         failing_files.update(frontend_code)
     repair_prompt = _build_repair_prompt(trimmed, failing_files)
     await _emit_build_event(

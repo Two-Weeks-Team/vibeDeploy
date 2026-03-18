@@ -32,6 +32,7 @@ def test_scaffold_returns_all_nine_files():
         "web/next.config.ts",
         "web/postcss.config.js",
         "web/src/app/globals.css",
+        "web/src/app/layout.tsx",
         "agent/main.py",
         "agent/models.py",
         "agent/ai_service.py",
@@ -84,6 +85,48 @@ def test_extra_backend_dependencies_appended():
 def test_globals_css_uses_tailwind_import():
     files = generate_scaffold({})
     assert "tailwindcss" in files["web/src/app/globals.css"]
+
+
+def test_globals_css_has_oklch_variables():
+    files = generate_scaffold({})
+    css = files["web/src/app/globals.css"]
+    oklch_count = css.count("oklch(")
+    assert oklch_count >= 12, f"Expected ≥12 OKLCH variables, got {oklch_count}"
+
+
+def test_globals_css_has_dark_block():
+    files = generate_scaffold({})
+    css = files["web/src/app/globals.css"]
+    assert ".dark {" in css
+
+
+def test_globals_css_has_root_block():
+    files = generate_scaffold({})
+    css = files["web/src/app/globals.css"]
+    assert ":root {" in css
+
+
+def test_globals_css_has_font_variables():
+    files = generate_scaffold({})
+    css = files["web/src/app/globals.css"]
+    assert "--font-display:" in css
+    assert "--font-body:" in css
+
+
+def test_globals_css_domain_preset_applies():
+    files_finance = generate_scaffold({"domain": "finance"})
+    files_creative = generate_scaffold({"domain": "creative"})
+    css_finance = files_finance["web/src/app/globals.css"]
+    css_creative = files_creative["web/src/app/globals.css"]
+    assert css_finance != css_creative
+
+
+def test_globals_css_typography_hint_applies():
+    files_tech = generate_scaffold({"typography_hint": "tech saas"})
+    files_luxury = generate_scaffold({"typography_hint": "luxury fashion"})
+    css_tech = files_tech["web/src/app/globals.css"]
+    css_luxury = files_luxury["web/src/app/globals.css"]
+    assert css_tech != css_luxury
 
 
 def test_postcss_config_uses_tailwind_plugin():

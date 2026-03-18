@@ -22,7 +22,15 @@ PROMPT_TEMPLATES: dict[str, dict[str, Any]] = {
             "Description: {description}\n\n"
             "Relevant context:\n{context_block}\n"
             "Task: Build a production-ready Next.js page using App Router patterns, "
-            "accessible semantics, and clear state handling."
+            "accessible semantics, and clear state handling.\n\n"
+            "MANDATORY FUNCTIONAL REQUIREMENTS:\n"
+            '- Add "use client" at the top of the file.\n'
+            "- Use useEffect to fetch initial data from the API on mount.\n"
+            "- Every button must have an onClick that calls an API function from src/lib/api.ts.\n"
+            "- All displayed data (lists, cards, tables) must come from useState, populated by API responses.\n"
+            "- Show loading skeleton/spinner during API calls, error message on failure.\n"
+            "- Import and render ALL components that integrate with the API. Never create API-wired components that go unused.\n"
+            "- NEVER hardcode arrays of items as if they were real data. Fetch from API or show empty state."
         ),
         "max_tokens": 4000,
     },
@@ -35,7 +43,11 @@ PROMPT_TEMPLATES: dict[str, dict[str, Any]] = {
             "Description: {description}\n\n"
             "Relevant context:\n{context_block}\n"
             "Task: Build a reusable typed component with robust prop ergonomics and "
-            "strict design-system consistency."
+            "strict design-system consistency.\n\n"
+            "MANDATORY: This component must accept dynamic data via props — not hardcoded.\n"
+            "If this component displays a list or collection, accept items as a prop array.\n"
+            "If it has buttons, accept onClick callbacks as props.\n"
+            "If it shows loading or empty states, accept a loading prop."
         ),
         "max_tokens": 3500,
     },
@@ -48,7 +60,10 @@ PROMPT_TEMPLATES: dict[str, dict[str, Any]] = {
             "Description: {description}\n\n"
             "Relevant context:\n{context_block}\n"
             "Task: Build a typed API client module that follows the contract exactly, "
-            "including request/response typing and safe error paths."
+            "including request/response typing and safe error paths.\n\n"
+            "MANDATORY: Export a function for EVERY backend endpoint.\n"
+            "Each function must: call fetch with proper headers, parse JSON response, "
+            "throw on non-OK status. Every exported function must be used by at least one page or component."
         ),
         "max_tokens": 3500,
     },

@@ -2,7 +2,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from agent.nodes.build_validator import _ast_check_python_files, _write_files_to_tmpdir, build_validator
+from agent.nodes.build_validator import (
+    _ast_check_python_files,
+    _check_design_quality,
+    _write_files_to_tmpdir,
+    build_validator,
+)
 
 
 def test_ast_check_python_files_passes_valid_code():
@@ -252,3 +257,52 @@ async def test_build_validator_emits_error_event_on_syntax_failure():
     event_types = [e["payload"]["type"] for e in emitted_events]
     assert "build.node.start" in event_types
     assert "build.node.error" in event_types
+
+
+_GOOD_GLOBALS_CSS = """:root {
+  --background: 0 0% 100%;
+  --foreground: 222.2 84% 4.9%;
+  --card: 0 0% 100%;
+  --card-foreground: 222.2 84% 4.9%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222.2 84% 4.9%;
+  --primary: 222.2 47.4% 11.2%;
+  --primary-foreground: 210 40% 98%;
+  --secondary: 210 40% 96%;
+  --secondary-foreground: 222.2 47.4% 11.2%;
+  --muted: 210 40% 96%;
+  --muted-foreground: 215.4 16.3% 46.9%;
+}
+.dark {
+  --background: 222.2 84% 4.9%;
+}
+"""
+
+
+def test_check_design_quality_passes_with_valid_code():
+    frontend_code = {
+        "src/app/globals.css": _GOOD_GLOBALS_CSS,
+        "page.tsx": "export default function Page() { return <div className='bg-background p-4'>OK</div>; }\n",
+    }
+    assert _check_design_quality(frontend_code) == []
+
+
+def test_check_design_quality_fails_when_css_variables_below_minimum():
+    sparse_css = (
+        ":root {\n  --primary: 222 47% 11%;\n  --secondary: 210 40% 96%;\n}\n.dark {\n  --primary: 210 40% 98%;\n}\n"
+    )
+    errors = _check_design_quality({"src/app/globals.css": sparse_css})
+    assert len(errors) == 1
+    assert "globals.css has only 3 CSS variables (minimum 12)" in errors[0]
+    assert errors[0].startswith("DESIGN:")
+
+
+def test_check_design_quality_fails_when_bg_white_hardcoded_in_tsx():
+    frontend_code = {
+        "src/app/globals.css": _GOOD_GLOBALS_CSS,
+        "page.tsx": 'export default function Page() { return <div className="bg-white p-4">Bad</div>; }\n',
+    }
+    errors = _check_design_quality(frontend_code)
+    assert len(errors) == 1
+    assert "page.tsx contains bg-white" in errors[0]
+    assert errors[0].startswith("DESIGN:")

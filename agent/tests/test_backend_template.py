@@ -27,7 +27,7 @@ def test_ai_service_py_passes_ast_parse():
 
 def test_scaffold_returns_nine_files():
     files = generate_scaffold({})
-    assert len(files) == 9
+    assert len(files) == 10
 
 
 def test_health_endpoint_still_present():

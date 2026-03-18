@@ -47,7 +47,7 @@ async def _db_update_card_safe(card_id: str, **fields: object) -> None:
 
         await zp_store.update_card(card_id, **fields)
     except Exception:
-        pass
+        logger.exception("[ZP] DB update failed for card %s fields=%s", card_id, list(fields.keys()))
 
 
 async def _db_update_session_safe(session_id: str, status: str) -> None:
@@ -177,6 +177,87 @@ class StreamingOrchestrator:
         except Exception:
             pass
 
+    async def _hydrate_session_from_db(self, session_id: str) -> ZPSession | None:
+        """Load a session and its cards from the database into memory."""
+        try:
+            from agent.db import zp_store
+
+            data = await zp_store.get_session(session_id)
+            if data is None:
+                return None
+
+            cards: list[ZPCard] = []
+            for cd in data.get("cards", []):
+                try:
+                    card = ZPCard(
+                        card_id=cd.get("card_id", ""),
+                        video_id=cd.get("video_id", ""),
+                        status=cd.get("status", "analyzing"),
+                        score=cd.get("score", 0),
+                        title=cd.get("title", ""),
+                        thread_id=cd.get("thread_id"),
+                        reason=cd.get("reason", ""),
+                        reason_code=cd.get("reason_code", ""),
+                        domain=cd.get("domain", ""),
+                        papers_found=cd.get("papers_found", 0),
+                        competitors_found=cd.get("competitors_found", ""),
+                        saturation=cd.get("saturation", ""),
+                        novelty_boost=cd.get("novelty_boost", 0.0),
+                        video_summary=cd.get("video_summary", ""),
+                        insights=cd.get("insights", []),
+                        mvp_proposal=cd.get("mvp_proposal", {}),
+                        build_step=cd.get("build_step", ""),
+                        analysis_step=cd.get("analysis_step", ""),
+                        repo_url=cd.get("repo_url", ""),
+                        live_url=cd.get("live_url", ""),
+                    )
+                    cards.append(card)
+                except Exception:
+                    logger.warning("[ZP] Skipping invalid card in session %s", session_id)
+
+            session = ZPSession(
+                session_id=session_id,
+                status=data.get("status", "exploring"),
+                cards=cards,
+                build_queue=[],
+                active_build=None,
+                goal_go_cards=data.get("goal_go_cards", 10),
+                created_at=str(data.get("created_at", "")),
+            )
+            self._sessions[session_id] = session
+            if session_id not in self._build_queues:
+                self._build_queues[session_id] = BuildQueue()
+
+            logger.info("[ZP] Hydrated session %s from DB (%d cards)", session_id, len(cards))
+            return session
+        except Exception:
+            logger.exception("[ZP] Failed to hydrate session %s from DB", session_id)
+            return None
+
+    async def ensure_session(self, session_id: str) -> ZPSession | None:
+        """Get session from memory, or load from DB if not present."""
+        session = self._sessions.get(session_id)
+        if session is not None:
+            return session
+        return await self._hydrate_session_from_db(session_id)
+
+    async def load_sessions_from_db(self) -> int:
+        """Load the latest session from DB into memory on startup. Returns count loaded."""
+        try:
+            from agent.db import zp_store
+
+            data = await zp_store.get_dashboard()
+            if data and data.get("session_id"):
+                session_id = data["session_id"]
+                if session_id not in self._sessions:
+                    result = await self._hydrate_session_from_db(session_id)
+                    if result:
+                        logger.info("[ZP] Loaded latest session %s from DB on startup", session_id)
+                        return 1
+        except Exception:
+            logger.exception("[ZP] Failed to load sessions from DB on startup")
+        return 0
+
     def get_session(self, session_id: str) -> ZPSession | None:
         return self._sessions.get(session_id)
 
@@ -198,7 +279,7 @@ class StreamingOrchestrator:
 
             await zp_store.add_card(session_id, card_id, video_id, title or video_id)
         except Exception:
-            pass
+            logger.exception("[ZP] Failed to add card %s to DB", card_id)
         return card_id
 
     async def exploration_step(
@@ -210,7 +291,7 @@ class StreamingOrchestrator:
         video_description: str = "",
         verdict_fn: VerdictFn | None = None,
     ) -> list[dict]:
-        session = self._sessions.get(session_id)
+        session = await self.ensure_session(session_id)
         if session is None:
             return []
 

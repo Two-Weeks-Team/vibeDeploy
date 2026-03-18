@@ -188,12 +188,23 @@ export function CardDetailModal({ card, isOpen, onClose, onQueueBuild, onPassCar
               </Button>
             </>
           )}
-          {card.status === "deployed" && card.thread_id && (
-            <Button asChild className="w-full sm:w-auto">
-              <a href={`/result/${card.thread_id}`}>
-                <ExternalLink className="w-4 h-4 mr-2" /> View Result
-              </a>
-            </Button>
+          {card.status === "deployed" && (
+            <div className="flex gap-2 w-full">
+              {card.live_url && (
+                <Button asChild className="flex-1 bg-emerald-600 hover:bg-emerald-700">
+                  <a href={card.live_url} target="_blank" rel="noopener noreferrer">
+                    <ExternalLink className="w-4 h-4 mr-2" /> View App
+                  </a>
+                </Button>
+              )}
+              {card.repo_url && (
+                <Button asChild variant="outline" className="flex-1">
+                  <a href={card.repo_url} target="_blank" rel="noopener noreferrer">
+                    <ExternalLink className="w-4 h-4 mr-2" /> GitHub
+                  </a>
+                </Button>
+              )}
+            </div>
           )}
         </div>
       </DialogContent>

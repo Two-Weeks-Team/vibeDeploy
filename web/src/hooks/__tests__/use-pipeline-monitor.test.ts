@@ -1,4 +1,4 @@
-import { renderHook } from "@testing-library/react";
+import { renderHook, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { usePipelineMonitor } from "../use-pipeline-monitor";
 
@@ -19,13 +19,13 @@ describe("usePipelineMonitor", () => {
     vi.restoreAllMocks();
   });
 
-  it("has empty initial state", () => {
+  it("has empty state before events arrive", async () => {
     const { result } = renderHook(() => usePipelineMonitor());
 
     expect(result.current.activePipelines).toEqual([]);
     expect(result.current.events).toEqual([]);
     expect(result.current.nodeStatuses).toEqual({});
-    expect(result.current.connected).toBe(false);
+    await waitFor(() => expect(result.current.connected).toBe(true));
   });
 
   it("provides expected interface", () => {
@@ -45,4 +45,3 @@ describe("usePipelineMonitor", () => {
   });
 
 });
-

@@ -16,6 +16,10 @@ export interface ZPCard {
   thread_id?: string | null;
   build_step?: string;
   analysis_step?: string;
+  repo_url?: string;
+  live_url?: string;
+  build_phase?: string;
+  build_node?: string;
   video_summary?: string;
   insights?: string[];
   mvp_proposal?: {
