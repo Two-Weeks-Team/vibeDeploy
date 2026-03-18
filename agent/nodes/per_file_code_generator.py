@@ -1079,6 +1079,14 @@ def _api_template(path: str, description: str, api_contract: object) -> str:
     )
 
 
+def _strip_api_prefix(path: str) -> str:
+    if path.startswith("/api/"):
+        return path[4:]
+    if path == "/api":
+        return "/"
+    return path
+
+
 def _route_template(path: str, description: str, api_contract: object) -> str:
     operations = _contract_operations(api_contract)
     lines = [
@@ -1095,6 +1103,7 @@ def _route_template(path: str, description: str, api_contract: object) -> str:
         route_path = str(op["path"])
         func_name = f"route_{idx}_{method}"
         if method == "get":
+            route_path = _strip_api_prefix(route_path)
             lines.extend(
                 [
                     f'@router.get("{route_path}")\n',
@@ -1103,6 +1112,7 @@ def _route_template(path: str, description: str, api_contract: object) -> str:
                 ]
             )
         elif "insight" in route_path:
+            route_path = _strip_api_prefix(route_path)
             lines.extend(
                 [
                     f'@router.post("{route_path}")\n',
@@ -1111,6 +1121,7 @@ def _route_template(path: str, description: str, api_contract: object) -> str:
                 ]
             )
         else:
+            route_path = _strip_api_prefix(route_path)
             lines.extend(
                 [
                     f'@router.post("{route_path}")\n',
