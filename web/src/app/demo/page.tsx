@@ -163,29 +163,18 @@ export default function DemoPage() {
       setSelectedCardId("nutriplan-aADukT");
     }, 760);
     queueTimer(() => setCursor((prev) => ({ ...prev, clicking: false })), 980);
-  }, [actions, moveCursorToElement, queueTimer, session, stage]);
-
-  useEffect(() => {
-    if (stage !== "dashboard" || !session || buildClickShownRef.current) return;
-
-    const targetCard = session.cards.find((card) => card.card_id === "nutriplan-aADukT");
-    const studyMateGoSeen = actions.some((action) => action.message.includes("StudyMate Lite scored 75.0 → GO"));
-
-    if (!targetCard || targetCard.status !== "go_ready" || selectedCardId || !studyMateGoSeen || !buildDialogShownRef.current) {
-      return;
-    }
-
-    buildClickShownRef.current = true;
+    queueTimer(() => setSelectedCardId(null), 5760);
     queueTimer(() => {
+      buildClickShownRef.current = true;
       const goButton = document.querySelector('[data-go-card-id="nutriplan-aADukT"]');
       moveCursorToElement(goButton);
-    }, 300);
+    }, 8000);
     queueTimer(() => {
       setCursor((prev) => ({ ...prev, clicking: true }));
       queueBuild("nutriplan-aADukT");
-    }, 620);
-    queueTimer(() => setCursor((prev) => ({ ...prev, clicking: false })), 860);
-  }, [actions, moveCursorToElement, queueBuild, queueTimer, selectedCardId, session, stage]);
+    }, 10050);
+    queueTimer(() => setCursor((prev) => ({ ...prev, clicking: false })), 10520);
+  }, [actions, moveCursorToElement, queueBuild, queueTimer, session, stage]);
 
   useEffect(() => {
     if (stage !== "dashboard" || !session || viewAppClickShownRef.current) return;
@@ -197,15 +186,15 @@ export default function DemoPage() {
     queueTimer(() => {
       const viewAppLink = document.querySelector('[data-view-app-card-id="nutriplan-aADukT"]');
       moveCursorToElement(viewAppLink);
-    }, 400);
+    }, 900);
     queueTimer(() => {
       setCursor((prev) => ({ ...prev, clicking: true }));
       const viewAppLink = document.querySelector('[data-view-app-card-id="nutriplan-aADukT"]');
       if (viewAppLink instanceof HTMLElement) {
         viewAppLink.click();
       }
-    }, 720);
-    queueTimer(() => setCursor((prev) => ({ ...prev, clicking: false })), 960);
+    }, 1700);
+    queueTimer(() => setCursor((prev) => ({ ...prev, clicking: false })), 2100);
   }, [moveCursorToElement, queueTimer, session, stage]);
 
   useEffect(() => () => clearSequenceTimers(), [clearSequenceTimers]);
