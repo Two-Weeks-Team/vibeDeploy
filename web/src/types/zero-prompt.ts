@@ -6,6 +6,14 @@ export interface ZPCard {
   title: string;
   status: CardStatus;
   score: number;
+  reason?: string;
+  reason_code?: string;
+  domain?: string;
+  papers_found?: number;
+  competitors_found?: string;
+  saturation?: string;
+  novelty_boost?: number;
+  thread_id?: string | null;
 }
 
 export interface ZPSession {

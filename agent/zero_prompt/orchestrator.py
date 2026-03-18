@@ -211,6 +211,7 @@ class StreamingOrchestrator:
             events.append(brainstorm_complete_event(0, 0, 0.0))
 
         events.append(compete_start_event(idea.name or video_title))
+        market = None
         try:
             from agent.zero_prompt.competitive_analysis import analyze_competition
 
@@ -249,15 +250,21 @@ class StreamingOrchestrator:
             except Exception:
                 decision, score, reason, reason_code = "GO", 70, "default verdict", "high_potential"
 
+        card.title = idea.name or video_title or video_id
+        card.score = score
+        card.reason = reason
+        card.reason_code = reason_code
+        card.domain = idea.domain if idea else ""
+        card.papers_found = len(papers) if papers else 0
+        card.competitors_found = str(len(market.competitors)) if market else "0"
+        card.saturation = market.saturation_level if market else ""
+        card.novelty_boost = novelty_boost
+
         if decision == "GO":
             card.status = "go_ready"
-            card.score = score
-            card.title = idea.name or video_title or video_id
             events.append(verdict_go_event(score, reason, reason_code))
         else:
             card.status = "nogo"
-            card.score = score
-            card.title = idea.name or video_title or video_id
             events.append(verdict_nogo_event(score, reason, reason_code))
 
         return events

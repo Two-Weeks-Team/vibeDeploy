@@ -13,13 +13,18 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "vibeDeploy — One sentence. One meeting. One live app.",
+  title: "vibeDeploy — Zero prompts. Zero coding. One button deploys a live app.",
   description:
-    "Describe your app idea in one sentence or paste a YouTube URL. The Vibe Council — 6 AI agents — debates feasibility, then builds and deploys your MVP to DigitalOcean.",
+    "AI discovers ideas from YouTube, validates with academic research, writes type-safe code, and ships to DigitalOcean — autonomously.",
   openGraph: {
     title: "vibeDeploy",
-    description: "AI-powered idea validation and instant deployment",
+    description: "Zero-Prompt AI deployment — from YouTube trend to live app, fully autonomous",
     type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: "vibeDeploy",
+    description: "Zero-Prompt AI deployment — from YouTube trend to live app, fully autonomous",
   },
 };
 

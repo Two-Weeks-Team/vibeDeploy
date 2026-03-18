@@ -18,7 +18,7 @@ export async function getSession(id: string): Promise<ZPSession> {
 }
 
 export async function queueBuild(sessionId: string, cardId: string): Promise<void> {
-  const response = await fetch(`${DASHBOARD_API_URL}/zero-prompt/${sessionId}/action`, {
+  const response = await fetch(`${DASHBOARD_API_URL}/zero-prompt/${sessionId}/actions`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action: "queue_build", card_id: cardId }),
@@ -27,10 +27,10 @@ export async function queueBuild(sessionId: string, cardId: string): Promise<voi
 }
 
 export async function passCard(sessionId: string, cardId: string): Promise<void> {
-  const response = await fetch(`${DASHBOARD_API_URL}/zero-prompt/${sessionId}/action`, {
+  const response = await fetch(`${DASHBOARD_API_URL}/zero-prompt/${sessionId}/actions`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "pass", card_id: cardId }),
+    body: JSON.stringify({ action: "pass_card", card_id: cardId }),
   });
   if (!response.ok) throw new Error("Failed to pass card");
 }

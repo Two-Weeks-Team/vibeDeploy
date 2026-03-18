@@ -103,6 +103,13 @@ class ZPCard(BaseModel):
     score: int = 0
     title: str = ""
     thread_id: str | None = None
+    reason: str = ""
+    reason_code: str = ""
+    domain: str = ""
+    papers_found: int = 0
+    competitors_found: str = ""
+    saturation: str = ""
+    novelty_boost: float = 0.0
 
 
 class ZPSession(BaseModel):

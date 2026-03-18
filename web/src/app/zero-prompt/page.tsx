@@ -26,9 +26,11 @@ function ZeroPromptInner() {
     session, 
     actions, 
     isConnected, 
+    isCompleted,
     isLoading, 
     error, 
     startSession, 
+    restoreSession,
     queueBuild, 
     passCard 
   } = useZeroPrompt();
@@ -38,11 +40,17 @@ function ZeroPromptInner() {
   const autostartFired = useRef(false);
 
   useEffect(() => {
+    const sessionParam = searchParams.get("session");
+    if (sessionParam && !session && !isLoading && !autostartFired.current) {
+      autostartFired.current = true;
+      restoreSession(sessionParam);
+      return;
+    }
     if (searchParams.get("autostart") === "true" && !session && !isLoading && !autostartFired.current) {
       autostartFired.current = true;
       startSession(10);
     }
-  }, [searchParams, session, isLoading, startSession]);
+  }, [searchParams, session, isLoading, startSession, restoreSession]);
 
   const handleStart = () => {
     const goalNum = parseInt(goal, 10);
@@ -122,12 +130,24 @@ function ZeroPromptInner() {
                 : "Connecting to agent..."}
             </p>
           </div>
-          {isConnected && (
-            <div className="flex items-center gap-2 text-sm text-green-500">
-              <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-              Live
-            </div>
-          )}
+          <div className="flex items-center gap-2 text-sm">
+            {isConnected ? (
+              <>
+                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                <span className="text-green-500">Live — Exploring</span>
+              </>
+            ) : isCompleted ? (
+              <>
+                <span className="w-2 h-2 rounded-full bg-blue-500" />
+                <span className="text-blue-500">Complete</span>
+              </>
+            ) : isLoading ? (
+              <>
+                <span className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse" />
+                <span className="text-yellow-500">Connecting...</span>
+              </>
+            ) : null}
+          </div>
         </header>
 
         <StatusBar session={session} isConnected={isConnected} />

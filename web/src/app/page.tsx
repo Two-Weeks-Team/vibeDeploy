@@ -63,10 +63,10 @@ export default function LandingPage() {
             vibeDeploy
           </motion.h1>
           <motion.p variants={fadeUp} className="text-xl text-muted-foreground">
-            From idea to live app — one sentence, one meeting.
+            Zero prompts. Zero coding. One button deploys a live app.
           </motion.p>
           <motion.p variants={fadeUp} className="text-sm text-muted-foreground/70">
-            Describe your app idea. The Vibe Council debates feasibility, then builds and deploys it.
+            AI discovers ideas from YouTube, validates with research, writes code, and ships to DigitalOcean — autonomously.
           </motion.p>
           <motion.div variants={fadeUp} className="flex flex-col items-center gap-3 pt-6">
             <Link href="/zero-prompt?autostart=true">

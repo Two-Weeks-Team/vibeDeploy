@@ -27,6 +27,7 @@ export function useZeroPrompt() {
   const [session, setSession] = useState<ZPSession | null>(null);
   const [actions, setActions] = useState<ZPAction[]>([]);
   const [isConnected, setIsConnected] = useState(false);
+  const [isCompleted, setIsCompleted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
@@ -82,6 +83,9 @@ export function useZeroPrompt() {
             
             if (data.type === "zp.session.start" && data.session_id) {
               sessionIdRef.current = data.session_id;
+              if (typeof window !== "undefined") {
+                window.history.replaceState(null, "", `/zero-prompt?session=${data.session_id}`);
+              }
             }
             
             setActions((prev) => {
@@ -104,6 +108,7 @@ export function useZeroPrompt() {
         await fetchSession(sessionIdRef.current);
       }
       setIsConnected(false);
+      setIsCompleted(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to start");
       setIsConnected(false);
@@ -132,13 +137,21 @@ export function useZeroPrompt() {
     }
   };
 
+  const restoreSession = useCallback(async (id: string) => {
+    sessionIdRef.current = id;
+    await fetchSession(id);
+    setIsCompleted(true);
+  }, [fetchSession]);
+
   return {
     session,
     actions,
     isConnected,
+    isCompleted,
     isLoading,
     error,
     startSession: handleStartSession,
+    restoreSession,
     queueBuild: handleQueueBuild,
     passCard: handlePassCard,
   };
