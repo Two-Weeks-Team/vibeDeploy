@@ -52,6 +52,7 @@ export default function DemoPage() {
     queueBuild,
     passCard,
     deleteCard,
+    reExplore,
   } = useDemoZeroPrompt();
 
   const autoFired = useRef(false);
@@ -194,6 +195,7 @@ export default function DemoPage() {
               onQueueBuild={queueBuild}
               onPassCard={passCard}
               onDeleteCard={deleteCard}
+              onReExplore={reExplore}
             />
             <ActionFeed actions={actions} />
           </div>

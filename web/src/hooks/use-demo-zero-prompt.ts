@@ -128,6 +128,15 @@ export function useDemoZeroPrompt() {
     setActions((prev) => [{ type: "delete", message: `Card ${cardId} deleted`, timestamp: now }, ...prev]);
   }, []);
 
+  const reExplore = useCallback((cardId: string) => {
+    const now = new Date().toISOString();
+    setSession((prev) => {
+      if (!prev) return prev;
+      return { ...prev, cards: prev.cards.filter((c) => c.card_id !== cardId) };
+    });
+    setActions((prev) => [{ type: "explore", message: `Re-exploring — replaced ${cardId} with new discovery`, timestamp: now }, ...prev]);
+  }, []);
+
   return {
     session,
     actions,
@@ -139,5 +148,6 @@ export function useDemoZeroPrompt() {
     queueBuild,
     passCard,
     deleteCard: deleteCardFn,
+    reExplore,
   };
 }
