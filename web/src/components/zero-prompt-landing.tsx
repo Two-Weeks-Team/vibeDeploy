@@ -96,14 +96,14 @@ export function ZeroPromptLanding({ youtubeUrl, onYoutubeUrlChange, startAction,
           <motion.div variants={fadeUp} className="flex flex-col items-center gap-4 pt-6">
             <div className="flex flex-col sm:flex-row items-center gap-3">
               {startAction}
-              <div className="group/demo relative">
-                <Link href="/demo">
+              <div className="relative">
+                <Link href="/demo" className="group/demo">
                   <Button aria-describedby={demoTooltipId} size="lg" variant="outline" className="h-14 px-8 text-lg font-semibold gap-2 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300">
                     <Play className="w-5 h-5 fill-current" />
                     Watch Demo
                   </Button>
                 </Link>
-                <div id={demoTooltipId} role="tooltip" className="absolute top-full left-1/2 z-20 mt-3 w-[min(90vw,26rem)] -translate-x-1/2 rounded-2xl border border-emerald-500/20 bg-background/95 p-4 text-left shadow-2xl shadow-black/30 opacity-0 backdrop-blur-sm transition-all duration-200 -translate-y-2 group-hover/demo:translate-y-0 group-hover/demo:opacity-100 group-focus-within/demo:translate-y-0 group-focus-within/demo:opacity-100">
+                <div id={demoTooltipId} role="tooltip" className="pointer-events-none absolute top-full left-1/2 z-20 mt-3 w-[min(90vw,26rem)] -translate-x-1/2 rounded-2xl border border-emerald-500/20 bg-background/95 p-4 text-left shadow-2xl shadow-black/30 opacity-0 backdrop-blur-sm transition-all duration-200 -translate-y-2 group-hover/demo:translate-y-0 group-hover/demo:opacity-100 group-focus-within/demo:translate-y-0 group-focus-within/demo:opacity-100">
                   <div className="space-y-3">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-300">For judges & competitors</span>
