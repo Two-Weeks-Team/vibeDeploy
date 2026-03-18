@@ -1332,7 +1332,7 @@ async def _trigger_zp_build(orch, session_id: str, card_id: str) -> None:
                 for url_key in ("liveUrl", "live_url", "default_ingress"):
                     if event_data.get(url_key):
                         captured_live_url = str(event_data[url_key])
-                for url_key in ("repoUrl", "repo_url", "github_url", "repo"):
+                for url_key in ("repoUrl", "repo_url", "github_url", "github_repo", "repo"):
                     if event_data.get(url_key):
                         captured_repo_url = str(event_data[url_key])
                 try:
@@ -1347,6 +1347,38 @@ async def _trigger_zp_build(orch, session_id: str, card_id: str) -> None:
                     )
                 except Exception:
                     pass
+                if captured_live_url and card.status != "deployed":
+                    card.build_step = "done"
+                    card.status = "deployed"
+                    card.live_url = captured_live_url
+                    card.repo_url = captured_repo_url
+                    card.thread_id = f"zp-{card_id}"
+                    try:
+                        await _zp_store.update_card(
+                            card_id,
+                            status="deployed",
+                            build_step="done",
+                            thread_id=card.thread_id,
+                            live_url=captured_live_url,
+                            repo_url=captured_repo_url,
+                        )
+                        push_zp_event(
+                            {
+                                "type": "card.update",
+                                "card_id": card_id,
+                                "status": "deployed",
+                                "title": card.title,
+                                "session_id": session_id,
+                            }
+                        )
+                        logger.info(
+                            "[ZP] Card %s deployed mid-stream: url=%s repo=%s",
+                            card_id,
+                            captured_live_url,
+                            captured_repo_url,
+                        )
+                    except Exception:
+                        pass
                 subscriber_key = f"{session_id}:{card_id}"
                 for queue in _zp_build_subscribers.get(subscriber_key, []):
                     try:
