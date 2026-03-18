@@ -8,12 +8,19 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from agent.llm import MODEL_CONFIG, ainvoke_with_retry, content_to_str, get_llm, get_rate_limit_fallback_models
+from agent.nodes.per_file_prompts import build_prompt
+
 logger = logging.getLogger(__name__)
 
 _PYTHON_EXTENSIONS = frozenset({".py"})
 _JS_TS_EXTENSIONS = frozenset({".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"})
 _MAX_RETRY_ATTEMPTS = 3
 _BROKEN_IMPORT_RE = re.compile(r"^\s*import\s+from\s*['\"]", re.MULTILINE)
+
+
+def _use_llm_per_file_generation() -> bool:
+    return os.getenv("VIBEDEPLOY_USE_LLM_PER_FILE_GENERATION", "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 class FileSpec(BaseModel):
@@ -153,8 +160,156 @@ def _build_generation_context(state: dict) -> dict:
     return {
         "api_contract": state.get("api_contract"),
         "design_system": blueprint.get("design_system", {}),
+        "design_system_context": state.get("design_system_context") or {},
+        "prompt_strategy": state.get("prompt_strategy") or {},
+        "generated_types": state.get("generated_types") or {},
+        "pydantic_models": state.get("pydantic_models") or "",
+        "frontend_code": dict(state.get("frontend_code") or {}),
+        "backend_code": dict(state.get("backend_code") or {}),
         "already_generated": {},
     }
+
+
+def _template_key_for_spec(spec: FileSpec) -> str:
+    normalized = spec.path.replace("\\", "/")
+    if normalized.endswith("page.tsx"):
+        return "page.tsx"
+    if normalized.endswith("src/lib/api.ts"):
+        return "api.ts"
+    if normalized.endswith("routes.py"):
+        return "routes.py"
+    if normalized.endswith("ai_service.py"):
+        return "ai_service.py"
+    if normalized.endswith(".tsx"):
+        return "component.tsx"
+    return spec.file_type
+
+
+def _stringify_context_value(value) -> str:
+    if isinstance(value, str):
+        return value
+    if value is None:
+        return ""
+    try:
+        return json.dumps(value, ensure_ascii=False, indent=2)
+    except TypeError:
+        return str(value)
+
+
+def _prompt_context_for_spec(spec: FileSpec, context: dict) -> dict:
+    blueprint_design = context.get("design_system") or {}
+    design_system_context = context.get("design_system_context") or {}
+    prompt_strategy = context.get("prompt_strategy") or {}
+    frontend_code = context.get("frontend_code") or {}
+    backend_code = context.get("backend_code") or {}
+    template_key = _template_key_for_spec(spec)
+    target = "backend" if _is_backend_path(spec.path) else "frontend"
+    appendix_key = f"{target}_prompt_appendix"
+    contract_note = (
+        "Use the generated typed API client at src/lib/api-client.ts where possible. "
+        "Do not invent endpoints; only use the OpenAPI contract."
+        if target == "frontend"
+        else "Implement only endpoints and response shapes defined in the OpenAPI contract."
+    )
+    context_map = {
+        "file_path": spec.path,
+        "description": spec.description,
+        "design_system": _stringify_context_value(design_system_context or blueprint_design),
+        "layout": _stringify_context_value((design_system_context or {}).get("experience_contract") or {}),
+        "navigation": _stringify_context_value(
+            {
+                "dependencies": spec.dependencies,
+                "already_generated": list((context.get("already_generated") or {}).keys()),
+            }
+        ),
+        "props_spec": _stringify_context_value({"dependencies": spec.dependencies, "contract_note": contract_note}),
+        "api_contract": _stringify_context_value(context.get("api_contract") or ""),
+        "types": _stringify_context_value(frontend_code.get("src/types/api.d.ts") or ""),
+        "models": _stringify_context_value(backend_code.get("schemas.py") or context.get("pydantic_models") or ""),
+    }
+    prompt = build_prompt(template_key, context_map)
+    appendix = str(prompt_strategy.get(appendix_key) or "").strip()
+    if appendix:
+        prompt = f"{prompt}\n\nAdditional Strategy:\n{appendix}"
+    return {"template_key": template_key, "target": target, "prompt": prompt}
+
+
+def _extract_balanced_json_block(raw: str) -> str | None:
+    for start_index, char in enumerate(raw):
+        if char != "{":
+            continue
+        stack = ["}"]
+        in_string = False
+        escaped = False
+        for index in range(start_index + 1, len(raw)):
+            current = raw[index]
+            if in_string:
+                if escaped:
+                    escaped = False
+                elif current == "\\":
+                    escaped = True
+                elif current == '"':
+                    in_string = False
+                continue
+            if current == '"':
+                in_string = True
+                continue
+            if current == "{":
+                stack.append("}")
+                continue
+            if current == "}":
+                if not stack:
+                    break
+                stack.pop()
+                if not stack:
+                    return raw[start_index : index + 1]
+    return None
+
+
+def _parse_single_file_payload(raw: str, path: str) -> str:
+    cleaned = raw.strip()
+    if cleaned.startswith("```"):
+        cleaned = re.sub(r"^```(?:json|tsx|ts|py)?\n?", "", cleaned)
+        cleaned = re.sub(r"\n?```$", "", cleaned)
+    json_block = _extract_balanced_json_block(cleaned)
+    if json_block:
+        try:
+            parsed = json.loads(json_block)
+            if isinstance(parsed, dict):
+                if isinstance(parsed.get("content"), str):
+                    return parsed["content"]
+                files = parsed.get("files")
+                if isinstance(files, dict) and isinstance(files.get(path), str):
+                    return files[path]
+        except json.JSONDecodeError:
+            pass
+    return cleaned
+
+
+async def _generate_file_with_llm(spec: FileSpec, context: dict) -> str:
+    prompt_meta = _prompt_context_for_spec(spec, context)
+    target = prompt_meta["target"]
+    model_key = "code_gen_backend" if target == "backend" else "code_gen_frontend"
+    model = MODEL_CONFIG.get(model_key, MODEL_CONFIG["code_gen"])
+    llm = get_llm(model=model, temperature=0.1, max_tokens=12000)
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "Generate exactly one file. Return ONLY valid JSON with this shape: "
+                '{"content":"full file content"}. No markdown fences, no prose.'
+            ),
+        },
+        {"role": "user", "content": prompt_meta["prompt"]},
+    ]
+    response = await ainvoke_with_retry(
+        llm,
+        messages,
+        max_attempts=4,
+        fallback_models=get_rate_limit_fallback_models(model),
+        rate_limit_switch_after_attempts=4,
+    )
+    return _parse_single_file_payload(content_to_str(response.content), spec.path)
 
 
 async def backend_generator_node(state: dict, config=None) -> dict:
@@ -168,9 +323,17 @@ async def backend_generator_node(state: dict, config=None) -> dict:
     backend_code = dict(state.get("backend_code") or {})
     context = _build_generation_context(state)
     for spec in specs:
-        generated = _generate_file_from_spec(spec, context)
+        if _use_llm_per_file_generation() and spec.file_type in {"route", "service", "api"}:
+            try:
+                generated = {spec.path: await _generate_file_with_llm(spec, context)}
+            except Exception as exc:
+                logger.warning("[PER_FILE_LLM] backend fallback for %s: %s", spec.path, str(exc)[:200])
+                generated = _generate_file_from_spec(spec, context)
+        else:
+            generated = _generate_file_from_spec(spec, context)
         context["already_generated"].update(generated)
         backend_code.update(generated)
+        context["backend_code"] = dict(backend_code)
     return {
         "backend_code": backend_code,
         "phase": "backend_generated",
@@ -190,9 +353,17 @@ async def frontend_generator_node(state: dict, config=None) -> dict:
     context = _build_generation_context(state)
     context["already_generated"].update(frontend_code)
     for spec in specs:
-        generated = _generate_file_from_spec(spec, context)
+        if _use_llm_per_file_generation() and spec.file_type in {"page", "component", "api"}:
+            try:
+                generated = {spec.path: await _generate_file_with_llm(spec, context)}
+            except Exception as exc:
+                logger.warning("[PER_FILE_LLM] frontend fallback for %s: %s", spec.path, str(exc)[:200])
+                generated = _generate_file_from_spec(spec, context)
+        else:
+            generated = _generate_file_from_spec(spec, context)
         context["already_generated"].update(generated)
         frontend_code.update(generated)
+        context["frontend_code"] = dict(frontend_code)
     return {
         "frontend_code": frontend_code,
         "phase": "frontend_generated",

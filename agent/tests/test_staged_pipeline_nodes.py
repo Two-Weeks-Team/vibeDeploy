@@ -93,6 +93,23 @@ async def test_backend_and_frontend_generator_nodes_populate_state():
 
 
 @pytest.mark.asyncio
+async def test_frontend_generator_uses_llm_when_flag_enabled(monkeypatch):
+    async def fake_generate(spec, context):
+        return "export default function Page(){ return <main>LLM</main>; }"
+
+    monkeypatch.setenv("VIBEDEPLOY_USE_LLM_PER_FILE_GENERATION", "true")
+    monkeypatch.setattr("agent.nodes.per_file_code_generator._generate_file_with_llm", fake_generate)
+    state = {
+        "blueprint": BLUEPRINT,
+        "api_contract": generate_api_contract(BLUEPRINT),
+        "frontend_code": {},
+        "backend_code": {},
+    }
+    result = await frontend_generator_node(state)
+    assert result["frontend_code"]["src/app/page.tsx"].startswith("export default function Page")
+
+
+@pytest.mark.asyncio
 async def test_local_runtime_validator_fails_without_main():
     result = await local_runtime_validator({"backend_code": {"routes.py": "x=1\n"}})
     assert result["local_runtime_validation"]["passed"] is False
@@ -126,10 +143,11 @@ def test_generated_api_contract_is_valid_json():
 
 
 @pytest.mark.asyncio
-async def test_api_run_route_works_with_staged_flag(app_client, monkeypatch):
+async def test_api_run_route_works_with_staged_and_llm_flags(app_client, monkeypatch):
     import agent.graph as graph_mod
 
     monkeypatch.setenv("VIBEDEPLOY_USE_STAGED_PIPELINE", "true")
+    monkeypatch.setenv("VIBEDEPLOY_USE_LLM_PER_FILE_GENERATION", "true")
     importlib.reload(graph_mod)
 
     class MockGraph:
