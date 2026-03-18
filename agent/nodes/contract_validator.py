@@ -404,6 +404,7 @@ async def validate_with_timeout(
 async def contract_validator_node(state: dict, config=None) -> dict:
     api_contract = str(state.get("api_contract") or "").strip()
     backend_code = dict(state.get("backend_code") or {})
+    attempt = int(state.get("wiring_attempt_count") or 0) + 1
     if not api_contract:
         result = {
             "passed": False,
@@ -419,6 +420,7 @@ async def contract_validator_node(state: dict, config=None) -> dict:
         result = await validate_with_timeout(api_contract, backend_code, timeout=10.0)
     return {
         "wiring_validation": result,
+        "wiring_attempt_count": attempt,
         "phase": "contract_validated" if result.get("passed") else "contract_validation_failed",
         "error": "; ".join(result.get("errors") or []) if result.get("errors") else None,
     }

@@ -121,6 +121,7 @@ class VibeDeployState(TypedDict):
     pydantic_models: Optional[str]
     design_system_context: Optional[Dict]
     wiring_validation: Optional[Dict]
+    wiring_attempt_count: Optional[int]
     local_runtime_validation: Optional[Dict]
     deploy_gate_result: Optional[Dict]
 

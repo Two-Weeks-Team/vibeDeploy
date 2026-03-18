@@ -62,7 +62,12 @@ def route_after_spec_freeze(state):
 
 def route_after_contract(state):
     validation = state.get("wiring_validation") or {}
-    return "code_evaluator" if validation.get("passed") else "code_generator"
+    if validation.get("passed"):
+        return "code_evaluator"
+    attempts = int(state.get("wiring_attempt_count") or 0)
+    if attempts >= 3:
+        return "__end__"
+    return "code_generator"
 
 
 def route_after_local_runtime(state):
@@ -73,6 +78,15 @@ def route_after_local_runtime(state):
     if attempts >= 3:
         return "__end__"
     return "code_generator"
+
+
+def route_after_build_staged(state):
+    result = route_after_build(state)
+    if result == "code_generator":
+        return "backend_generator"
+    if result == "deployer":
+        return "local_runtime_validator"
+    return result
 
 
 def route_code_eval_staged(state):
@@ -263,6 +277,7 @@ def create_staged_graph():
         {
             "code_evaluator": "code_evaluator",
             "code_generator": "backend_generator",
+            "__end__": END,
         },
     )
     # Staged pipeline remaps logical "code_generator" → actual "backend_generator" for per-file generation
@@ -277,10 +292,10 @@ def create_staged_graph():
     # Staged pipeline remaps logical "code_generator" → actual "backend_generator" for per-file generation
     workflow.add_conditional_edges(
         "build_validator",
-        route_after_build,
+        route_after_build_staged,
         {
-            "deployer": "local_runtime_validator",
-            "code_generator": "code_generator",
+            "local_runtime_validator": "local_runtime_validator",
+            "backend_generator": "backend_generator",
             "__end__": END,
         },
     )

@@ -29,7 +29,7 @@ def test_scaffold_returns_all_nine_files():
     expected_paths = {
         "web/package.json",
         "web/tsconfig.json",
-        "web/next.config.ts",
+        "web/next.config.js",
         "web/postcss.config.js",
         "web/src/app/globals.css",
         "web/src/app/layout.tsx",
@@ -54,7 +54,7 @@ def test_models_py_postgres_url_fix():
 
 def test_next_config_contains_standalone_and_rewrite():
     files = generate_scaffold({})
-    content = files["web/next.config.ts"]
+    content = files["web/next.config.js"]
     assert '"standalone"' in content
     assert "/api/:path*" in content
 
