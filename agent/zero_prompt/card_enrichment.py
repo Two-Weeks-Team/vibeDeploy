@@ -45,13 +45,13 @@ async def enrich_card_with_gemini(
         prompt = (
             f"{context}\n"
             "Based on this analysis, return JSON with:\n"
-            '1. "video_summary": 2-3 sentence summary of the video/idea (Korean)\n'
-            '2. "insights": array of 3-5 actionable insights (Korean, each 1 sentence)\n'
+            '1. "video_summary": 2-3 sentence summary of the video/idea (English)\n'
+            '2. "insights": array of 3-5 actionable insights (English, each 1 sentence)\n'
             '3. "mvp_proposal": object with:\n'
-            '   - "app_name": catchy app name\n'
-            '   - "core_feature": one-line core feature description (Korean)\n'
+            '   - "app_name": catchy English app name\n'
+            '   - "core_feature": one-line core feature description (English)\n'
             '   - "tech_stack": recommended tech stack\n'
-            '   - "key_pages": array of 3-4 main pages/screens\n'
+            '   - "key_pages": array of 3-4 main pages/screens (English)\n'
             '   - "estimated_days": number (1-7)\n'
             "Return ONLY valid JSON, no markdown."
         )
@@ -96,25 +96,25 @@ def _rule_based_enrichment(
     idea_features: list[str],
     market_gaps: list[str],
 ) -> dict:
-    summary = transcript_text[:200] if transcript_text else f"{video_title} — {idea_domain} 도메인의 앱 아이디어"
+    summary = transcript_text[:200] if transcript_text else f"{video_title} — app idea in {idea_domain} domain"
 
     insights = []
     if idea_features:
-        insights = [f"{f} 기능이 핵심 차별화 포인트" for f in idea_features[:3]]
+        insights = [f"{f} is a key differentiating feature" for f in idea_features[:3]]
     if market_gaps:
-        insights.extend([f"시장 갭: {g}" for g in market_gaps[:2]])
+        insights.extend([f"Market gap: {g}" for g in market_gaps[:2]])
     if not insights:
         insights = [
-            f"{idea_domain} 도메인에서 새로운 기회 발견",
-            "빠른 MVP 출시로 시장 검증 가능",
-            "논문 기반 기술 적용으로 차별화 가능",
+            f"New opportunity identified in {idea_domain} domain",
+            "Rapid MVP launch enables early market validation",
+            "Research-backed technology creates differentiation",
         ]
 
     mvp = {
         "app_name": idea_name or video_title[:30],
-        "core_feature": f"{idea_domain} 도메인 자동화 솔루션",
+        "core_feature": f"Automation solution for {idea_domain} domain",
         "tech_stack": "Next.js + Tailwind CSS + FastAPI",
-        "key_pages": ["대시보드", "데이터 입력", "분석 결과", "설정"],
+        "key_pages": ["Dashboard", "Data Input", "Analysis Results", "Settings"],
         "estimated_days": 3,
     }
 

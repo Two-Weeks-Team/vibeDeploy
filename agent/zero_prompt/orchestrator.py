@@ -187,6 +187,20 @@ class StreamingOrchestrator:
         go_ready_count = sum(1 for card in session.cards if card.status == "go_ready")
         return go_ready_count < session.goal_go_cards
 
+    async def register_card(self, session_id: str, video_id: str, title: str = "") -> str:
+        card_id = str(uuid.uuid4())
+        card = ZPCard(card_id=card_id, video_id=video_id, status="analyzing", score=0, title=title or video_id)
+        session = self._sessions.get(session_id)
+        if session:
+            session.cards.append(card)
+        try:
+            from agent.db import zp_store
+
+            await zp_store.add_card(session_id, card_id, video_id, title or video_id)
+        except Exception:
+            pass
+        return card_id
+
     async def exploration_step(
         self,
         session_id: str,
@@ -200,9 +214,14 @@ class StreamingOrchestrator:
         if session is None:
             return []
 
-        card_id = str(uuid.uuid4())
-        card = ZPCard(card_id=card_id, video_id=video_id, status="analyzing", score=0, title=video_title or video_id)
-        session.cards.append(card)
+        card = next((c for c in session.cards if c.video_id == video_id and c.status == "analyzing"), None)
+        if card is None:
+            card_id = str(uuid.uuid4())
+            card = ZPCard(
+                card_id=card_id, video_id=video_id, status="analyzing", score=0, title=video_title or video_id
+            )
+            session.cards.append(card)
+        card_id = card.card_id
         events: list[dict] = []
 
         try:
@@ -211,7 +230,17 @@ class StreamingOrchestrator:
             await zp_store.add_card(session_id, card_id, video_id, video_title or video_id)
         except Exception:
             pass
-        push_zp_event({"type": "card.update", "card_id": card_id, "status": "analyzing", "session_id": session_id})
+        card.analysis_step = "transcript"
+        push_zp_event(
+            {
+                "type": "card.update",
+                "card_id": card_id,
+                "status": "analyzing",
+                "analysis_step": "transcript",
+                "session_id": session_id,
+            }
+        )
+        await _db_update_card_safe(card_id, analysis_step="transcript")
 
         events.append(transcript_start_event(video_id))
         try:

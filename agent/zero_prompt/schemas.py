@@ -114,6 +114,7 @@ class ZPCard(BaseModel):
     insights: list[str] = []
     mvp_proposal: dict = {}
     build_step: str = ""
+    analysis_step: str = ""
 
 
 class ZPSession(BaseModel):

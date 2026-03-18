@@ -108,7 +108,7 @@ export function CardDetailModal({ card, isOpen, onClose, onQueueBuild, onPassCar
             <div className="space-y-1.5">
               <h4 className="text-sm font-semibold flex items-center gap-1.5">
                 <Youtube className="w-4 h-4 text-red-400" />
-                영상 요약
+                Video Summary
               </h4>
               <p className="text-sm text-muted-foreground leading-relaxed bg-muted/20 p-3 rounded-lg">
                 {card.video_summary}
@@ -120,7 +120,7 @@ export function CardDetailModal({ card, isOpen, onClose, onQueueBuild, onPassCar
             <div className="space-y-1.5">
               <h4 className="text-sm font-semibold flex items-center gap-1.5">
                 <Zap className="w-4 h-4 text-yellow-400" />
-                핵심 인사이트
+                Key Insights
               </h4>
               <ul className="space-y-1">
                 {card.insights.map((insight, i) => (
@@ -137,13 +137,13 @@ export function CardDetailModal({ card, isOpen, onClose, onQueueBuild, onPassCar
             <div className="space-y-2">
               <h4 className="text-sm font-semibold flex items-center gap-1.5">
                 <Play className="w-4 h-4 text-emerald-400" />
-                MVP 제안
+                MVP Proposal
               </h4>
               <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-lg p-3 space-y-2">
                 <div className="flex justify-between items-center">
                   <span className="font-semibold text-emerald-400">{card.mvp_proposal.app_name}</span>
                   {card.mvp_proposal.estimated_days && (
-                    <Badge variant="outline" className="text-xs">{card.mvp_proposal.estimated_days}일 예상</Badge>
+                    <Badge variant="outline" className="text-xs">{card.mvp_proposal.estimated_days} days est.</Badge>
                   )}
                 </div>
                 {card.mvp_proposal.core_feature && (

@@ -1108,25 +1108,21 @@ async def zero_prompt_start(request: ZPStartRequest):
             videos = [(f"fallback-{i}", topic, topic) for i, topic in enumerate(fallback_topics)]
             logger.info("[ZP] Using hardcoded fallback topics")
 
-        video_idx = 0
-        while orch.should_continue_exploring(session_id):
-            if video_idx >= len(videos):
-                break
-            vid_id, vid_title, vid_desc = videos[video_idx]
-            video_idx += 1
+        goal = request.goal or 10
+        batch = videos[: goal + 5]
 
-            step_events = await orch.exploration_step(
-                session_id, vid_id, video_title=vid_title, video_description=vid_desc
-            )
-            for evt in step_events:
-                yield _fmt(evt.get("type", "zp.step"), evt)
-            await asyncio.sleep(0.05)
+        for vid_id, vid_title, vid_desc in batch:
+            await orch.register_card(session_id, vid_id, vid_title)
+            yield _fmt("zp.card.registered", {"type": "zp.card.registered", "video_id": vid_id, "title": vid_title})
 
-        session = orch.get_session(session_id)
-        if session is not None:
-            session.remaining_videos = [[v[0], v[1], v[2]] for v in videos[video_idx:]]
+        async def _analyze_all():
+            for vid_id, vid_title, vid_desc in batch:
+                if not await orch.should_continue_exploring(session_id):
+                    break
+                await orch.exploration_step(session_id, vid_id, video_title=vid_title, video_description=vid_desc)
 
-        yield _fmt("zp.session.complete", {"session_id": session_id, "type": "zp.session.complete"})
+        asyncio.create_task(_analyze_all())
+        yield _fmt("zp.exploration.started", {"type": "zp.exploration.started", "total_videos": len(batch)})
 
     return StreamingResponse(
         event_stream(),

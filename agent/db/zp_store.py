@@ -37,6 +37,7 @@ async def ensure_tables() -> None:
                 insights JSONB DEFAULT '[]'::jsonb,
                 mvp_proposal JSONB DEFAULT '{}'::jsonb,
                 build_step TEXT DEFAULT '',
+                analysis_step TEXT DEFAULT '',
                 thread_id TEXT,
                 created_at TIMESTAMPTZ DEFAULT NOW()
             )
