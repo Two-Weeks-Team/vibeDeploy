@@ -21,6 +21,7 @@ from .nodes.fix_storm import fix_storm, scope_down
 from .nodes.input_processor import input_processor
 from .nodes.inspiration_agent import inspiration_agent
 from .nodes.local_runtime_validator import local_runtime_validator
+from .nodes.per_file_code_generator import backend_generator_node, frontend_generator_node
 from .nodes.prompt_strategist import prompt_strategist
 from .nodes.pydantic_generator import pydantic_generator_node
 from .nodes.scaffold_generator import scaffold_generator_node
@@ -72,6 +73,15 @@ def route_after_local_runtime(state):
     if attempts >= 3:
         return "__end__"
     return "code_generator"
+
+
+def route_code_eval_staged(state):
+    result = route_code_eval(state)
+    if result == "code_generator":
+        return "backend_generator"
+    if result == "deployer":
+        return "build_validator"
+    return result
 
 
 def merge_dicts(left: dict | None, right: dict | None) -> dict:
@@ -191,6 +201,8 @@ def create_staged_graph():
     workflow.add_node("pydantic_generator", pydantic_generator_node)
     workflow.add_node("design_system_generator", design_system_generator)
     workflow.add_node("prompt_strategist", prompt_strategist)
+    workflow.add_node("backend_generator", backend_generator_node)
+    workflow.add_node("frontend_generator", frontend_generator_node)
     workflow.add_node("code_generator", code_generator)
     workflow.add_node("contract_validator", contract_validator_node)
     workflow.add_node("code_evaluator", code_evaluator)
@@ -241,22 +253,23 @@ def create_staged_graph():
     workflow.add_edge("type_generator", "pydantic_generator")
     workflow.add_edge("pydantic_generator", "design_system_generator")
     workflow.add_edge("design_system_generator", "prompt_strategist")
-    workflow.add_edge("prompt_strategist", "code_generator")
-    workflow.add_edge("code_generator", "contract_validator")
+    workflow.add_edge("prompt_strategist", "backend_generator")
+    workflow.add_edge("backend_generator", "frontend_generator")
+    workflow.add_edge("frontend_generator", "contract_validator")
     workflow.add_conditional_edges(
         "contract_validator",
         route_after_contract,
         {
             "code_evaluator": "code_evaluator",
-            "code_generator": "code_generator",
+            "code_generator": "backend_generator",
         },
     )
     workflow.add_conditional_edges(
         "code_evaluator",
-        route_code_eval,
+        route_code_eval_staged,
         {
-            "deployer": "build_validator",
-            "code_generator": "code_generator",
+            "build_validator": "build_validator",
+            "backend_generator": "backend_generator",
         },
     )
     workflow.add_conditional_edges(
@@ -273,7 +286,7 @@ def create_staged_graph():
         route_after_local_runtime,
         {
             "deploy_gate": "deploy_gate",
-            "code_generator": "code_generator",
+            "code_generator": "backend_generator",
             "__end__": END,
         },
     )

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import json
 
 import pytest
@@ -8,6 +9,7 @@ from agent.graph import create_staged_graph
 from agent.nodes.api_contract_generator import api_contract_generator_node, generate_api_contract
 from agent.nodes.deploy_gate import deploy_gate, route_after_deploy_gate
 from agent.nodes.local_runtime_validator import local_runtime_validator
+from agent.nodes.per_file_code_generator import backend_generator_node, frontend_generator_node
 from agent.nodes.pydantic_generator import pydantic_generator_node
 from agent.nodes.scaffold_generator import scaffold_generator_node
 from agent.nodes.spec_freeze_gate import spec_freeze_gate
@@ -16,6 +18,14 @@ from agent.nodes.type_generator import type_generator_node
 BLUEPRINT = {
     "app_name": "demo-app",
     "domain": "health",
+    "frontend_files": {
+        "src/app/page.tsx": {"purpose": "main page", "imports_from": ["src/lib/api.ts"]},
+        "src/lib/api.ts": {"purpose": "typed api client", "imports_from": []},
+    },
+    "backend_files": {
+        "routes.py": {"purpose": "api routes", "imports_from": ["ai_service"]},
+        "ai_service.py": {"purpose": "service layer", "imports_from": []},
+    },
     "frontend_backend_contract": [
         {
             "frontend_file": "src/lib/api.ts",
@@ -67,6 +77,22 @@ async def test_scaffold_type_and_pydantic_nodes_populate_state():
 
 
 @pytest.mark.asyncio
+async def test_backend_and_frontend_generator_nodes_populate_state():
+    state = {
+        "blueprint": BLUEPRINT,
+        "api_contract": generate_api_contract(BLUEPRINT),
+        "frontend_code": {"src/app/page.tsx": "existing"},
+        "backend_code": {"main.py": "existing"},
+    }
+    backend_result = await backend_generator_node(state)
+    state.update(backend_result)
+    frontend_result = await frontend_generator_node(state)
+    assert "routes.py" in backend_result["backend_code"]
+    assert "src/lib/api.ts" in frontend_result["frontend_code"]
+    assert frontend_result["phase"] == "frontend_generated"
+
+
+@pytest.mark.asyncio
 async def test_local_runtime_validator_fails_without_main():
     result = await local_runtime_validator({"backend_code": {"routes.py": "x=1\n"}})
     assert result["local_runtime_validation"]["passed"] is False
@@ -97,3 +123,29 @@ def test_generated_api_contract_is_valid_json():
     generated = json.loads(generate_api_contract(BLUEPRINT))
     assert generated["openapi"] == "3.1.0"
     assert "/api/plan" in generated["paths"]
+
+
+@pytest.mark.asyncio
+async def test_api_run_route_works_with_staged_flag(app_client, monkeypatch):
+    import agent.graph as graph_mod
+
+    monkeypatch.setenv("VIBEDEPLOY_USE_STAGED_PIPELINE", "true")
+    importlib.reload(graph_mod)
+
+    class MockGraph:
+        async def astream_events(self, *args, **kwargs):
+            yield {
+                "event": "on_chain_end",
+                "name": "input_processor",
+                "data": {"output": {"phase": "input_processing", "idea": {"title": "Test"}, "idea_summary": "Test"}},
+            }
+            yield {
+                "event": "on_chain_end",
+                "name": "doc_generator",
+                "data": {"output": {"phase": "doc_generation", "generated_docs": {"prd": "# PRD"}}},
+            }
+
+    monkeypatch.setattr(graph_mod, "app", MockGraph())
+    resp = await app_client.post("/api/run", json={"prompt": "A meal planner app"})
+    assert resp.status_code == 200
+    assert "text/event-stream" in resp.headers.get("content-type", "")

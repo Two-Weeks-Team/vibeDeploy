@@ -147,6 +147,58 @@ def per_file_code_generator_node(state: dict) -> dict:
     }
 
 
+def _build_generation_context(state: dict) -> dict:
+    blueprint = state.get("blueprint") if isinstance(state, dict) else {}
+    blueprint = blueprint if isinstance(blueprint, dict) else {}
+    return {
+        "api_contract": state.get("api_contract"),
+        "design_system": blueprint.get("design_system", {}),
+        "already_generated": {},
+    }
+
+
+async def backend_generator_node(state: dict, config=None) -> dict:
+    blueprint = state.get("blueprint") if isinstance(state, dict) else {}
+    blueprint = blueprint if isinstance(blueprint, dict) else {}
+    specs = [
+        spec
+        for spec in extract_file_specs(blueprint)
+        if spec.path in (blueprint.get("backend_files") or {}) or _is_backend_path(spec.path)
+    ]
+    backend_code = dict(state.get("backend_code") or {})
+    context = _build_generation_context(state)
+    for spec in specs:
+        generated = _generate_file_from_spec(spec, context)
+        context["already_generated"].update(generated)
+        backend_code.update(generated)
+    return {
+        "backend_code": backend_code,
+        "phase": "backend_generated",
+    }
+
+
+async def frontend_generator_node(state: dict, config=None) -> dict:
+    blueprint = state.get("blueprint") if isinstance(state, dict) else {}
+    blueprint = blueprint if isinstance(blueprint, dict) else {}
+    frontend_manifest = blueprint.get("frontend_files") or {}
+    specs = [
+        spec
+        for spec in extract_file_specs(blueprint)
+        if spec.path in frontend_manifest and not _is_backend_path(spec.path)
+    ]
+    frontend_code = dict(state.get("frontend_code") or {})
+    context = _build_generation_context(state)
+    context["already_generated"].update(frontend_code)
+    for spec in specs:
+        generated = _generate_file_from_spec(spec, context)
+        context["already_generated"].update(generated)
+        frontend_code.update(generated)
+    return {
+        "frontend_code": frontend_code,
+        "phase": "frontend_generated",
+    }
+
+
 def _generate_file_from_spec(spec: FileSpec, context: dict) -> dict[str, str]:
     api_contract = context.get("api_contract")
     design_system = context.get("design_system")
