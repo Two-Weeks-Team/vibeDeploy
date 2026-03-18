@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Play, X, ExternalLink, Loader2, Trash2 } from "lucide-react";
+import { Play, X, ExternalLink, Loader2, Trash2, CheckCircle, Code, Rocket, FileCode, TestTube } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { ZPCard } from "@/types/zero-prompt";
@@ -58,10 +58,38 @@ export function IdeaCard({ card, onQueueBuild, onPassCard, onDeleteCard, onClick
           </div>
         )}
 
-        {(card.status === "build_queued" || card.status === "building") && (
+        {card.status === "build_queued" && (
           <div className="flex items-center justify-center gap-2 mt-3 text-xs text-muted-foreground bg-muted/50 py-1.5 rounded">
             <Loader2 className="w-3 h-3 animate-spin" />
-            {card.status === "build_queued" ? "Queued..." : "Building..."}
+            Queued...
+          </div>
+        )}
+
+        {card.status === "building" && (
+          <div className="mt-3 space-y-1.5">
+            <div className="flex items-center gap-1.5 text-xs text-blue-400">
+              <Loader2 className="w-3 h-3 animate-spin" />
+              <span className="font-medium">Building...</span>
+            </div>
+            <div className="space-y-1">
+              {[
+                { icon: FileCode, label: "Code Gen", done: true },
+                { icon: TestTube, label: "Validate", done: false },
+                { icon: Code, label: "GitHub", done: false },
+                { icon: Rocket, label: "Deploy", done: false },
+              ].map((step) => (
+                <div key={step.label} className="flex items-center gap-1.5 text-[10px]">
+                  {step.done ? (
+                    <CheckCircle className="w-3 h-3 text-emerald-500" />
+                  ) : (
+                    <step.icon className="w-3 h-3 text-muted-foreground/50" />
+                  )}
+                  <span className={step.done ? "text-emerald-500" : "text-muted-foreground/50"}>
+                    {step.label}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
