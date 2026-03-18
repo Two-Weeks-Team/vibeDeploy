@@ -1,13 +1,13 @@
-# Web Restructuring Plan — bkit Orchestration Patterns Applied
+# Web Restructuring Plan
 
 > Generated: 2026-03-18 KST
-> Reference: [popup-studio-ai/bkit-claude-code](https://github.com/popup-studio-ai/bkit-claude-code)
+> Status: **IMPLEMENTED** (Wave 1-2 in PR#207)
 
 ## Context
 
-bkit-claude-code is a Claude Code plugin (not a web app), but its orchestration patterns are directly applicable to vibeDeploy's web frontend:
+Event-driven orchestration patterns applied to vibeDeploy's web frontend:
 
-| bkit Pattern | vibeDeploy Web Equivalent |
+| Pattern | vibeDeploy Web Equivalent |
 |---|---|
 | **Hook System** (event-driven, 6 layers) | Event bus for SSE events + component lifecycle |
 | **Skill Frontmatter** (metadata-driven) | Route metadata + page guards |
@@ -15,7 +15,7 @@ bkit-claude-code is a Claude Code plugin (not a web app), but its orchestration 
 | **Centralized State** (paths.js) | Unified store (Zustand or Context) |
 | **Skill Orchestrator** (module federation) | Dynamic feature loading |
 | **PDCA State Machine** (phase transitions) | Pipeline state machine |
-| **Config-Driven** (bkit.config.json) | Feature flags + dynamic config |
+| **Config-Driven** | Feature flags + dynamic config |
 | **Template System** (import resolver) | Component composition patterns |
 | **Eval Framework** (quality scoring) | Component testing patterns |
 
@@ -36,7 +36,7 @@ bkit-claude-code is a Claude Code plugin (not a web app), but its orchestration 
 
 ---
 
-## Proposed Structure (bkit-inspired)
+## Proposed Structure
 
 ### Current
 
@@ -116,7 +116,7 @@ web/src/
 │   │
 │   └── input-form.tsx           # Landing form (stays at root)
 │
-├── config/                      # <-- NEW: bkit-inspired config layer
+├── config/                      # <-- NEW: centralized config layer
 │   ├── agents.ts                # Centralized agent definitions (name, emoji, color, role)
 │   ├── pipeline.ts              # Pipeline node definitions + status colors
 │   └── features.ts              # Feature flags / dynamic config
@@ -125,7 +125,7 @@ web/src/
 │   ├── use-dashboard.ts         # Polling
 │   ├── use-pipeline-monitor.ts  # SSE (refactored to use sse-client)
 │   ├── use-zero-prompt.ts       # SSE
-│   └── use-event-bus.ts         # <-- NEW: bkit-inspired event bus
+│   └── use-event-bus.ts         # <-- NEW: cross-component event bus
 │
 ├── lib/                         # API + utilities
 │   ├── api.ts
@@ -146,7 +146,7 @@ web/src/
 
 ### Phase 1: Config Layer (LOW RISK, HIGH VALUE)
 
-**bkit pattern**: Centralized agent/pipeline definitions like `bkit.config.json`
+Centralized agent/pipeline definitions as single source of truth.
 
 | Task | Files | Effort |
 |------|-------|--------|
@@ -178,7 +178,7 @@ export const AGENTS = {
 
 ### Phase 3: Pipeline-Viz Split (HIGH VALUE, MEDIUM RISK)
 
-**bkit pattern**: Skill decomposition into focused modules
+Decomposition into focused, single-responsibility modules.
 
 | Sub-component | Lines | Responsibility |
 |---------------|-------|----------------|
@@ -190,7 +190,7 @@ export const AGENTS = {
 
 ### Phase 4: SSE Unification (HIGH VALUE)
 
-**bkit pattern**: Hook system with centralized event handling
+Unified hook system with centralized event handling.
 
 | Task | Files | Effort |
 |------|-------|--------|
