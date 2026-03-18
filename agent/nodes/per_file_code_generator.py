@@ -588,14 +588,10 @@ async def frontend_generator_node(state: dict, config=None) -> dict:
     page_specs = [s for s in specs_to_generate if _is_page_file(s.path)]
     component_specs = [s for s in specs_to_generate if not _is_page_file(s.path)]
 
-    await _generate_tier_parallel(
-        component_specs,
-        context,
-        frontend_code,
-        warnings,
-        file_type_filter={"component", "api", "config", "style"},
-        is_frontend=True,
-    )
+    for spec in component_specs:
+        generated = _generate_file_from_spec(spec, context)
+        frontend_code.update(generated)
+        context["already_generated"].update(generated)
     context["frontend_code"] = dict(frontend_code)
 
     for spec in page_specs:
@@ -671,14 +667,10 @@ async def frontend_file_repairer_node(state: dict, config=None) -> dict:
     page_repairs = [s for s in specs_to_repair if _is_page_file(s.path)]
     component_repairs = [s for s in specs_to_repair if not _is_page_file(s.path)]
 
-    await _generate_tier_parallel(
-        component_repairs,
-        context,
-        frontend_code,
-        warnings,
-        file_type_filter={"component", "api", "config", "style", "page"},
-        is_frontend=True,
-    )
+    for spec in component_repairs:
+        generated = _generate_file_from_spec(spec, context)
+        frontend_code.update(generated)
+        context["already_generated"].update(generated)
     context["frontend_code"] = dict(frontend_code)
 
     for spec in page_repairs:
