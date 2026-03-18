@@ -400,16 +400,17 @@ def _parse_single_file_payload(raw: str, path: str) -> str:
 def _has_truncated_jsx(content: str, path: str) -> bool:
     if not path.endswith((".tsx", ".jsx")):
         return False
-    lines = content.splitlines()
+    if not content or not content.strip():
+        return True
+    lines = [ln for ln in content.splitlines() if ln.strip()]
     if not lines:
         return True
     last = lines[-1].strip()
-    if last not in {"}", "};", ")", ");"} and not last.startswith("//"):
-        return True
-    open_tags = content.count("<") - content.count("</") - content.count("/>")
-    if open_tags > 2:
-        return True
-    return False
+    if last.endswith((";", "}", ")", ">", "/>")):
+        return False
+    if last.startswith("//") or last.startswith("/*") or last.startswith("*"):
+        return False
+    return True
 
 
 async def _generate_file_via_responses_api(
