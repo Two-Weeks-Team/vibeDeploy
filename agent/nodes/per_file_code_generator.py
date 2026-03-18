@@ -678,6 +678,11 @@ async def frontend_file_repairer_node(state: dict, config=None) -> dict:
         all_fe.update(context["already_generated"])
         component_code = {p: c for p, c in all_fe.items() if not _is_page_file(p)}
         context["available_exports"] = _extract_component_exports(component_code)
+        if state.get("build_errors"):
+            logger.info("[FILE_REPAIR] Using deterministic rescue for %s", spec.path)
+            generated = _generate_file_from_spec(spec, context)
+            frontend_code.update(generated)
+            continue
         if _use_llm_per_file_generation():
             model = MODEL_CONFIG.get("code_gen_frontend", MODEL_CONFIG["code_gen"])
             if llm_credentials_available(model):

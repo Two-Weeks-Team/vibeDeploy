@@ -49,6 +49,10 @@ def _extract_failing_file_paths(error_text: str) -> list[str]:
             p = match.group(1)
             if p not in paths:
                 paths.append(p)
+    lowered = error_text.lower()
+    if 'prerendering page "/"' in lowered or "src_app_page" in lowered:
+        if "src/app/page.tsx" not in paths:
+            paths.append("src/app/page.tsx")
     return paths[:5]
 
 
