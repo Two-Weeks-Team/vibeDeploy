@@ -180,11 +180,11 @@ export function CardDetailModal({ card, isOpen, onClose, onQueueBuild, onPassCar
           {card.status === "go_ready" && (
             <>
               <Button data-modal-pass-card-id={card.card_id} variant="outline" onClick={() => { onPassCard(card.card_id); onClose(); }}>
-                <X className="w-4 h-4 mr-2" /> Pass
+                <X className="w-4 h-4 mr-2" /> Skip
               </Button>
               <Button data-modal-go-card-id={card.card_id} className="bg-emerald-600 hover:bg-emerald-700 text-white"
                 onClick={() => { onQueueBuild(card.card_id); onClose(); }}>
-                <Play className="w-4 h-4 mr-2" /> GO! Build
+                <Play className="w-4 h-4 mr-2" /> Build App
               </Button>
             </>
           )}
