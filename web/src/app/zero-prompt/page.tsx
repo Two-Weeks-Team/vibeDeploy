@@ -129,6 +129,7 @@ export default function ZeroPromptPage() {
         
         <KanbanBoard 
           cards={session?.cards || []} 
+          sessionId={session?.session_id}
           onQueueBuild={queueBuild} 
           onPassCard={passCard}
           onDeleteCard={deleteCard}
