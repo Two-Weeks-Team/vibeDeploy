@@ -1154,7 +1154,7 @@ async def _run_zp_pipeline(orch, session_id: str, goal: int) -> None:
                 try:
                     from .db import zp_store as _zps
 
-                    await _zps.update_session(session_id, status="paused")
+                    await _zps.update_session_status(session_id, status="paused")
                 except Exception:
                     logger.exception("[ZP] Failed to persist paused status for %s", session_id)
                 push_zp_event(
@@ -1220,7 +1220,7 @@ async def _run_zp_pipeline(orch, session_id: str, goal: int) -> None:
                     try:
                         from .db import zp_store as _zps
 
-                        await _zps.update_session(session_id, status="paused")
+                        await _zps.update_session_status(session_id, status="paused")
                     except Exception:
                         logger.exception("[ZP] Failed to persist paused status for %s", session_id)
                     push_zp_event(
