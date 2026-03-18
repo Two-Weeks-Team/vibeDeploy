@@ -11,6 +11,7 @@ from agent.zero_prompt.events import (
     brainstorm_start_event,
     compete_complete_event,
     compete_start_event,
+    council_message_event,
     insight_complete_event,
     insight_start_event,
     paper_found_event,
@@ -265,8 +266,9 @@ class StreamingOrchestrator:
         session = self._sessions.get(session_id)
         if session is None or session.status != "exploring":
             return False
-        go_ready_count = sum(1 for card in session.cards if card.status == "go_ready")
-        return go_ready_count < session.goal_go_cards
+        committed_statuses = {"go_ready", "build_queued", "building", "deployed"}
+        committed_count = sum(1 for card in session.cards if card.status in committed_statuses)
+        return committed_count < session.goal_go_cards
 
     async def register_card(self, session_id: str, video_id: str, title: str = "") -> str:
         card_id = str(uuid.uuid4())
@@ -458,6 +460,28 @@ class StreamingOrchestrator:
         except Exception:
             pass
 
+        if market:
+            saturation = market.saturation_level
+            comp_count = len(market.competitors)
+            opp = market.market_opportunity_score
+            idea_domain = idea.domain if idea else "unknown"
+            if saturation == "low" and opp >= 60:
+                scout_msg = (
+                    f"Scout: {idea_domain.title()} market shows low saturation ({comp_count} known competitors) "
+                    f"with strong opportunity score {opp}/100 — this niche is underserved."
+                )
+            elif saturation == "high" or opp < 40:
+                scout_msg = (
+                    f"Scout: {idea_domain.title()} space is highly saturated ({comp_count} competitors, "
+                    f"opportunity {opp}/100). Entry requires sharp differentiation to survive."
+                )
+            else:
+                scout_msg = (
+                    f"Scout: Moderate competition in {idea_domain} ({comp_count} competitors, "
+                    f"opportunity {opp}/100). Window exists if we move fast."
+                )
+            push_zp_event({**council_message_event("Scout", scout_msg, card_id), "session_id": session_id})
+
         card.analysis_step = "verdict"
         await _db_update_card_safe(card_id, analysis_step="verdict")
         push_zp_event(
@@ -485,8 +509,8 @@ class StreamingOrchestrator:
                 from agent.zero_prompt.verdict import compute_verdict_score, determine_verdict
 
                 raw_confidence = idea.confidence_score if idea else 0.5
-                confidence = max(raw_confidence, 0.65)
-                engagement = max(0.55, min(1.0, len(papers) * 0.2 + 0.35)) if papers else 0.55
+                confidence = max(raw_confidence, 0.72)
+                engagement = max(0.60, min(1.0, len(papers) * 0.2 + 0.40)) if papers else 0.60
                 differentiation = max(50, 100 - (market_opportunity if market_opportunity > 60 else 20))
                 score = compute_verdict_score(
                     confidence, engagement, market_opportunity, novelty_boost, differentiation
@@ -528,10 +552,53 @@ class StreamingOrchestrator:
                     novelty_boost=novelty_boost,
                 )
                 push_zp_event(
-                    {"type": "card.update", "card_id": card_id, "status": "go_ready", "session_id": session_id}
+                    {
+                        "type": "card.update",
+                        "card_id": card_id,
+                        "status": "go_ready",
+                        "score": score,
+                        "title": card.title,
+                        "session_id": session_id,
+                    }
                 )
             except Exception:
                 pass
+
+            go_cards = [c for c in session.cards if c.status == "go_ready"]
+            if len(go_cards) >= session.goal_go_cards:
+                best_card = max(go_cards, key=lambda c: c.score)
+                if best_card.card_id not in session.build_queue:
+                    bq = self._build_queues.get(session_id)
+                    if bq:
+                        bq.enqueue(best_card.card_id)
+                    session.build_queue.append(best_card.card_id)
+                    best_card.status = "build_queued"
+                    _fire(_db_update_card_safe(best_card.card_id, status="build_queued"))
+                    push_zp_event(
+                        {
+                            "type": "card.update",
+                            "card_id": best_card.card_id,
+                            "status": "build_queued",
+                            "title": best_card.title,
+                            "session_id": session_id,
+                        }
+                    )
+                    push_zp_event(
+                        {
+                            "type": "zp.auto_build.triggered",
+                            "card_id": best_card.card_id,
+                            "title": best_card.title,
+                            "score": best_card.score,
+                            "session_id": session_id,
+                        }
+                    )
+                    logger.info(
+                        "[ZP] Auto-build triggered for %s (score=%d, %d/%d GO cards)",
+                        best_card.card_id,
+                        best_card.score,
+                        len(go_cards),
+                        session.goal_go_cards,
+                    )
 
             try:
                 from agent.zero_prompt.card_enrichment import enrich_card_with_gemini
@@ -557,10 +624,43 @@ class StreamingOrchestrator:
                         mvp_proposal=card.mvp_proposal,
                     )
                     push_zp_event(
-                        {"type": "card.enriched", "card_id": card_id, "status": "go_ready", "session_id": session_id}
+                        {
+                            "type": "card.enriched",
+                            "card_id": card_id,
+                            "status": "go_ready",
+                            "session_id": session_id,
+                            "title": card.title,
+                            "video_summary": card.video_summary,
+                        }
                     )
                 except Exception:
                     pass
+
+                mvp = card.mvp_proposal or {}
+                tech = mvp.get("tech_stack", "FastAPI + Next.js + PostgreSQL")
+                pages = mvp.get("key_pages", [])
+                app_name = mvp.get("app_name", card.title)
+                days = mvp.get("estimated_days", 3)
+                if tech and pages:
+                    arch_msg = (
+                        f"Architect: {app_name} maps cleanly to {len(pages)} screens "
+                        f"({', '.join(pages[:3])}). Stack: {tech}. "
+                        f"Estimated {days} day MVP — solid execution path."
+                    )
+                    push_zp_event({**council_message_event("Architect", arch_msg, card_id), "session_id": session_id})
+
+                if card.insights:
+                    catalyst_msg = f"Catalyst: {card.insights[0]}"
+                    push_zp_event(
+                        {**council_message_event("Catalyst", catalyst_msg, card_id), "session_id": session_id}
+                    )
+
+                if len(card.insights) > 1:
+                    advocate_msg = f"Advocate: {card.insights[1]}"
+                    push_zp_event(
+                        {**council_message_event("Advocate", advocate_msg, card_id), "session_id": session_id}
+                    )
+
             except Exception:
                 logger.exception("[ZP] Card enrichment failed for %s", card_id)
         else:
@@ -580,9 +680,21 @@ class StreamingOrchestrator:
                     saturation=card.saturation,
                     novelty_boost=novelty_boost,
                 )
-                push_zp_event({"type": "card.update", "card_id": card_id, "status": "nogo", "session_id": session_id})
+                push_zp_event(
+                    {
+                        "type": "card.update",
+                        "card_id": card_id,
+                        "status": "nogo",
+                        "score": score,
+                        "reason": reason,
+                        "title": card.title,
+                        "session_id": session_id,
+                    }
+                )
             except Exception:
                 pass
+            guardian_msg = f"Guardian: {reason} Recommend skipping and moving to next candidate."
+            push_zp_event({**council_message_event("Guardian", guardian_msg, card_id), "session_id": session_id})
 
         return events
 

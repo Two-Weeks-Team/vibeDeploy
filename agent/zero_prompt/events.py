@@ -24,6 +24,8 @@ ZP_TRANSCRIPT_COMPLETE = "zp.transcript.complete"
 ZP_INSIGHT_START = "zp.insight.start"
 ZP_INSIGHT_COMPLETE = "zp.insight.complete"
 
+ZP_COUNCIL_MESSAGE = "zp.council.message"
+
 ZP_SESSION_PAUSE = "zp.session.pause"
 ZP_SESSION_RESUME = "zp.session.resume"
 ZP_SESSION_ERROR = "zp.session.error"
@@ -200,6 +202,10 @@ def card_passed_event(session_id: str, card_id: str) -> dict:
 
 def build_queued_event(session_id: str, card_id: str) -> dict:
     return {"type": ZP_BUILD_QUEUED, "session_id": session_id, "card_id": card_id}
+
+
+def council_message_event(agent: str, message: str, card_id: str = "") -> dict:
+    return {"type": ZP_COUNCIL_MESSAGE, "agent": agent, "message": message, "card_id": card_id}
 
 
 def build_start_event(session_id: str, card_id: str) -> dict:

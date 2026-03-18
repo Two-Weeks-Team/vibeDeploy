@@ -30,7 +30,7 @@ def compute_verdict_score(
 
 
 def _no_go_reason_code(market_opportunity: int, differentiation: int, novelty_boost: float) -> str:
-    if market_opportunity < 30:
+    if market_opportunity < 25:
         return "market_saturated"
     if differentiation < 30:
         return "weak_differentiation"
@@ -51,20 +51,20 @@ def determine_verdict(
         score >= 70 → GO
         score <  70 → NO_GO
     """
-    if score >= 70:
+    if score >= 60:
         reason = (
             f"Strong signals across all axes (score {score}) — high potential opportunity."
             if score >= 80
-            else f"Sufficient signals detected (score {score}) — viable opportunity."
+            else f"Sufficient signals detected (score {score}) — viable opportunity with solid fundamentals."
         )
         return Verdict(score=score, decision="GO", reason=reason, reason_code="high_potential")
 
     reason_code = _no_go_reason_code(market_opportunity, differentiation, novelty_boost)
     reason_messages = {
-        "market_saturated": f"Market opportunity is too low (score {score}); space appears saturated.",
-        "weak_differentiation": f"Differentiation is insufficient (score {score}); idea lacks competitive edge.",
-        "weak_paper_backing": f"Novelty boost is negligible (score {score}); weak academic or research backing.",
-        "low_confidence": f"Overall confidence is too low to proceed (score {score}).",
+        "market_saturated": f"Market opportunity is too low (score {score}) — space appears saturated with strong competitors. Hard to differentiate at this stage.",
+        "weak_differentiation": f"Differentiation signals are insufficient (score {score}) — idea lacks competitive edge against existing solutions.",
+        "weak_paper_backing": f"Research backing is negligible (score {score}) — no academic support for technical claims. Higher risk of execution failure.",
+        "low_confidence": f"Overall signal confidence is too low to proceed (score {score}) — idea needs stronger validation before building.",
     }
     return Verdict(
         score=score,

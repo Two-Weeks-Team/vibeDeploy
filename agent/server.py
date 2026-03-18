@@ -1142,6 +1142,13 @@ async def zero_prompt_start(request: ZPStartRequest):
                 )
                 for evt in step_events:
                     push_zp_event(evt)
+                session = orch.get_session(session_id)
+                if session and session.build_queue:
+                    for card_id in list(session.build_queue):
+                        card = next((c for c in session.cards if c.card_id == card_id), None)
+                        if card and card.status == "build_queued":
+                            asyncio.create_task(_trigger_zp_build(orch, session_id, card_id))
+                            break
 
         asyncio.create_task(_analyze_all())
         yield _fmt("zp.exploration.started", {"type": "zp.exploration.started", "total_videos": len(batch)})
@@ -1266,6 +1273,13 @@ async def _analyze_single(orch, session_id: str, video_id: str, title: str) -> N
         step_events = await orch.exploration_step(session_id, video_id, video_title=title, video_description=title)
         for evt in step_events:
             push_zp_event(evt)
+        session = orch.get_session(session_id)
+        if session and session.build_queue:
+            for card_id in list(session.build_queue):
+                card = next((c for c in session.cards if c.card_id == card_id), None)
+                if card and card.status == "build_queued":
+                    asyncio.create_task(_trigger_zp_build(orch, session_id, card_id))
+                    break
     except Exception:
         logger.exception("[ZP] Analysis failed for video %s", video_id)
 

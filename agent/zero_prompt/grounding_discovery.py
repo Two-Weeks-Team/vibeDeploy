@@ -8,6 +8,7 @@ logger = logging.getLogger(__name__)
 
 _YT_ID_RE = re.compile(r"(?:youtube\.com/watch\?v=|youtu\.be/)([\w-]{11})")
 _JSON_BLOCK_RE = re.compile(r"```(?:json)?\s*([\s\S]*?)```")
+_VALID_YT_ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
 
 
 async def discover_videos_via_grounding(max_results: int = 15) -> list[tuple[str, str, str]]:
@@ -151,6 +152,6 @@ def _items_to_tuples(items: list, max_results: int) -> list[tuple[str, str, str]
         vid = str(item.get("video_id", "")).strip()
         title = str(item.get("title", "")).strip()
         desc = str(item.get("description", "")).strip()
-        if vid and len(vid) >= 8 and title:
+        if vid and _VALID_YT_ID_RE.match(vid) and title:
             results.append((vid, title, desc))
     return results
