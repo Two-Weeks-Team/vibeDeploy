@@ -486,20 +486,11 @@ async def _generate_file_with_llm(spec: FileSpec, context: dict) -> str:
 
     llm = get_llm(model=model, temperature=0.1, max_tokens=12000)
     messages = [
-        {"role": "system", "content": system_content.replace("raw file content", 'valid JSON: {"content":"..."}')},
+        {"role": "system", "content": system_content},
         {"role": "user", "content": prompt_meta["prompt"]},
     ]
-    for attempt in range(1, 4):
-        response = await ainvoke_with_retry(llm, messages, max_attempts=1)
-        content = _parse_single_file_payload(content_to_str(response.content), spec.path)
-        if not _has_truncated_jsx(content, spec.path):
-            return content
-        logger.warning("[PER_FILE_LLM] truncated JSX in %s (attempt %d), retrying", spec.path, attempt)
-        messages[0] = {
-            "role": "system",
-            "content": system_content + "\nCRITICAL: Previous response was TRUNCATED. Generate COMPLETE file.",
-        }
-    return content
+    response = await ainvoke_with_retry(llm, messages, max_attempts=3)
+    return _parse_single_file_payload(content_to_str(response.content), spec.path)
 
 
 async def backend_generator_node(state: dict, config=None) -> dict:
