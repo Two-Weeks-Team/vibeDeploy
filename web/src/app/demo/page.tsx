@@ -3,10 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
-import { Rocket } from "lucide-react";
+import { Rocket, Youtube, FlaskConical, Code2, Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { InputForm } from "@/components/input-form";
 import { StatusBar } from "@/components/zero-prompt/status-bar";
 import { KanbanBoard } from "@/components/zero-prompt/kanban-board";
 import { ActionFeed } from "@/components/zero-prompt/action-feed";
@@ -24,10 +23,10 @@ const COUNCIL_AGENTS = [
 ];
 
 const STEPS = [
-  { num: "1", title: "Describe", desc: "Enter your idea or paste a YouTube URL" },
-  { num: "2", title: "Council", desc: "6 AI agents debate feasibility live" },
-  { num: "3", title: "Build", desc: "PRD, code, and assets generated" },
-  { num: "4", title: "Deploy", desc: "Live app on DigitalOcean in minutes" },
+  { num: "1", title: "Discover", desc: "AI explores YouTube for trending app ideas", icon: Youtube },
+  { num: "2", title: "Evaluate", desc: "Vibe Council scores feasibility with 6 agents", icon: FlaskConical },
+  { num: "3", title: "Build", desc: "PRD, code, and assets auto-generated", icon: Code2 },
+  { num: "4", title: "Deploy", desc: "Live app on DigitalOcean in minutes", icon: Globe },
 ];
 
 const containerVariants = { hidden: {}, visible: { transition: { staggerChildren: 0.08 } } };
@@ -116,29 +115,39 @@ export default function DemoPage() {
               </p>
             </motion.div>
 
-            <motion.div className="flex items-center gap-4" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.35, duration: 0.5 }}>
-              <div className="flex-1 h-px bg-border" />
-              <span className="text-sm text-muted-foreground">Or describe your idea</span>
-              <div className="flex-1 h-px bg-border" />
-            </motion.div>
-
-            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4, duration: 0.5 }}>
-              <InputForm />
+            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3, duration: 0.5 }}>
+              <div className="relative my-10">
+                <div className="absolute inset-0 flex items-center" aria-hidden="true">
+                  <div className="w-full border-t border-border/50" />
+                </div>
+                <div className="relative flex justify-center">
+                  <span className="bg-background px-4 text-sm text-muted-foreground">How it works</span>
+                </div>
+              </div>
             </motion.div>
 
             <motion.div
-              className="grid grid-cols-2 gap-3 sm:grid-cols-4"
+              className="grid grid-cols-2 gap-4 sm:grid-cols-4"
               initial="hidden"
               animate="visible"
               variants={{ hidden: {}, visible: { transition: { staggerChildren: 0.1, delayChildren: 0.45 } } }}
             >
-              {STEPS.map((step) => (
-                <motion.div key={step.num} variants={fadeUp} className="text-center space-y-1">
-                  <div className="mx-auto flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">{step.num}</div>
-                  <p className="text-sm font-medium">{step.title}</p>
-                  <p className="text-xs text-muted-foreground">{step.desc}</p>
-                </motion.div>
-              ))}
+              {STEPS.map((step) => {
+                const Icon = step.icon;
+                return (
+                  <motion.div key={step.num} variants={fadeUp}>
+                    <Card className="text-center border-border/50 h-full">
+                      <CardContent className="pt-5 space-y-2">
+                        <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+                          <Icon className="w-5 h-5 text-primary" />
+                        </div>
+                        <p className="text-sm font-semibold">{step.title}</p>
+                        <p className="text-xs text-muted-foreground leading-relaxed">{step.desc}</p>
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                );
+              })}
             </motion.div>
 
             <motion.div
