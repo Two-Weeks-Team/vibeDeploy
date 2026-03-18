@@ -47,7 +47,7 @@ async def _db_update_card_safe(card_id: str, **fields: object) -> None:
 
         await zp_store.update_card(card_id, **fields)
     except Exception:
-        pass
+        logger.exception("[ZP] DB update failed for card %s fields=%s", card_id, list(fields.keys()))
 
 
 async def _db_update_session_safe(session_id: str, status: str) -> None:
@@ -198,7 +198,7 @@ class StreamingOrchestrator:
 
             await zp_store.add_card(session_id, card_id, video_id, title or video_id)
         except Exception:
-            pass
+            logger.exception("[ZP] Failed to add card %s to DB", card_id)
         return card_id
 
     async def exploration_step(

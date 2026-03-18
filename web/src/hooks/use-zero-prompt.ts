@@ -105,6 +105,14 @@ export function useZeroPrompt() {
             if (!trimmed.startsWith("data: ")) continue;
             try {
               const data = JSON.parse(trimmed.slice(6));
+
+              if (data.type === "snapshot") {
+                if (data.session_id) {
+                  setSession(data as ZPSession);
+                }
+                continue;
+              }
+
               setActions(prev => [{
                 type: data.type,
                 timestamp: new Date().toISOString(),

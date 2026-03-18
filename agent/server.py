@@ -1003,6 +1003,14 @@ async def zp_events(request: Request):
 
     async def event_stream() -> AsyncGenerator[str, None]:
         try:
+            try:
+                from .db import zp_store as _zps
+
+                dashboard = await _zps.get_dashboard()
+                yield f"data: {json.dumps({'type': 'snapshot', **dashboard})}\n\n"
+            except Exception:
+                pass
+
             while True:
                 try:
                     event = await asyncio.wait_for(q.get(), timeout=15.0)
@@ -1157,24 +1165,24 @@ async def zero_prompt_get_session(session_id: str):
 @app.post("/zero-prompt/{session_id}/actions")
 async def zero_prompt_action(session_id: str, request: ZPActionRequest):
     orch = _get_zp_orchestrator()
-    session = orch.get_session(session_id)
-    if session is None:
-        raise HTTPException(status_code=404, detail="session_not_found")
-
     action = request.action
     card_id = request.card_id
 
-    if action == "queue_build":
+    if action == "delete_card":
+        from .db import zp_store as _zps
+
+        await _zps.update_card(card_id, status="deleted")
+        push_zp_event({"type": "card.update", "card_id": card_id, "status": "deleted", "session_id": session_id})
+        result = {"type": "zp.action.delete_card", "card_id": card_id}
+    elif action == "pass_card":
+        from .db import zp_store as _zps
+
+        await _zps.update_card(card_id, status="passed")
+        push_zp_event({"type": "card.update", "card_id": card_id, "status": "passed", "session_id": session_id})
+        result = {"type": "zp.action.pass_card", "card_id": card_id}
+    elif action == "queue_build":
         result = orch.queue_build(session_id, card_id)
         asyncio.create_task(_trigger_zp_build(orch, session_id, card_id))
-        if orch.should_continue_exploring(session_id):
-            asyncio.create_task(_resume_exploration(orch, session_id))
-    elif action == "pass_card":
-        result = orch.pass_card(session_id, card_id)
-        if orch.should_continue_exploring(session_id):
-            asyncio.create_task(_resume_exploration(orch, session_id))
-    elif action == "delete_card":
-        result = orch.delete_card(session_id, card_id)
     elif action == "pause":
         result = orch.pause(session_id)
     elif action == "resume":
