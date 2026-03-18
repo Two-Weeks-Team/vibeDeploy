@@ -48,6 +48,7 @@ export default function DemoPage() {
     actions,
     isConnected,
     isCompleted,
+    isLoading,
     startSession,
     queueBuild,
     passCard,
@@ -66,6 +67,12 @@ export default function DemoPage() {
     }, 5000);
     return () => clearTimeout(timer);
   }, [stage, startSession]);
+
+  useEffect(() => {
+    if (stage === "dashboard" && !session && !isLoading) {
+      startSession();
+    }
+  }, [stage, session, isLoading, startSession]);
 
   return (
     <AnimatePresence mode="wait">
