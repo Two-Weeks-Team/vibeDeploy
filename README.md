@@ -107,7 +107,7 @@ The flagship feature. Press **Start** and walk away. vibeDeploy's 9 specialized 
   |  3. Paper search (OpenAlex + arXiv)      |
   |  4. Brainstorm (idea + papers = boost)   |
   |  5. Competitive analysis (Brave + Exa)   |
-  |  6. GO/NO-GO verdict (score >= 65)       |
+  |  6. GO/NO-GO verdict (score >= 70)       |
   |                                          |
   |  GO   --> Kanban board (max 10)          |
   |  NOGO --> next video + reason shown      |
@@ -356,7 +356,7 @@ Browser <-- SSE --->  |  | Next.js 15    |  | FastAPI Gateway  |  |
 | A2 | PostgreSQL for sessions + lineage | Full traceability: video -> idea -> card -> build -> deploy |
 | A3 | Docker SDK for build validation | Real compilation in isolated containers, not regex |
 | B1 | FIFO build queue, max 1 concurrent | Cost-predictable, credit-safe for hackathon |
-| B2 | GO threshold = 65 | Deterministic, reproducible scoring |
+| B2 | GO threshold = 70 | Deterministic, reproducible scoring |
 | B3 | Per-file code generation | Targeted regeneration; one bad file doesn't kill the build |
 
 ---

@@ -595,8 +595,8 @@ score = (
     differentiation_normalized × 15       # 차별화 가능성
 )
 
-GO:    score >= 65
-NO-GO: score < 65
+GO:    score >= 70
+NO-GO: score < 70
 ```
 
 ---
