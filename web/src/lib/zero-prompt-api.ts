@@ -34,3 +34,12 @@ export async function passCard(sessionId: string, cardId: string): Promise<void>
   });
   if (!response.ok) throw new Error("Failed to pass card");
 }
+
+export async function deleteCard(sessionId: string, cardId: string): Promise<void> {
+  const response = await fetch(`${DASHBOARD_API_URL}/zero-prompt/${sessionId}/actions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "delete_card", card_id: cardId }),
+  });
+  if (!response.ok) throw new Error("Failed to delete card");
+}

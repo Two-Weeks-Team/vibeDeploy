@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { getSession, startSession, queueBuild, passCard } from "@/lib/zero-prompt-api";
+import { getSession, startSession, queueBuild, passCard, deleteCard } from "@/lib/zero-prompt-api";
 import type { ZPSession, ZPAction } from "@/types/zero-prompt";
 
 function formatEventMessage(data: Record<string, unknown>): string {
@@ -140,6 +140,16 @@ export function useZeroPrompt() {
     }
   };
 
+  const handleDeleteCard = async (cardId: string) => {
+    if (!session) return;
+    try {
+      await deleteCard(session.session_id, cardId);
+      await fetchSession(session.session_id);
+    } catch (err) {
+      console.error("Failed to delete card", err);
+    }
+  };
+
   const restoreSession = useCallback(async (id: string) => {
     sessionIdRef.current = id;
     await fetchSession(id);
@@ -157,5 +167,6 @@ export function useZeroPrompt() {
     restoreSession,
     queueBuild: handleQueueBuild,
     passCard: handlePassCard,
+    deleteCard: handleDeleteCard,
   };
 }

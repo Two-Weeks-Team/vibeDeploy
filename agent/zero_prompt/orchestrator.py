@@ -321,7 +321,7 @@ class StreamingOrchestrator:
         if card is None:
             return {"type": "zp.action.error", "error": "card_not_found"}
 
-        if card.status != "go_ready":
+        if card.status not in ("go_ready", "nogo", "passed", "build_failed", "deleted"):
             return {"type": "zp.action.error", "error": "card_not_deletable"}
 
         card.status = "deleted"
