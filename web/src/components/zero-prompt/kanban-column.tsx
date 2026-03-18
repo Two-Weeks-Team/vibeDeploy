@@ -3,7 +3,6 @@
 import { Badge } from "@/components/ui/badge";
 import type { ZPCard, CardStatus } from "@/types/zero-prompt";
 import { IdeaCard } from "./idea-card";
-import { BuildMonitorCard } from "@/components/zero-prompt/build-monitor-card";
 
 interface KanbanColumnProps {
   id: string;
@@ -18,7 +17,7 @@ interface KanbanColumnProps {
   onCardClick?: (card: ZPCard) => void;
 }
 
-export function KanbanColumn({ title, statuses, cards, sessionId, onQueueBuild, onPassCard, onDeleteCard, onReExplore, onCardClick }: KanbanColumnProps) {
+export function KanbanColumn({ title, statuses, cards, onQueueBuild, onPassCard, onDeleteCard, onReExplore, onCardClick }: KanbanColumnProps) {
   const columnCards = cards.filter((c) => statuses.includes(c.status));
 
   return (
@@ -35,19 +34,15 @@ export function KanbanColumn({ title, statuses, cards, sessionId, onQueueBuild, 
           </div>
         ) : (
           columnCards.map((card) => (
-            card.status === "building" && sessionId ? (
-              <BuildMonitorCard key={card.card_id} card={card} sessionId={sessionId} />
-            ) : (
-              <IdeaCard 
-                key={card.card_id} 
-                card={card} 
-                onQueueBuild={onQueueBuild} 
-                onPassCard={onPassCard}
-                onDeleteCard={onDeleteCard}
-                onReExplore={onReExplore}
-                onClick={onCardClick}
-              />
-            )
+            <IdeaCard
+              key={card.card_id}
+              card={card}
+              onQueueBuild={onQueueBuild}
+              onPassCard={onPassCard}
+              onDeleteCard={onDeleteCard}
+              onReExplore={onReExplore}
+              onClick={onCardClick}
+            />
           ))
         )}
       </div>
