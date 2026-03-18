@@ -1092,6 +1092,13 @@ async def _ensure_frontend_lockfile(files: dict[str, str]) -> dict[str, str]:
     if not isinstance(package_json, str) or not package_json.strip():
         return files
 
+    npm_bin = shutil.which("npm")
+    if not npm_bin:
+        prepared = dict(files)
+        prepared.pop("web/package-lock.json", None)
+        logger.info("[DEPLOYER] npm not available; removing any LLM-generated lockfile to avoid npm ci mismatch")
+        return prepared
+
     existing_lock = files.get("web/package-lock.json", "")
     if _has_usable_package_lock(existing_lock):
         return files
