@@ -1111,28 +1111,59 @@ async def _discover_videos() -> list[tuple[str, str, str]]:
     return [(f"fallback-{i}", topic, topic) for i, topic in enumerate(_ZP_FALLBACK_TOPICS)]
 
 
+def _count_go_cards(session) -> int:
+    committed = {"go_ready", "build_queued", "building", "deployed"}
+    return sum(1 for c in session.cards if c.status in committed)
+
+
 async def _run_zp_pipeline(orch, session_id: str, goal: int) -> None:
     try:
-        push_zp_event({"type": "zp.discovery.start", "message": "Searching for trending videos..."})
-        videos = await _discover_videos()
-        batch = videos[: goal + 5]
+        seen_video_ids: set[str] = set()
+        round_num = 0
+        max_rounds = 5
 
-        for vid_id, vid_title, vid_desc in batch:
-            await orch.register_card(session_id, vid_id, vid_title)
+        while round_num < max_rounds:
+            session = orch.get_session(session_id)
+            if session and _count_go_cards(session) >= goal:
+                logger.info("[ZP] Goal reached (%d GO cards) for session %s", goal, session_id)
+                break
+
+            round_num += 1
             push_zp_event(
-                {"type": "zp.card.registered", "video_id": vid_id, "title": vid_title, "session_id": session_id}
+                {
+                    "type": "zp.discovery.start",
+                    "message": f"Searching for trending videos (round {round_num})...",
+                    "session_id": session_id,
+                }
             )
+            videos = await _discover_videos()
 
-        push_zp_event({"type": "zp.exploration.started", "total_videos": len(batch), "session_id": session_id})
-        logger.info("[ZP] Starting analysis of %d videos for session %s", len(batch), session_id)
+            new_videos = [(vid_id, title, desc) for vid_id, title, desc in videos if vid_id not in seen_video_ids]
+            if not new_videos:
+                logger.info("[ZP] No new videos found in round %d, stopping", round_num)
+                break
 
-        for vid_id, vid_title, vid_desc in batch:
-            step_events = await orch.exploration_step(
-                session_id, vid_id, video_title=vid_title, video_description=vid_desc
-            )
-            for evt in step_events:
-                push_zp_event(evt)
-            await _trigger_pending_builds(orch, session_id)
+            batch = new_videos[: goal + 5]
+            for vid_id, title, desc in batch:
+                seen_video_ids.add(vid_id)
+                await orch.register_card(session_id, vid_id, title)
+                push_zp_event(
+                    {"type": "zp.card.registered", "video_id": vid_id, "title": title, "session_id": session_id}
+                )
+
+            push_zp_event({"type": "zp.exploration.started", "total_videos": len(batch), "session_id": session_id})
+            logger.info("[ZP] Round %d: analyzing %d videos for session %s", round_num, len(batch), session_id)
+
+            for vid_id, title, desc in batch:
+                step_events = await orch.exploration_step(session_id, vid_id, video_title=title, video_description=desc)
+                for evt in step_events:
+                    push_zp_event(evt)
+                await _trigger_pending_builds(orch, session_id)
+
+                session = orch.get_session(session_id)
+                if session and _count_go_cards(session) >= goal:
+                    logger.info("[ZP] Goal reached mid-round (%d GO cards)", goal)
+                    break
 
         logger.info("[ZP] Pipeline complete for session %s", session_id)
     except Exception:
