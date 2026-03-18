@@ -14,11 +14,14 @@ type DemoStage = "landing" | "dashboard";
 
 const DEMO_VIDEO_URL = "https://www.youtube.com/watch?v=aADukThvjXQ";
 const DEMO_INPUT_CLICK_DELAY_MS = 900;
+const DEMO_INPUT_CLICK_RELEASE_MS = 1120;
 const DEMO_INPUT_TYPING_START_MS = 1300;
 const DEMO_INPUT_TYPING_STEP_MS = 32;
 const DEMO_START_BUTTON_MOVE_DELAY_MS = 700;
 const DEMO_START_BUTTON_CLICK_DELAY_MS = 1050;
+const DEMO_START_BUTTON_RELEASE_MS = 1240;
 const DEMO_SESSION_START_DELAY_MS = 1360;
+const DEMO_DASHBOARD_TRANSITION_DELAY_MS = 900;
 
 const INITIAL_CURSOR = {
   visible: false,
@@ -87,7 +90,7 @@ export default function DemoPage() {
 
     queueTimer(() => moveCursorToElement(introInputRef.current), 600);
     queueTimer(() => setCursor((prev) => ({ ...prev, clicking: true })), DEMO_INPUT_CLICK_DELAY_MS);
-    queueTimer(() => setCursor((prev) => ({ ...prev, clicking: false })), 1120);
+    queueTimer(() => setCursor((prev) => ({ ...prev, clicking: false })), DEMO_INPUT_CLICK_RELEASE_MS);
 
     DEMO_VIDEO_URL.split("").forEach((_, index) => {
       queueTimer(() => {
@@ -99,7 +102,7 @@ export default function DemoPage() {
 
     queueTimer(() => moveCursorToElement(zeroPromptStartRef.current), typingCompleteAt + DEMO_START_BUTTON_MOVE_DELAY_MS);
     queueTimer(() => setCursor((prev) => ({ ...prev, clicking: true })), typingCompleteAt + DEMO_START_BUTTON_CLICK_DELAY_MS);
-    queueTimer(() => setCursor((prev) => ({ ...prev, clicking: false })), typingCompleteAt + 1240);
+    queueTimer(() => setCursor((prev) => ({ ...prev, clicking: false })), typingCompleteAt + DEMO_START_BUTTON_RELEASE_MS);
     queueTimer(() => {
       if (sessionStartedRef.current) return;
       sessionStartedRef.current = true;
@@ -107,7 +110,7 @@ export default function DemoPage() {
     }, typingCompleteAt + DEMO_SESSION_START_DELAY_MS);
     queueTimer(() => {
       setStage("dashboard");
-    }, typingCompleteAt + DEMO_SESSION_START_DELAY_MS + 900);
+    }, typingCompleteAt + DEMO_SESSION_START_DELAY_MS + DEMO_DASHBOARD_TRANSITION_DELAY_MS);
 
     return clearSequenceTimers;
   }, [clearSequenceTimers, moveCursorToElement, queueTimer, stage, startSession]);
