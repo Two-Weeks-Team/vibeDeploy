@@ -47,9 +47,11 @@ export default function DemoPage() {
     session,
     actions,
     isConnected,
+    isCompleted,
     startSession,
     queueBuild,
     passCard,
+    deleteCard,
   } = useDemoZeroPrompt();
 
   const autoFired = useRef(false);
@@ -169,12 +171,30 @@ export default function DemoPage() {
                   Zero-Prompt Dashboard
                 </h1>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Session: {session.session_id} &bull; Status: {session.status}
+                  Session: {session.session_id.slice(0, 8)}... &bull; Status: {session.status}
                 </p>
+              </div>
+              <div className="flex items-center gap-2 text-sm">
+                {isConnected ? (
+                  <>
+                    <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                    <span className="text-green-500">Live — Exploring</span>
+                  </>
+                ) : isCompleted ? (
+                  <>
+                    <span className="w-2 h-2 rounded-full bg-blue-500" />
+                    <span className="text-blue-500">Complete</span>
+                  </>
+                ) : null}
               </div>
             </header>
             <StatusBar session={session} isConnected={isConnected} />
-            <KanbanBoard cards={session.cards || []} onQueueBuild={queueBuild} onPassCard={passCard} />
+            <KanbanBoard
+              cards={session.cards || []}
+              onQueueBuild={queueBuild}
+              onPassCard={passCard}
+              onDeleteCard={deleteCard}
+            />
             <ActionFeed actions={actions} />
           </div>
         </motion.div>

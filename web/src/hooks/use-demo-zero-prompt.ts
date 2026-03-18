@@ -47,27 +47,23 @@ export function useDemoZeroPrompt() {
           }
 
           if (event.cardUpdate) {
-            const { card_id, status, score } = event.cardUpdate;
+            const { card_id, status, score, ...extra } = event.cardUpdate;
 
             setSession((prev) => {
               if (!prev) return prev;
 
               const existingCard = prev.cards.find((c) => c.card_id === card_id);
               let nextCards: ZPCard[];
+              const patch = { status, ...(score !== undefined ? { score } : {}), ...extra };
 
               if (existingCard) {
                 nextCards = prev.cards.map((c) =>
-                  c.card_id === card_id
-                    ? { ...c, status, ...(score !== undefined ? { score } : {}) }
-                    : c,
+                  c.card_id === card_id ? { ...c, ...patch } : c,
                 );
               } else {
                 const template = DEMO_CARDS.find((c) => c.card_id === card_id);
                 if (!template) return prev;
-                nextCards = [
-                  ...prev.cards,
-                  { ...template, status, ...(score !== undefined ? { score } : {}) },
-                ];
+                nextCards = [...prev.cards, { ...template, ...patch }];
               }
 
               return { ...prev, cards: nextCards };
@@ -123,14 +119,25 @@ export function useDemoZeroPrompt() {
     setActions((prev) => [{ type: "pass", message: `Manual PASS — ${cardId} skipped`, timestamp: now }, ...prev]);
   }, []);
 
+  const deleteCardFn = useCallback((cardId: string) => {
+    const now = new Date().toISOString();
+    setSession((prev) => {
+      if (!prev) return prev;
+      return { ...prev, cards: prev.cards.filter((c) => c.card_id !== cardId) };
+    });
+    setActions((prev) => [{ type: "delete", message: `Card ${cardId} deleted`, timestamp: now }, ...prev]);
+  }, []);
+
   return {
     session,
     actions,
     isConnected,
+    isCompleted: false,
     isLoading,
     error: null as string | null,
     startSession,
     queueBuild,
     passCard,
+    deleteCard: deleteCardFn,
   };
 }

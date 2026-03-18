@@ -105,7 +105,7 @@ export type DemoTimelineEvent = {
   /** Milliseconds from demo start */
   time: number;
   /** Card state mutation — card_id is the lookup key */
-  cardUpdate?: { card_id: string; status: ZPCard["status"]; score?: number };
+  cardUpdate?: { card_id: string; status: ZPCard["status"]; score?: number } & Partial<Omit<ZPCard, "card_id" | "status" | "score">>;
   /** Action feed log entry */
   action?: Omit<ZPAction, "timestamp">;
   /** Session-level status change */
