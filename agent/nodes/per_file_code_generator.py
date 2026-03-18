@@ -524,25 +524,10 @@ async def backend_generator_node(state: dict, config=None) -> dict:
             and spec.path not in build_errors_text
         ):
             continue
-        if _use_llm_per_file_generation() and spec.file_type in {"route", "service", "api"}:
-            model = MODEL_CONFIG.get("code_gen_backend", MODEL_CONFIG["code_gen"])
-            if not llm_credentials_available(model):
-                warnings.append(f"per_file_backend_llm_unavailable:{model}")
-                generated = _generate_file_from_spec(spec, context)
-            else:
-                try:
-                    generated = {spec.path: await _generate_file_with_llm(spec, context)}
-                    route = llm_auth_route_for_model(model) or "unknown"
-                    warnings.append(f"per_file_backend_llm_used:{model}:{route}")
-                except Exception as exc:
-                    logger.warning("[PER_FILE_LLM] backend fallback for %s: %s", spec.path, str(exc)[:200])
-                    warnings.append(f"per_file_backend_llm_fallback:{spec.path}")
-                    generated = _generate_file_from_spec(spec, context)
-        else:
-            try:
-                generated = _generate_file_from_spec(spec, context)
-            except Exception:
-                generated = _generate_file_from_spec(spec, context)
+        try:
+            generated = _generate_file_from_spec(spec, context)
+        except Exception:
+            generated = _generate_file_from_spec(spec, context)
         context["already_generated"].update(generated)
         backend_code.update(generated)
         context["backend_code"] = dict(backend_code)
