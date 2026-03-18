@@ -137,11 +137,13 @@ export function useDemoZeroPrompt() {
     setActions((prev) => [{ type: "explore", message: `Re-exploring — replaced ${cardId} with new discovery`, timestamp: now }, ...prev]);
   }, []);
 
+  const isCompleted = session?.status === "completed";
+
   return {
     session,
     actions,
     isConnected,
-    isCompleted: false,
+    isCompleted,
     isLoading,
     error: null as string | null,
     startSession,

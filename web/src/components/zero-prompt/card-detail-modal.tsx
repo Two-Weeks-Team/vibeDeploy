@@ -19,6 +19,18 @@ export function CardDetailModal({ card, isOpen, onClose, onQueueBuild, onPassCar
 
   const isRealVideo = card.video_id && !card.video_id.startsWith("fallback-");
   const youtubeUrl = isRealVideo ? `https://youtube.com/watch?v=${card.video_id}` : null;
+  const insightKeyCounts = new Map<string, number>();
+  const keyedInsights = (card.insights ?? []).map((insight) => {
+    const count = (insightKeyCounts.get(insight) ?? 0) + 1;
+    insightKeyCounts.set(insight, count);
+    return { insight, key: `${card.card_id}-insight-${count}-${insight.slice(0, 20)}` };
+  });
+  const keyPageCounts = new Map<string, number>();
+  const keyedPages = (card.mvp_proposal?.key_pages ?? []).map((page) => {
+    const count = (keyPageCounts.get(page) ?? 0) + 1;
+    keyPageCounts.set(page, count);
+    return { page, key: `${card.card_id}-page-${count}-${page}` };
+  });
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -123,8 +135,8 @@ export function CardDetailModal({ card, isOpen, onClose, onQueueBuild, onPassCar
                 Key Insights
               </h4>
               <ul className="space-y-1">
-                {card.insights.map((insight) => (
-                  <li key={insight} className="text-sm text-muted-foreground flex items-start gap-2">
+                {keyedInsights.map(({ insight, key }) => (
+                  <li key={key} className="text-sm text-muted-foreground flex items-start gap-2">
                     <span className="text-yellow-500 mt-0.5">•</span>
                     <span>{insight}</span>
                   </li>
@@ -154,8 +166,8 @@ export function CardDetailModal({ card, isOpen, onClose, onQueueBuild, onPassCar
                 )}
                 {card.mvp_proposal.key_pages && card.mvp_proposal.key_pages.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 mt-1">
-                    {card.mvp_proposal.key_pages.map((page) => (
-                      <Badge key={page} variant="secondary" className="text-xs">{page}</Badge>
+                    {keyedPages.map(({ page, key }) => (
+                      <Badge key={key} variant="secondary" className="text-xs">{page}</Badge>
                     ))}
                   </div>
                 )}

@@ -1,5 +1,6 @@
 "use client";
 
+import { useId } from "react";
 import type { ReactNode, Ref } from "react";
 import Link from "next/link";
 import Image from "next/image";
@@ -12,11 +13,20 @@ import { Code2, ExternalLink, FlaskConical, Globe, LayoutDashboard, Lock, Play, 
 function extractVideoId(url: string): string | null {
   try {
     const u = new URL(url);
-    const rawId = u.hostname.includes("youtube.com") ? u.searchParams.get("v") : u.hostname === "youtu.be" ? u.pathname.slice(1) : null;
-    if (!rawId || rawId.length < 11) return null;
-    return rawId.slice(0, 11);
-  } catch {}
-  return null;
+    const hostname = u.hostname.replace(/^www\./, "");
+    let rawId = u.searchParams.get("v");
+    if (!rawId && hostname === "youtu.be") {
+      rawId = u.pathname.split("/").filter(Boolean)[0] ?? null;
+    }
+    if (!rawId && ["youtube.com", "m.youtube.com"].includes(hostname) && u.pathname.startsWith("/embed/")) {
+      rawId = u.pathname.split("/").filter(Boolean)[1] ?? null;
+    }
+    if (!rawId) return null;
+    const match = rawId.match(/[A-Za-z0-9_-]{11}/);
+    return match?.[0] ?? null;
+  } catch {
+    return null;
+  }
 }
 
 const COUNCIL_AGENTS = [
@@ -59,6 +69,7 @@ type ZeroPromptLandingProps = {
 
 export function ZeroPromptLanding({ youtubeUrl, onYoutubeUrlChange, startAction, inputRef }: ZeroPromptLandingProps) {
   const videoId = extractVideoId(youtubeUrl);
+  const demoTooltipId = useId();
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center px-4 py-16 relative">
@@ -87,12 +98,12 @@ export function ZeroPromptLanding({ youtubeUrl, onYoutubeUrlChange, startAction,
               {startAction}
               <div className="group/demo relative">
                 <Link href="/demo">
-                  <Button size="lg" variant="outline" className="h-14 px-8 text-lg font-semibold gap-2 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300">
+                  <Button aria-describedby={demoTooltipId} size="lg" variant="outline" className="h-14 px-8 text-lg font-semibold gap-2 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300">
                     <Play className="w-5 h-5 fill-current" />
                     Watch Demo
                   </Button>
                 </Link>
-                <div className="pointer-events-none absolute top-full left-1/2 z-20 mt-3 w-[min(90vw,26rem)] -translate-x-1/2 rounded-2xl border border-emerald-500/20 bg-background/95 p-4 text-left shadow-2xl shadow-black/30 opacity-0 backdrop-blur-sm transition-all duration-200 -translate-y-2 group-hover/demo:pointer-events-auto group-hover/demo:translate-y-0 group-hover/demo:opacity-100 group-focus-within/demo:pointer-events-auto group-focus-within/demo:translate-y-0 group-focus-within/demo:opacity-100">
+                <div id={demoTooltipId} role="tooltip" className="absolute top-full left-1/2 z-20 mt-3 w-[min(90vw,26rem)] -translate-x-1/2 rounded-2xl border border-emerald-500/20 bg-background/95 p-4 text-left shadow-2xl shadow-black/30 opacity-0 backdrop-blur-sm transition-all duration-200 -translate-y-2 group-hover/demo:translate-y-0 group-hover/demo:opacity-100 group-focus-within/demo:translate-y-0 group-focus-within/demo:opacity-100">
                   <div className="space-y-3">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-300">For judges & competitors</span>
