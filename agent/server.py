@@ -1127,8 +1127,6 @@ async def _run_zp_pipeline(orch, session_id: str, goal: int) -> None:
         logger.info("[ZP] Starting analysis of %d videos for session %s", len(batch), session_id)
 
         for vid_id, vid_title, vid_desc in batch:
-            if not orch.should_continue_exploring(session_id):
-                break
             step_events = await orch.exploration_step(
                 session_id, vid_id, video_title=vid_title, video_description=vid_desc
             )

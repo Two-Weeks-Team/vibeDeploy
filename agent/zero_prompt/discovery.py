@@ -12,10 +12,11 @@ _YOUTUBE_SEARCH_URL = "https://www.googleapis.com/youtube/v3/search"
 _YOUTUBE_VIDEOS_URL = "https://www.googleapis.com/youtube/v3/videos"
 
 _CATEGORY_QUERIES = {
-    "science_tech": {"q": "app development tutorial", "videoCategoryId": "28"},
-    "education": {"q": "coding project ideas", "videoCategoryId": "27"},
-    "howto": {"q": "build web app step by step", "videoCategoryId": "26"},
-    "korean_market": {"q": "앱 개발 사이드 프로젝트", "relevanceLanguage": "ko"},
+    "saas_ideas": {"q": "SaaS startup ideas 2025 2026 build launch"},
+    "side_projects": {"q": "side project ideas developer micro saas"},
+    "ai_apps": {"q": "AI app ideas build sell startup 2026"},
+    "build_startup": {"q": "build and launch web app startup idea"},
+    "niche_saas": {"q": "niche SaaS idea profitable solo founder"},
 }
 
 _CACHE: dict[str, tuple[float, list[VideoCandidate]]] = {}
