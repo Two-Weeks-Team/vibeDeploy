@@ -2,6 +2,9 @@ import ast
 import json
 from typing import Any
 
+from agent.nodes.design_tokens import to_css_variables
+from agent.nodes.typography import select_font_pairing
+
 _NEXT_VERSION = "16.1.6"
 _REACT_VERSION = "19.2.3"
 
@@ -53,9 +56,17 @@ module.exports = {
 };
 """
 
-_GLOBALS_CSS = """\
-@import "tailwindcss";
-"""
+
+def _build_globals_css(domain: str, pairing: dict) -> str:
+    display_name = pairing["display"].replace("_", " ")
+    body_name = pairing["body"].replace("_", " ")
+    token_block = to_css_variables(domain)
+    root_with_fonts = token_block.replace(
+        "  --radius: 0.625rem;\n}",
+        f'  --radius: 0.625rem;\n  --font-display: "{display_name}", sans-serif;\n  --font-body: "{body_name}", sans-serif;\n}}',
+    )
+    return '@import "tailwindcss";\n\n' + root_with_fonts + "\n"
+
 
 _BASE_REQUIREMENTS = [
     "fastapi",
@@ -154,6 +165,9 @@ async def call_inference(prompt: str, model: str = "meta-llama/Llama-3.3-70B-Ins
 
 def generate_scaffold(blueprint: dict[str, Any]) -> dict[str, str]:
     app_name = str(blueprint.get("app_name", "vibe-app")).strip() or "vibe-app"
+    domain = str(blueprint.get("domain", "tech"))
+    typography_hint = str(blueprint.get("typography_hint", ""))
+    pairing = select_font_pairing(typography_hint)
     extra_frontend_deps: dict[str, str] = {}
     extra_backend_deps: list[str] = []
 
@@ -198,7 +212,7 @@ def generate_scaffold(blueprint: dict[str, Any]) -> dict[str, str]:
         "web/tsconfig.json": json.dumps(_TSCONFIG, indent=2),
         "web/next.config.ts": _NEXT_CONFIG_TS,
         "web/postcss.config.js": _POSTCSS_CONFIG_JS,
-        "web/src/app/globals.css": _GLOBALS_CSS,
+        "web/src/app/globals.css": _build_globals_css(domain, pairing),
         "agent/main.py": main_py_content,
         "agent/models.py": _MODELS_PY,
         "agent/requirements.txt": "\n".join(requirements_lines) + "\n",

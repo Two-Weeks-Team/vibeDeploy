@@ -118,6 +118,10 @@ class VibeDeployState(TypedDict):
     # Deployment
     deploy_result: Optional[DeployResult]
 
+    # Design context
+    design_preset: Optional[str]
+    typography_pairing: Optional[Dict]
+
     # Control flags
     skip_council: bool
 

@@ -55,3 +55,41 @@ def generate_color_tokens(design_system: dict) -> str:
     lines.append("}")
 
     return "\n".join(lines)
+
+
+def to_css_variables(domain: str = "saas") -> str:
+    preset = DOMAIN_PRESETS.get(domain, DOMAIN_PRESETS["tech"])
+
+    primary = preset["primary"]
+    accent = preset["accent"]
+    base_hue = preset["base_hue"]
+
+    lines: list[str] = [":root {"]
+    lines.append(f"  --background: oklch(98% 0.005 {base_hue});")
+    lines.append(f"  --foreground: oklch(15% 0.01 {base_hue});")
+    lines.append("  --card: oklch(100% 0 0);")
+    lines.append(f"  --border: oklch(90% 0.01 {base_hue});")
+    lines.append(f"  --primary: {primary};")
+    lines.append(f"  --primary-foreground: oklch(98% 0.005 {base_hue});")
+    lines.append(f"  --accent: {accent};")
+    lines.append(f"  --muted: oklch(96% 0.008 {base_hue});")
+    lines.append(f"  --muted-foreground: oklch(45% 0.02 {base_hue});")
+    lines.append("  --success: oklch(65% 0.2 145);")
+    lines.append("  --warning: oklch(75% 0.15 85);")
+    lines.append("  --destructive: oklch(55% 0.2 25);")
+    lines.append("  --radius: 0.625rem;")
+    lines.append("}")
+
+    lines.append("")
+    lines.append(".dark {")
+    lines.append(f"  --background: oklch(12% 0.01 {base_hue});")
+    lines.append(f"  --foreground: oklch(95% 0.005 {base_hue});")
+    lines.append(f"  --card: oklch(18% 0.015 {base_hue});")
+    lines.append(f"  --border: oklch(25% 0.02 {base_hue});")
+    lines.append(f"  --primary: oklch(70% 0.2 {base_hue});")
+    lines.append(f"  --accent: oklch(22% 0.03 {base_hue});")
+    lines.append(f"  --muted: oklch(20% 0.015 {base_hue});")
+    lines.append(f"  --muted-foreground: oklch(65% 0.01 {base_hue});")
+    lines.append("}")
+
+    return "\n".join(lines)
