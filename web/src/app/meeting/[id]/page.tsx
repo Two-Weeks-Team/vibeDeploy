@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { MeetingView } from "@/components/meeting-view";
+import { MeetingView } from "@/components/meeting/meeting-view";
 
 export default function MeetingPage() {
   const params = useParams<{ id: string }>();
