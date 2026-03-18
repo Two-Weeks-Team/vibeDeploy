@@ -7,23 +7,23 @@ export const DEMO_SPEED_MULTIPLIER = 8;
 
 export const DEMO_CARDS: ZPCard[] = [
   {
-    card_id: "queuebite-784480",
-    video_id: "dQw4w9WgXcQ",
-    title: "QueueBite — Restaurant Queue Management with AI Wait-Time Prediction",
+    card_id: "nutriplan-aADukT",
+    video_id: "aADukThvjXQ",
+    title: "NutriPlan — AI Meal Planning with Simplified Nutrition Tracking",
     status: "analyzing",
     score: 0,
-    domain: "Restaurant Tech",
-    video_summary: "A deep dive into building a modern restaurant queue management system that leverages AI to predict wait times and reduce customer frustration. The video explores QR code check-in flows and real-time WebSocket updates.",
+    domain: "Health & Nutrition",
+    video_summary: "Trainer Winny breaks down how to simplify nutrition without obsessive calorie counting. The video covers macro-based meal templates, free meal plan structures, and grocery shopping strategies that eliminate decision fatigue for fitness-focused users.",
     insights: [
-      "QR code check-in eliminates manual queue tracking and reduces front-of-house staff burden",
-      "AI wait-time prediction reduces customer frustration by 40% and increases table turnover",
-      "Real-time WebSocket updates keep customers informed and reduce walkouts by 25%",
+      "Simplified macro tracking (protein/carb/fat ratios) removes the complexity barrier that causes 70% of nutrition app users to quit within 2 weeks",
+      "Auto-generated weekly meal plans based on user goals and dietary preferences eliminate daily decision fatigue",
+      "Integrated grocery list export from meal plans saves 45 minutes per week on shopping preparation",
     ],
     mvp_proposal: {
-      app_name: "QueueBite",
-      core_feature: "AI-powered queue management with QR code check-in and real-time wait predictions",
-      tech_stack: "FastAPI + Next.js + PostgreSQL + WebSocket",
-      key_pages: ["Queue Dashboard", "Customer Check-in", "Wait Time Display", "Analytics"],
+      app_name: "NutriPlan",
+      core_feature: "AI-powered simplified meal planning with macro tracking, auto-generated weekly plans, and grocery list export",
+      tech_stack: "FastAPI + Next.js + PostgreSQL + OpenAI API",
+      key_pages: ["Meal Plan Dashboard", "Macro Calculator", "Grocery List", "Progress Tracker"],
       estimated_days: 5,
     },
   },
@@ -317,7 +317,7 @@ export type DemoTimelineEvent = {
 //   - BUILD TRIGGERED after 4th GO (FitQuest @48500ms)
 //
 // PHASE 2 (50000ms → 92000ms): Auto-Build (runs in parallel with Phase 1 tail)
-//   - QueueBite: build_queued → code_gen → validate → github → deploy → deployed
+//   - NutriPlan: build_queued → code_gen → validate → github → deploy → deployed
 //   - SpendSense: same cycle
 //   - StudyMate, FitQuest, BookSwap, PlantPal stay in go_ready
 //
@@ -339,56 +339,56 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   // Build triggers after 4th GO card (FitQuest @48500ms) — runs in parallel.
   // ═══════════════════════════════════════════════════════════════════════════
 
-  // ── Card 1: QueueBite (discover @6500, verdict @16500) ────────────────────
+  // ── Card 1: NutriPlan (discover @6500, verdict @16500) ────────────────────
   {
     time: 4000,
-    action: { type: "explore", message: "YouTube search: 'how to build restaurant queue app' — filter: Recently uploaded — 12 results" },
+    action: { type: "explore", message: "YouTube search: 'how to simplify nutrition meal plan' — filter: Recently uploaded — 12 results" },
   },
   {
     time: 5000,
-    action: { type: "explore", message: "Scanning trending tech videos..." },
+    action: { type: "explore", message: "Scanning trending health & fitness videos — filter: Recently uploaded..." },
   },
   {
     time: 6500,
-    cardUpdate: { card_id: "queuebite-784480", status: "analyzing", score: 0, analysis_step: "transcript" },
-    action: { type: "card", message: "New idea card: QueueBite — Restaurant Queue Management with AI Wait-Time Prediction" },
+    cardUpdate: { card_id: "nutriplan-aADukT", status: "analyzing", score: 0, analysis_step: "transcript" },
+    action: { type: "card", message: "New idea card: NutriPlan — AI Meal Planning with Simplified Nutrition Tracking" },
   },
   {
     time: 8000,
-    cardUpdate: { card_id: "queuebite-784480", status: "analyzing", analysis_step: "insight", domain: "Restaurant Tech" },
+    cardUpdate: { card_id: "nutriplan-aADukT", status: "analyzing", analysis_step: "insight", domain: "Health & Nutrition" },
   },
   {
     time: 8500,
-    action: { type: "council", message: "Vibe Council evaluating QueueBite — 5 agents analyzing in parallel..." },
+    action: { type: "council", message: "Vibe Council evaluating NutriPlan — nutrition SaaS market analysis in parallel..." },
   },
   {
     time: 10000,
-    cardUpdate: { card_id: "queuebite-784480", status: "analyzing", analysis_step: "papers", papers_found: 3 },
+    cardUpdate: { card_id: "nutriplan-aADukT", status: "analyzing", analysis_step: "papers", papers_found: 3 },
   },
   {
     time: 10500,
-    action: { type: "council", message: "Architect: Solid FastAPI + Next.js stack. WebSocket layer for real-time queue events. PostgreSQL handles queue state persistence cleanly." },
+    action: { type: "council", message: "Architect: FastAPI + Next.js + PostgreSQL. OpenAI API for meal plan generation based on macro targets. Clean REST API for CRUD + AI endpoints." },
   },
   {
     time: 12000,
-    cardUpdate: { card_id: "queuebite-784480", status: "analyzing", analysis_step: "brainstorm" },
+    cardUpdate: { card_id: "nutriplan-aADukT", status: "analyzing", analysis_step: "brainstorm" },
   },
   {
     time: 12500,
-    action: { type: "council", message: "Scout: Growing market segment — 200M+ restaurant visits monthly. Only 3 direct competitors with weak AI. Strong differentiation opportunity." },
+    action: { type: "council", message: "Scout: Health & wellness app market at $7.8B. Simplified nutrition angle underserved — MyFitnessPal and Noom are complex. Clear gap for 'easy mode' meal planning." },
   },
   {
     time: 14000,
-    cardUpdate: { card_id: "queuebite-784480", status: "analyzing", analysis_step: "compete", competitors_found: "3", saturation: "low" },
+    cardUpdate: { card_id: "nutriplan-aADukT", status: "analyzing", analysis_step: "compete", competitors_found: "3", saturation: "low" },
   },
   {
     time: 14500,
-    action: { type: "council", message: "Catalyst: AI wait-time prediction is the killer hook. QR code check-in removes all friction — this is the feature that drives installs." },
+    action: { type: "council", message: "Catalyst: 'Simplified nutrition' is the killer hook — directly from the video. Macro-based templates eliminate calorie obsession. Grocery list auto-export drives daily utility." },
   },
   {
     time: 16500,
-    cardUpdate: { card_id: "queuebite-784480", status: "go_ready", score: 78.5, domain: "Restaurant Tech" },
-    action: { type: "verdict", message: "QueueBite scored 78.5 → GO — added to build queue [1/4]" },
+    cardUpdate: { card_id: "nutriplan-aADukT", status: "go_ready", score: 83.7, domain: "Health & Nutrition" },
+    action: { type: "verdict", message: "NutriPlan scored 83.7 → GO — highest score! Added to build queue [1/4]" },
   },
 
   // ── Card 2: SpendSense AI (discover @14500, verdict @24500) ──────────────
@@ -991,37 +991,37 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   // PHASE 2 — Auto-Build Processing (50000ms → 92000ms, parallel with Phase 1)
   //
   // Build triggered by 4th GO card (FitQuest @48500ms).
-  // QueueBite and SpendSense build and deploy; StudyMate, FitQuest, BookSwap,
+  // NutriPlan and SpendSense build and deploy; StudyMate, FitQuest, BookSwap,
   // PlantPal remain in go_ready showing the queue continues.
   // Each build cycle: build_queued → building → deployed (~20 seconds)
   // ═══════════════════════════════════════════════════════════════════════════
 
-  // ── Build 1: QueueBite (queued @50000, deployed @70000) ──────────────────
+  // ── Build 1: NutriPlan (queued @50000, deployed @70000) ──────────────────
   {
     time: 50000,
-    cardUpdate: { card_id: "queuebite-784480", status: "build_queued" },
-    action: { type: "build", message: "Generating PRD and technical specification for QueueBite..." },
+    cardUpdate: { card_id: "nutriplan-aADukT", status: "build_queued" },
+    action: { type: "build", message: "Generating PRD and technical specification for NutriPlan — Meal Planning SaaS MVP..." },
   },
   {
     time: 53000,
-    action: { type: "build", message: "PRD complete — 2,400 words, 8 user stories defined" },
+    action: { type: "build", message: "PRD complete — 2,800 words, 10 user stories defined (meal plan CRUD, macro calculator, grocery export)" },
   },
   {
     time: 55000,
-    cardUpdate: { card_id: "queuebite-784480", status: "building", build_step: "code_gen" },
-    action: { type: "build", message: "Blueprint: 14 files planned — FastAPI backend + Next.js frontend + PostgreSQL queue schema" },
+    cardUpdate: { card_id: "nutriplan-aADukT", status: "building", build_step: "code_gen" },
+    action: { type: "build", message: "Blueprint: 16 files planned — FastAPI backend + Next.js frontend + PostgreSQL nutrition schema + OpenAI integration" },
   },
   {
     time: 57500,
-    action: { type: "build", message: "Code generation in progress — FastAPI WebSocket queue events + PostgreSQL models..." },
+    action: { type: "build", message: "Code generation in progress — FastAPI meal plan API + PostgreSQL nutrition models + OpenAI prompt layer..." },
   },
   {
     time: 59000,
-    cardUpdate: { card_id: "queuebite-784480", status: "building", build_step: "validate" },
+    cardUpdate: { card_id: "nutriplan-aADukT", status: "building", build_step: "validate" },
   },
   {
     time: 60500,
-    action: { type: "build", message: "Generated 14 files — code evaluation passed (quality score 87/100)" },
+    action: { type: "build", message: "Generated 16 files — code evaluation passed (quality score 91/100)" },
   },
   {
     time: 63500,
@@ -1029,7 +1029,7 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   },
   {
     time: 64000,
-    cardUpdate: { card_id: "queuebite-784480", status: "building", build_step: "github" },
+    cardUpdate: { card_id: "nutriplan-aADukT", status: "building", build_step: "github" },
   },
   {
     time: 65500,
@@ -1041,12 +1041,12 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   },
   {
     time: 68000,
-    cardUpdate: { card_id: "queuebite-784480", status: "building", build_step: "deploy" },
+    cardUpdate: { card_id: "nutriplan-aADukT", status: "building", build_step: "deploy" },
   },
   {
     time: 70000,
-    cardUpdate: { card_id: "queuebite-784480", status: "deployed" },
-    action: { type: "deploy", message: "QueueBite deployed → https://queuebite-784480.ondigitalocean.app" },
+    cardUpdate: { card_id: "nutriplan-aADukT", status: "deployed" },
+    action: { type: "deploy", message: "NutriPlan deployed → https://nutriplan-aaduk.ondigitalocean.app — Meal Planning SaaS MVP live!" },
   },
 
   // ── Build 2: SpendSense AI (queued @72000, deployed @92000) ──────────────
@@ -1105,7 +1105,7 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   // ═══════════════════════════════════════════════════════════════════════════
   // PHASE 3 — Continued Exploration (95000ms → 200000ms)
   //
-  // QueueBite and SpendSense deployed. 4 GO apps in go_ready (StudyMate,
+  // NutriPlan and SpendSense deployed. 4 GO apps in go_ready (StudyMate,
   // FitQuest, BookSwap, PlantPal). RouteOpt and WeatherAI continue analysis.
   // New YouTube searches and action feed activity through 200s.
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1254,7 +1254,7 @@ export const DEMO_TIMELINE: DemoTimelineEvent[] = [
   },
   {
     time: 175000,
-    action: { type: "build", message: "6 GO cards total: QueueBite & SpendSense deployed, StudyMate, FitQuest, BookSwap, PlantPal queued. 4 NO-GO cards filtered. Exploration at 95% depth." },
+    action: { type: "build", message: "6 GO cards total: NutriPlan (Meal Planning SaaS) & SpendSense deployed, StudyMate, FitQuest, BookSwap, PlantPal queued. 5 NO-GO cards filtered. Exploration continues." },
   },
   {
     time: 180000,
