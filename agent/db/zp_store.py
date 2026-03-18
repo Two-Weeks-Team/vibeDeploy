@@ -46,6 +46,20 @@ async def ensure_tables() -> None:
             """
         )
 
+        migrations = [
+            "ALTER TABLE zp_cards ADD COLUMN IF NOT EXISTS analysis_step TEXT DEFAULT ''",
+            "ALTER TABLE zp_cards ADD COLUMN IF NOT EXISTS repo_url TEXT DEFAULT ''",
+            "ALTER TABLE zp_cards ADD COLUMN IF NOT EXISTS live_url TEXT DEFAULT ''",
+            "ALTER TABLE zp_cards ADD COLUMN IF NOT EXISTS build_events JSONB DEFAULT '[]'::jsonb",
+            "ALTER TABLE zp_cards ADD COLUMN IF NOT EXISTS build_phase TEXT DEFAULT ''",
+            "ALTER TABLE zp_cards ADD COLUMN IF NOT EXISTS build_node TEXT DEFAULT ''",
+        ]
+        for migration in migrations:
+            try:
+                await conn.execute(migration)
+            except Exception:
+                pass
+
 
 async def create_session(goal: int = 10) -> dict:
     session_id = str(uuid.uuid4())
