@@ -30,7 +30,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from starlette.responses import StreamingResponse
+from starlette.responses import JSONResponse, StreamingResponse
 
 from .cost import estimate_pipeline_cost
 from .db.store import ResultStore
@@ -1260,29 +1260,15 @@ async def zero_prompt_start(request: ZPStartRequest):
     )
     push_zp_event({"type": "zp.pipeline.started", "session_id": session_id, "goal": goal})
 
-    async def event_stream() -> AsyncGenerator[str, None]:
-        yield _sse(
-            "zp.session.start",
-            {
-                "type": "zp.session.start",
-                "session_id": session_id,
-                "goal_go_cards": goal,
-                "session_status": session.status,
-            },
-        )
-        yield _sse(
-            "zp.pipeline.started",
-            {"type": "zp.pipeline.started", "session_id": session_id, "goal": goal},
-        )
-
-    return StreamingResponse(
-        event_stream(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        },
+    return JSONResponse(
+        {
+            "session_id": session_id,
+            "status": session.status,
+            "goal_go_cards": goal,
+            "cards": [],
+            "build_queue": [],
+            "active_build": None,
+        }
     )
 
 
