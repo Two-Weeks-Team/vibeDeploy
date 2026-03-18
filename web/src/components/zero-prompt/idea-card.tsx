@@ -53,7 +53,7 @@ export function IdeaCard({ card, onQueueBuild, onPassCard, onDeleteCard, onClick
               className="flex-1 h-8 text-xs"
               onClick={() => onPassCard(card.card_id)}
             >
-              <X className="w-3 h-3 mr-1" /> 패스
+              <X className="w-3 h-3 mr-1" /> Pass
             </Button>
           </div>
         )}
@@ -73,7 +73,7 @@ export function IdeaCard({ card, onQueueBuild, onPassCard, onDeleteCard, onClick
               className="flex-1 h-8 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
               onClick={() => onDeleteCard(card.card_id)}
             >
-              <Trash2 className="w-3 h-3 mr-1" /> 삭제
+              <Trash2 className="w-3 h-3 mr-1" /> Delete
             </Button>
           </div>
         )}

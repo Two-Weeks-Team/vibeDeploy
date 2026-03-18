@@ -25,7 +25,7 @@ export function StatusBar({ session, isConnected }: StatusBarProps) {
         <CardContent className="p-4 flex items-center justify-between">
           <div>
             <p className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-              <Activity className="w-4 h-4 text-blue-400" /> 탐색 중
+              <Activity className="w-4 h-4 text-blue-400" /> Exploring
             </p>
             <p className="text-2xl font-bold mt-1">{analyzedCount}</p>
           </div>
@@ -38,7 +38,7 @@ export function StatusBar({ session, isConnected }: StatusBarProps) {
       <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
         <CardContent className="p-4">
           <p className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-            <PlayCircle className="w-4 h-4 text-amber-400" /> GO 대기
+            <PlayCircle className="w-4 h-4 text-amber-400" /> GO Ready
           </p>
           <p className="text-2xl font-bold mt-1">{goReadyCount}</p>
         </CardContent>
@@ -47,7 +47,7 @@ export function StatusBar({ session, isConnected }: StatusBarProps) {
       <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
         <CardContent className="p-4">
           <p className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-            <Clock className="w-4 h-4 text-purple-400" /> 빌드 중
+            <Clock className="w-4 h-4 text-purple-400" /> Building
           </p>
           <p className="text-2xl font-bold mt-1">{buildQueueCount}</p>
         </CardContent>
@@ -56,7 +56,7 @@ export function StatusBar({ session, isConnected }: StatusBarProps) {
       <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
         <CardContent className="p-4">
           <p className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-            <CheckCircle className="w-4 h-4 text-emerald-400" /> 배포됨
+            <CheckCircle className="w-4 h-4 text-emerald-400" /> Deployed
           </p>
           <p className="text-2xl font-bold mt-1">{deployedCount}</p>
         </CardContent>
