@@ -11,6 +11,7 @@ export type NodeStatus = "idle" | "active" | "complete" | "error";
 
 interface PipelineVizProps {
   activeNodes?: Record<string, NodeStatus>;
+  nodeMetadata?: Record<string, { iteration?: number; maxIterations?: number; repairAttempt?: number; maxRepairs?: number; matchRate?: number; skipped?: boolean }>;
   pipeline?: PipelineType;
   className?: string;
 }
@@ -80,6 +81,7 @@ const evalNodes: NodeDef[] = [
   { id: "prompt_strategy", label: "Prompt Strategist", x: 62, y: 68, emoji: "🧭" },
   { id: "code_gen", label: "Code Generator", x: 80, y: 68, emoji: "💻" },
   { id: "code_eval", label: "Code Evaluator", x: 50, y: 76, emoji: "✅" },
+  { id: "build_validate", label: "Build Validate", x: 50, y: 81, emoji: "🔨" },
   { id: "git_push", label: "Git Push", x: 8, y: 86, emoji: "📦" },
   { id: "ci_test", label: "CI Test", x: 24, y: 86, emoji: "⚙️" },
   { id: "app_spec", label: "App Spec", x: 40, y: 86, emoji: "📋" },
@@ -124,7 +126,8 @@ const evalEdges: EdgeDef[] = [
   { source: "blueprint", target: "prompt_strategy" },
   { source: "prompt_strategy", target: "code_gen" },
   { source: "code_gen", target: "code_eval" },
-  { source: "code_eval", target: "git_push" },
+  { source: "code_eval", target: "build_validate" },
+  { source: "build_validate", target: "git_push" },
   { source: "code_eval", target: "code_gen" },
   { source: "git_push", target: "ci_test" },
   { source: "ci_test", target: "app_spec" },
@@ -167,6 +170,7 @@ const evalPhaseLabels: PhaseLabel[] = [
   { label: "FIX", y: 59, color: "text-orange-400/80" },
   { label: "BUILD", y: 67, color: "text-emerald-400/80" },
   { label: "EVAL", y: 75, color: "text-cyan-400/80" },
+  { label: "VALIDATE", y: 81, color: "text-amber-400/80" },
   { label: "SHIP", y: 86, color: "text-emerald-300/90" },
 ];
 
@@ -180,7 +184,7 @@ const evalCallouts: CalloutDef[] = [];
 
 const brainstormCallouts: CalloutDef[] = [];
 
-const GO_NODES = new Set(["doc_gen", "blueprint", "prompt_strategy", "code_gen", "code_eval", "git_push", "ci_test", "app_spec", "do_build", "do_deploy", "verified"]);
+const GO_NODES = new Set(["doc_gen", "blueprint", "prompt_strategy", "code_gen", "code_eval", "build_validate", "git_push", "ci_test", "app_spec", "do_build", "do_deploy", "verified"]);
 const CONDITIONAL_NODES = new Set(["fix_storm", "scope_down"]);
 const BOTTOM_NODES = new Set([...GO_NODES, ...CONDITIONAL_NODES]);
 
@@ -213,7 +217,7 @@ const EVAL_PARTICLE_ROUTES: ParticleRoute[] = [
   ["decision", "fix_storm", "advocate", "cross_exam"],
   ["decision", "scope_down", "doc_gen"],
   ["decision", "doc_gen", "blueprint", "prompt_strategy", "code_gen", "code_eval"],
-  ["code_eval", "git_push", "ci_test", "app_spec", "do_build", "do_deploy", "verified"],
+  ["code_eval", "build_validate", "git_push", "ci_test", "app_spec", "do_build", "do_deploy", "verified"],
 ];
 
 const BS_PARTICLE_ROUTES: ParticleRoute[] = [
@@ -315,11 +319,11 @@ function getVisibleNodeIds(
   return visible;
 }
 
-export function PipelineViz({ activeNodes = {}, pipeline = "evaluation", className }: PipelineVizProps) {
+export function PipelineViz({ activeNodes = {}, nodeMetadata = {}, pipeline = "evaluation", className }: PipelineVizProps) {
   const nodes = pipeline === "evaluation" ? evalNodes : brainstormNodes;
   const edges = pipeline === "evaluation" ? evalEdges : brainstormEdges;
   const phaseLabels = pipeline === "evaluation" ? evalPhaseLabels : brainstormPhaseLabels;
-  const phaseDividers = pipeline === "evaluation" ? [7.5, 15.5, 24.5, 33.5, 42.5, 50, 56.5, 64, 72, 81] : [28, 67];
+  const phaseDividers = pipeline === "evaluation" ? [7.5, 15.5, 24.5, 33.5, 42.5, 50, 56.5, 64, 72, 79, 83] : [28, 67];
   const callouts = pipeline === "evaluation" ? evalCallouts : brainstormCallouts;
   const getNodeStatus = (id: string): NodeStatus => activeNodes[id] || "idle";
   const visibleNodeIds = getVisibleNodeIds(pipeline, nodes, activeNodes);
@@ -567,6 +571,21 @@ export function PipelineViz({ activeNodes = {}, pipeline = "evaluation", classNa
                     {node.emoji ? <span className="text-[11px] leading-none">{node.emoji}</span> : <span>{getStatusIcon(status)}</span>}
                     <span>{node.label}</span>
                     {status !== "idle" && <span className="ml-0.5">{getStatusIcon(status)}</span>}
+                    {(() => {
+                      const meta = nodeMetadata[node.id];
+                      if (!meta) return null;
+                      if (meta.skipped) return <span className="ml-1 text-[9px] text-slate-400">(skipped)</span>;
+                      if (meta.iteration && meta.maxIterations && meta.iteration > 1) {
+                        return <span className="ml-1 rounded bg-amber-500/25 px-1 text-[9px] font-bold text-amber-300">{meta.iteration}/{meta.maxIterations}</span>;
+                      }
+                      if (meta.repairAttempt && meta.maxRepairs) {
+                        return <span className="ml-1 rounded bg-orange-500/25 px-1 text-[9px] font-bold text-orange-300">fix {meta.repairAttempt}/{meta.maxRepairs}</span>;
+                      }
+                      if (meta.matchRate != null && status === "complete") {
+                        return <span className="ml-1 text-[9px] text-emerald-400">{Math.round(meta.matchRate)}%</span>;
+                      }
+                      return null;
+                    })()}
                   </div>
                 </motion.div>
               );

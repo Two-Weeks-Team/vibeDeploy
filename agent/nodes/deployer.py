@@ -180,7 +180,7 @@ async def deployer(state: VibeDeployState, config=None) -> dict:
     if github_full_name and commit_sha:
         await _emit_step_start("ci_test", "Running CI workflow", config=config, commit_sha=commit_sha)
         ci_result, all_files, repair_attempts = await _ci_repair_loop(
-            github_full_name, commit_sha, all_files, max_retries=3
+            github_full_name, commit_sha, all_files, max_retries=3, config=config
         )
         ci_status = ci_result.get("status", "skipped")
         if ci_status in {"passed", "skipped"}:
@@ -321,6 +321,13 @@ async def deployer(state: VibeDeployState, config=None) -> dict:
             break
 
         logger.warning("[DEPLOYER] Deploy attempt %d failed. Repairing from error logs.", attempt + 1)
+        await _emit_step_start(
+            "do_build",
+            f"Deploy repair attempt {attempt + 1}/3",
+            config=config,
+            deploy_repair_attempt=attempt + 1,
+        )
+
         fixed_files = await _repair_code_from_errors(all_files, error_logs)
         if fixed_files == all_files:
             logger.warning("[DEPLOYER] LLM could not fix deploy errors (attempt %d)", attempt + 1)
@@ -341,6 +348,13 @@ async def deployer(state: VibeDeployState, config=None) -> dict:
         if redeploy_result.get("status") == "error":
             logger.warning("[DEPLOYER] Redeploy trigger failed: %s", redeploy_result.get("error", ""))
             break
+
+        await _emit_step_complete(
+            "do_build",
+            f"Deploy repair attempt {attempt + 1} — redeploying",
+            config=config,
+            deploy_repair_attempt=attempt + 1,
+        )
 
         deploy_repair_attempts = attempt + 1
 
@@ -561,6 +575,7 @@ async def _ci_repair_loop(
     commit_sha: str,
     files: dict[str, str],
     max_retries: int = 3,
+    config=None,
 ) -> tuple[dict, dict[str, str], int]:
     for attempt in range(1, max_retries + 1):
         ci_result = await wait_for_ci(full_name, commit_sha, timeout=180)
@@ -575,6 +590,14 @@ async def _ci_repair_loop(
         if not error_logs:
             return ci_result, files, attempt
 
+        await _emit_step_start(
+            "ci_test",
+            f"CI repair attempt {attempt}/{max_retries}",
+            config=config,
+            ci_repair_attempt=attempt,
+            max_retries=max_retries,
+        )
+
         fixed_files = await _repair_code_from_errors(files, error_logs)
         if fixed_files == files:
             return ci_result, files, attempt
@@ -588,6 +611,15 @@ async def _ci_repair_loop(
         commit_sha = push_result.get("commit_sha", "")
         if not commit_sha:
             return ci_result, files, attempt
+
+        if commit_sha:
+            await _emit_step_complete(
+                "ci_test",
+                f"CI repair attempt {attempt} pushed — re-running CI",
+                config=config,
+                ci_repair_attempt=attempt,
+                commit_sha=commit_sha,
+            )
 
     final_ci = await wait_for_ci(full_name, commit_sha, timeout=180)
     return final_ci, files, max_retries

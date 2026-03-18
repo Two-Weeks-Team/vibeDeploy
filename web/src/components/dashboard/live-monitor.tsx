@@ -8,12 +8,13 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Wifi, WifiOff, Activity, Clock, Brain, Target, Play, Workflow, Radio } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PipelineViz } from "./pipeline-viz";
-import type { ActivePipeline, DashboardEvent, PipelineNodeStatus } from "@/types/dashboard";
+import type { ActivePipeline, DashboardEvent, NodeMetadata, PipelineNodeStatus } from "@/types/dashboard";
 
 interface LiveMonitorProps {
   activePipelines: ActivePipeline[];
   events: DashboardEvent[];
   nodeStatuses: Record<string, PipelineNodeStatus>;
+  nodeMetadata?: Record<string, NodeMetadata>;
   connected: boolean;
 }
 
@@ -128,7 +129,7 @@ function EventFeed({ events }: { events: DashboardEvent[] }) {
   );
 }
 
-export function LiveMonitor({ activePipelines, events, nodeStatuses, connected }: LiveMonitorProps) {
+export function LiveMonitor({ activePipelines, events, nodeStatuses, nodeMetadata, connected }: LiveMonitorProps) {
   const activePipeline = activePipelines[0];
   const latestEvent = events[0];
 
@@ -244,7 +245,7 @@ export function LiveMonitor({ activePipelines, events, nodeStatuses, connected }
                     Live node states align to the exact named steps now in flight, including the five council agents, the five score axes, prompt strategy, CI, build, deploy, and live verification.
                   </p>
                 </div>
-                <PipelineViz pipeline={activePipeline.type} activeNodes={nodeStatuses} />
+                <PipelineViz pipeline={activePipeline.type} activeNodes={nodeStatuses} nodeMetadata={nodeMetadata} />
               </div>
             </>
           ) : (
