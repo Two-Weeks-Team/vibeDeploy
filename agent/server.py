@@ -323,6 +323,11 @@ def _reconcile_showcase_meetings(meetings: list[dict], showcase_apps: list[dict]
     for meeting in meetings:
         showcase_app = matches.get(str(meeting.get("thread_id", "")))
         if not showcase_app:
+            deployment = dict(meeting.get("deployment") or {})
+            status = str(deployment.get("status") or "").strip().lower()
+            local_url = str(deployment.get("localUrl") or deployment.get("local_url") or "").strip()
+            if status in {"local_running", "local_error"} or local_url:
+                reconciled.append(meeting)
             continue
 
         deployment = dict(meeting.get("deployment") or {})
@@ -901,16 +906,18 @@ async def dashboard_stats():
 
 @app.get("/dashboard/results")
 @app.get("/results")
-async def dashboard_results():
+async def dashboard_results(limit: int = 50):
     meetings, _brainstorms, _filtered = await _get_dashboard_snapshot()
-    return meetings[:50]
+    safe_limit = max(1, min(limit, 200))
+    return meetings[:safe_limit]
 
 
 @app.get("/dashboard/brainstorms")
 @app.get("/brainstorms")
-async def dashboard_brainstorms():
+async def dashboard_brainstorms(limit: int = 50):
     _meetings, brainstorms, _filtered = await _get_dashboard_snapshot()
-    return brainstorms[:50]
+    safe_limit = max(1, min(limit, 200))
+    return brainstorms[:safe_limit]
 
 
 @app.get("/dashboard/deployments")
