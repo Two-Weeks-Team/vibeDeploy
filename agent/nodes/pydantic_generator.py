@@ -100,3 +100,26 @@ def validate_pydantic_output(code: str) -> bool:
         return True
     except SyntaxError:
         return False
+
+
+async def pydantic_generator_node(state: dict[str, Any], config=None) -> dict:
+    api_contract = str(state.get("api_contract") or "").strip()
+    if not api_contract:
+        return {
+            "pydantic_models": None,
+            "phase": "pydantic_generation_skipped",
+        }
+    code = generate_pydantic_models(api_contract)
+    if not validate_pydantic_output(code):
+        return {
+            "pydantic_models": code,
+            "error": "generated_pydantic_models_invalid",
+            "phase": "pydantic_generation_failed",
+        }
+    backend_code = dict(state.get("backend_code") or {})
+    backend_code["schemas.py"] = code
+    return {
+        "backend_code": backend_code,
+        "pydantic_models": code,
+        "phase": "pydantic_models_generated",
+    }

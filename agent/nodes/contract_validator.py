@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import re
 
@@ -381,9 +382,13 @@ async def validate_with_timeout(
                 "repair_instructions": [],
             }
     """
+    task = asyncio.create_task(_validate(api_contract_json, backend_code))
     try:
-        return await asyncio.wait_for(_validate(api_contract_json, backend_code), timeout=timeout)
+        return await asyncio.wait_for(task, timeout=timeout)
     except asyncio.TimeoutError:
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
         return {
             "passed": False,
             "errors": [f"Validation timed out after {timeout}s"],
@@ -394,3 +399,26 @@ async def validate_with_timeout(
             "schema_mismatches": [],
             "repair_instructions": [],
         }
+
+
+async def contract_validator_node(state: dict, config=None) -> dict:
+    api_contract = str(state.get("api_contract") or "").strip()
+    backend_code = dict(state.get("backend_code") or {})
+    if not api_contract:
+        result = {
+            "passed": False,
+            "errors": ["api_contract_missing"],
+            "repair_instructions": [],
+            "schema_mismatches": [],
+            "missing": [],
+            "extra": [],
+            "total_endpoints": 0,
+            "matched": 0,
+        }
+    else:
+        result = await validate_with_timeout(api_contract, backend_code, timeout=10.0)
+    return {
+        "wiring_validation": result,
+        "phase": "contract_validated" if result.get("passed") else "contract_validation_failed",
+        "error": "; ".join(result.get("errors") or []) if result.get("errors") else None,
+    }

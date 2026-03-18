@@ -379,3 +379,25 @@ def generate_api_dts(openapi_json: str) -> str:
     # Reuse already-parsed spec to avoid double json.loads
     body = generate_typescript_types(json.dumps(spec))
     return header + body
+
+
+async def type_generator_node(state: dict[str, Any], config=None) -> dict:
+    api_contract = str(state.get("api_contract") or "").strip()
+    if not api_contract:
+        return {
+            "generated_types": {},
+            "phase": "type_generation_skipped",
+        }
+    dts = generate_api_dts(api_contract)
+    client = generate_api_client(api_contract)
+    frontend_code = dict(state.get("frontend_code") or {})
+    frontend_code["src/types/api.d.ts"] = dts
+    frontend_code["src/lib/api-client.ts"] = client
+    return {
+        "frontend_code": frontend_code,
+        "generated_types": {
+            "dts_path": "src/types/api.d.ts",
+            "client_path": "src/lib/api-client.ts",
+        },
+        "phase": "types_generated",
+    }

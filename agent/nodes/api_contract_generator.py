@@ -133,3 +133,19 @@ def validate_openapi_spec(spec_json: str) -> bool:
         return True
     except (json.JSONDecodeError, ValidationError):
         return False
+
+
+async def api_contract_generator_node(state: dict, config=None) -> dict:
+    blueprint = state.get("blueprint") or {}
+    spec_json = generate_api_contract(blueprint)
+    if not validate_openapi_spec(spec_json):
+        return {
+            "api_contract": spec_json,
+            "spec_frozen": False,
+            "spec_freeze_errors": ["Generated API contract is not valid OpenAPI JSON"],
+            "phase": "api_contract_invalid",
+        }
+    return {
+        "api_contract": spec_json,
+        "phase": "api_contract_generated",
+    }
