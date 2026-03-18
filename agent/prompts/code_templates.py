@@ -80,6 +80,18 @@ Experience and design requirements:
   - If the product involves lists, collections, or data views, pre-populate with 3-5 realistic example items.
   - Every visible text element must feel like it was written by a product manager for that specific domain.
 
+FUNCTIONAL INTERACTIVITY (MANDATORY — apps must WORK, not just look good):
+- Every button MUST have an onClick handler that calls an API function from src/lib/api.ts or navigates via Next.js router. Buttons without handlers are UNACCEPTABLE.
+- All forms MUST submit data to backend via src/lib/api.ts. Every form needs onSubmit with e.preventDefault() and an API call.
+- All data displayed in lists, tables, cards, or feeds MUST be fetched from the API via useEffect on mount. NEVER render hardcoded arrays as "real data".
+- The main page MUST call at least one API endpoint in useEffect on mount to load initial data (e.g., GET /demo, GET /plans).
+- During API calls: show a loading indicator (spinner or skeleton), disable submit buttons, prevent duplicate submissions.
+- On API error: display a user-visible error message (toast, alert, or inline), allow retry. NEVER silently fail.
+- All user inputs MUST be controlled components (value + onChange wired to useState).
+- If a component exists that integrates with the API (e.g., WorkspacePanel), it MUST be imported and rendered in the main page flow. Do NOT create API-wired components that are never used.
+- The "use client" directive is REQUIRED at the top of any file that uses useState, useEffect, onClick, onChange, or fetch.
+- src/lib/api.ts MUST export functions for every backend endpoint: fetching data, submitting forms, and calling AI features. Every exported function must be used by at least one component.
+
 API and implementation requirements:
 - Fetch real backend endpoints from src/lib/api.ts.
 - Frontend routes should call `/api/...` paths, but assume the backend defines business routes without wrapping `APIRouter(prefix="/api")`.
