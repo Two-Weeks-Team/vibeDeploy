@@ -1151,12 +1151,23 @@ async def _trigger_zp_build(orch, session_id: str, card_id: str) -> None:
         card.status = "building"
         idea_title = card.title or card.video_id
 
+        build_prompt = f"Build a web app: {idea_title}."
+        if card.domain and card.domain != "unknown":
+            build_prompt += f" Domain: {card.domain}."
+        if card.reason:
+            build_prompt += f" Validation: {card.reason}"
+        build_prompt += (
+            " Create a complete Next.js frontend with Tailwind CSS"
+            " and a FastAPI backend with health endpoint."
+            " Include realistic seed data and a clean dashboard UI."
+        )
+
         from .pipeline_runtime import stream_action_session
 
         action_payload = {
             "action": "evaluate",
             "thread_id": f"zp-{card_id}",
-            "prompt": idea_title,
+            "prompt": build_prompt,
             "skip_council": True,
         }
         async for _chunk in stream_action_session(action_payload):
