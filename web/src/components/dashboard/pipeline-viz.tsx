@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { CheckCircle, XCircle, Clock, Activity } from "lucide-react";
+import { AGENT_MAP } from "@/config/agents";
 
 export type PipelineType = "evaluation" | "brainstorm";
 export type NodeStatus = "idle" | "active" | "complete" | "error";
@@ -61,18 +62,18 @@ const fadeUp = {
 const evalNodes: NodeDef[] = [
   { id: "input", label: "Input Processor", x: 50, y: 4, emoji: "📝" },
   { id: "enrich", label: "Enrich Idea", x: 50, y: 11, emoji: "✨" },
-  { id: "architect", label: "Architect", x: 10, y: 20, emoji: "🏗️" },
-  { id: "scout", label: "Scout", x: 30, y: 20, emoji: "🔭" },
-  { id: "catalyst", label: "Catalyst", x: 50, y: 20, emoji: "⚡" },
-  { id: "guardian", label: "Guardian", x: 70, y: 20, emoji: "🛡️" },
-  { id: "advocate", label: "Advocate", x: 90, y: 20, emoji: "🎯" },
+  { id: "architect", label: "Architect", x: 10, y: 20, emoji: AGENT_MAP.architect.emoji },
+  { id: "scout", label: "Scout", x: 30, y: 20, emoji: AGENT_MAP.scout.emoji },
+  { id: "catalyst", label: "Catalyst", x: 50, y: 20, emoji: AGENT_MAP.catalyst.emoji },
+  { id: "guardian", label: "Guardian", x: 70, y: 20, emoji: AGENT_MAP.guardian.emoji },
+  { id: "advocate", label: "Advocate", x: 90, y: 20, emoji: AGENT_MAP.advocate.emoji },
   { id: "cross_exam", label: "Cross Examination", x: 50, y: 29, emoji: "⚔️" },
   { id: "score_tech", label: "Tech Feasibility", x: 10, y: 38, emoji: "📊" },
   { id: "score_market", label: "Market Viability", x: 30, y: 38, emoji: "📊" },
   { id: "score_innovation", label: "Innovation Score", x: 50, y: 38, emoji: "📊" },
   { id: "score_risk", label: "Risk Profile", x: 70, y: 38, emoji: "📊" },
   { id: "score_user", label: "User Impact", x: 90, y: 38, emoji: "📊" },
-  { id: "verdict", label: "Strategist Verdict", x: 50, y: 47, emoji: "🏛️", glow: true },
+  { id: "verdict", label: "Strategist Verdict", x: 50, y: 47, emoji: AGENT_MAP.strategist.emoji, glow: true },
   { id: "decision", label: "Decision Gate", x: 50, y: 53, emoji: "🚦" },
   { id: "fix_storm", label: "Fix Storm", x: 22, y: 60, emoji: "🔧" },
   { id: "scope_down", label: "Scope Down", x: 70, y: 60, emoji: "📐" },
@@ -138,12 +139,12 @@ const evalEdges: EdgeDef[] = [
 
 const brainstormNodes: NodeDef[] = [
   { id: "input", label: "Input", x: 50, y: 10, emoji: "📝" },
-  { id: "architect", label: "Architect", x: 10, y: 45, emoji: "🏗️" },
-  { id: "scout", label: "Scout", x: 30, y: 45, emoji: "🔭" },
-  { id: "catalyst", label: "Catalyst", x: 50, y: 45, emoji: "⚡" },
-  { id: "guardian", label: "Guardian", x: 70, y: 45, emoji: "🛡️" },
-  { id: "advocate", label: "Advocate", x: 90, y: 45, emoji: "🎯" },
-  { id: "synthesize", label: "Synthesize", x: 50, y: 85, emoji: "🧭", glow: true },
+  { id: "architect", label: "Architect", x: 10, y: 45, emoji: AGENT_MAP.architect.emoji },
+  { id: "scout", label: "Scout", x: 30, y: 45, emoji: AGENT_MAP.scout.emoji },
+  { id: "catalyst", label: "Catalyst", x: 50, y: 45, emoji: AGENT_MAP.catalyst.emoji },
+  { id: "guardian", label: "Guardian", x: 70, y: 45, emoji: AGENT_MAP.guardian.emoji },
+  { id: "advocate", label: "Advocate", x: 90, y: 45, emoji: AGENT_MAP.advocate.emoji },
+  { id: "synthesize", label: "Synthesize", x: 50, y: 85, emoji: AGENT_MAP.strategist.emoji, glow: true },
 ];
 
 const brainstormEdges: EdgeDef[] = [
