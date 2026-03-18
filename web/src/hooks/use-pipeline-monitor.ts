@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ActivePipeline, DashboardEvent, PipelineNodeStatus } from "@/types/dashboard";
+import type { ActivePipeline, DashboardEvent, NodeMetadata, PipelineNodeStatus } from "@/types/dashboard";
 
 const AGENT_URL = process.env.NEXT_PUBLIC_AGENT_URL ?? "http://localhost:8080";
 const DASHBOARD_API_URL = AGENT_URL.includes("ondigitalocean.app")
@@ -23,7 +23,7 @@ const NODE_NAME_TO_VIZ_ID: Record<string, string> = {
   prompt_strategist: "prompt_strategy",
   code_generator: "code_gen",
   code_evaluator: "code_eval",
-  deployer: "do_deploy",
+  build_validator: "build_validate",
 };
 
 const AGENT_TO_VIZ_ID: Record<string, string> = {
@@ -52,6 +52,7 @@ const DIRECT_VIZ_NODE_IDS = new Set([
   "score_innovation",
   "score_risk",
   "score_user",
+  "build_validate",
   "git_push",
   "ci_test",
   "app_spec",
@@ -74,6 +75,7 @@ export function usePipelineMonitor() {
   const [activePipelines, setActivePipelines] = useState<ActivePipeline[]>([]);
   const [events, setEvents] = useState<DashboardEvent[]>([]);
   const [nodeStatuses, setNodeStatuses] = useState<Record<string, PipelineNodeStatus>>({});
+  const [nodeMetadata, setNodeMetadata] = useState<Record<string, NodeMetadata>>({});
   const [connected, setConnected] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -82,6 +84,13 @@ export function usePipelineMonitor() {
 
   const updateNode = useCallback((vizId: string, status: PipelineNodeStatus) => {
     setNodeStatuses((prev: Record<string, PipelineNodeStatus>) => ({ ...prev, [vizId]: status }));
+  }, []);
+
+  const updateMetadata = useCallback((vizId: string, meta: Partial<NodeMetadata>) => {
+    setNodeMetadata((prev) => ({
+      ...prev,
+      [vizId]: { ...prev[vizId], ...meta },
+    }));
   }, []);
 
   const connectSSE = useCallback(() => {
@@ -128,7 +137,10 @@ export function usePipelineMonitor() {
 
                 if (hadPipelines && nowEmpty) {
                   if (clearTimer.current) clearTimeout(clearTimer.current);
-                  clearTimer.current = setTimeout(() => setNodeStatuses({}), 2000);
+                  clearTimer.current = setTimeout(() => {
+                    setNodeStatuses({});
+                    setNodeMetadata({});
+                  }, 2000);
                 } else if (!nowEmpty && clearTimer.current) {
                   clearTimeout(clearTimer.current);
                   clearTimer.current = null;
@@ -182,7 +194,7 @@ export function usePipelineMonitor() {
 
               if (data.type === "deploy.complete") {
                 updateNode("do_deploy", "complete");
-                updateNode("verified", "complete");
+                // Do not force verified — let the actual verified event determine its status
               }
 
               if (data.type === "brainstorm.agent.insight" && data.agent) {
@@ -210,6 +222,40 @@ export function usePipelineMonitor() {
 
               if (data.type === "code_eval.result") {
                 updateNode("code_eval", data.passed ? "complete" : "active");
+                updateMetadata("code_eval", {
+                  passed: Boolean(data.passed),
+                  iteration: Number(data.iteration) || undefined,
+                  maxIterations: Number(data.max_iterations) || undefined,
+                  matchRate: Number(data.match_rate) || undefined,
+                  completeness: Number(data.completeness) || undefined,
+                  consistency: Number(data.consistency) || undefined,
+                  runnability: Number(data.runnability) || undefined,
+                  experience: Number(data.experience) || undefined,
+                  blockers: Array.isArray(data.blockers) ? data.blockers as string[] : undefined,
+                });
+              }
+
+              if (data.type === "build.node.complete" || data.type === "build.node.error") {
+                updateMetadata("build_validate", {
+                  passed: Boolean(data.passed),
+                  skipped: Boolean(data.skipped),
+                  backendOk: data.backend_ok != null ? Boolean(data.backend_ok) : undefined,
+                  frontendOk: data.frontend_ok != null ? Boolean(data.frontend_ok) : undefined,
+                });
+              }
+
+              if (data.type?.startsWith("deploy.") && data.ci_repair_attempt != null) {
+                updateMetadata("ci_test", {
+                  repairAttempt: Number(data.ci_repair_attempt),
+                  maxRepairs: Number(data.max_retries) || 3,
+                });
+              }
+
+              if (data.type?.startsWith("deploy.") && data.deploy_repair_attempt != null) {
+                updateMetadata("do_build", {
+                  repairAttempt: Number(data.deploy_repair_attempt),
+                  maxRepairs: 3,
+                });
               }
             } catch { }
           }
@@ -220,7 +266,7 @@ export function usePipelineMonitor() {
         reconnectTimer.current = setTimeout(connectSSE, 3_000);
       }
     })();
-  }, [updateNode]);
+  }, [updateNode, updateMetadata]);
 
   const fetchActive = useCallback(async () => {
     try {
@@ -246,6 +292,7 @@ export function usePipelineMonitor() {
     activePipelines,
     events,
     nodeStatuses,
+    nodeMetadata,
     connected,
   };
 }

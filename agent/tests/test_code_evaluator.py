@@ -363,3 +363,42 @@ async def test_code_evaluator_returns_repair_tasks_for_blockers():
     assert repair_tasks
     assert any(task["target"] == "frontend" for task in repair_tasks)
     assert result["task_distribution"]["total"] >= len(repair_tasks)
+
+
+@pytest.mark.asyncio
+async def test_code_evaluator_emits_result_event_when_config_provided():
+    """Verify that code_evaluator emits a code_eval.result event with scores."""
+    from unittest.mock import patch
+
+    emitted_events = []
+
+    async def _capture_event(name, payload, *, config):
+        emitted_events.append({"name": name, "payload": payload})
+
+    with patch("agent.nodes.code_evaluator.adispatch_custom_event", side_effect=_capture_event):
+        await code_evaluator(
+            {
+                "blueprint": {
+                    "frontend_files": {"package.json": {}, "src/app/page.tsx": {}},
+                    "backend_files": {"main.py": {}, "requirements.txt": {}},
+                },
+                "frontend_code": {
+                    "package.json": '{"dependencies":{"next":"15.0.0"}}',
+                    "src/app/page.tsx": "export default function Page(){ return <main>Hello</main>; }",
+                },
+                "backend_code": {
+                    "main.py": "from fastapi import FastAPI\napp = FastAPI()\n",
+                    "requirements.txt": "fastapi\nuvicorn\n",
+                },
+            },
+            config={"configurable": {"thread_id": "test-thread"}},
+        )
+
+    assert len(emitted_events) == 1
+    event = emitted_events[0]
+    assert event["name"] == "code_eval.result"
+    assert event["payload"]["type"] == "code_eval.result"
+    assert "match_rate" in event["payload"]
+    assert "iteration" in event["payload"]
+    assert "passed" in event["payload"]
+    assert event["payload"]["node"] == "code_evaluator"

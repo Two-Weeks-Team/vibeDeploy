@@ -201,3 +201,54 @@ def test_write_files_to_tmpdir_skips_non_string_values(tmp_path):
 
     assert (tmp_path / "main.py").exists()
     assert not (tmp_path / "bad.py").exists()
+
+
+@pytest.mark.asyncio
+async def test_build_validator_emits_events_when_config_provided():
+    """Verify that build_validator emits SSE events when a config is supplied."""
+    emitted_events = []
+
+    async def _capture_event(name, payload, *, config):
+        emitted_events.append({"name": name, "payload": payload})
+
+    with (
+        patch("agent.nodes.build_validator.adispatch_custom_event", side_effect=_capture_event),
+        patch.dict("sys.modules", {"docker": None, "docker.errors": None}),
+    ):
+        result = await build_validator(
+            {
+                "backend_code": {"main.py": "x = 1\n", "requirements.txt": "fastapi\n"},
+                "frontend_code": {},
+            },
+            config={"configurable": {"thread_id": "test-thread"}},
+        )
+
+    assert result["build_validation"]["passed"] is True  # Docker skipped
+    assert len(emitted_events) >= 2  # At least node.start and node.complete
+    event_types = [e["payload"]["type"] for e in emitted_events]
+    assert "build.node.start" in event_types
+    # Should have complete or skip event
+    assert any(t in event_types for t in ("build.node.complete",))
+
+
+@pytest.mark.asyncio
+async def test_build_validator_emits_error_event_on_syntax_failure():
+    """Verify that build_validator emits an error event when Python syntax check fails."""
+    emitted_events = []
+
+    async def _capture_event(name, payload, *, config):
+        emitted_events.append({"name": name, "payload": payload})
+
+    with patch("agent.nodes.build_validator.adispatch_custom_event", side_effect=_capture_event):
+        result = await build_validator(
+            {
+                "backend_code": {"main.py": "def broken(\n    pass\n", "requirements.txt": "fastapi\n"},
+                "frontend_code": {},
+            },
+            config={"configurable": {"thread_id": "test-thread"}},
+        )
+
+    assert result["build_validation"]["passed"] is False
+    event_types = [e["payload"]["type"] for e in emitted_events]
+    assert "build.node.start" in event_types
+    assert "build.node.error" in event_types
