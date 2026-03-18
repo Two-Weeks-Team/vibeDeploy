@@ -5,6 +5,16 @@ import { getDashboard, startSession, queueBuild, passCard, deleteCard } from "@/
 import { DASHBOARD_API_URL } from "@/lib/api";
 import type { ZPSession, ZPAction } from "@/types/zero-prompt";
 
+function getActionCategory(type: string, data: Record<string, unknown>): string {
+  if (type.startsWith("zp.transcript") || type.startsWith("zp.discovery") || type.startsWith("zp.exploration") || type === "zp.card.registered" || type === "zp.pipeline.started") return "explore";
+  if (type.startsWith("zp.council") || type.startsWith("zp.insight") || type.startsWith("zp.paper") || type.startsWith("zp.brainstorm") || type.startsWith("zp.compete")) return "council";
+  if (type.startsWith("zp.verdict")) return "verdict";
+  if (type === "zp.build.done" || type === "card.build_step" || type === "zp.auto_build.triggered") return "build";
+  if (type === "card.update" && data.status === "deployed") return "deploy";
+  if (type.startsWith("card.") || type.startsWith("zp.card")) return "card";
+  return "event";
+}
+
 function formatEventMessage(data: Record<string, unknown>): string {
   const type = String(data.type || "");
   if (type === "zp.session.start") return `Session started (goal: ${data.goal_go_cards} apps)`;
@@ -115,13 +125,18 @@ export function useZeroPrompt() {
                 continue;
               }
 
-              setActions(prev => [{
-                type: data.type,
-                timestamp: new Date().toISOString(),
-                message: formatEventMessage(data),
-              }, ...prev].slice(0, 300));
-              
-              if (data.type?.includes("card") || data.type?.includes("verdict") || data.type?.includes("session")) {
+              const rawType = String(data.type || "");
+              const category = getActionCategory(rawType, data as Record<string, unknown>);
+              const msg = formatEventMessage(data as Record<string, unknown>);
+              if (msg && msg !== rawType) {
+                setActions(prev => [{
+                  type: category,
+                  timestamp: new Date().toISOString(),
+                  message: msg,
+                }, ...prev].slice(0, 300));
+              }
+
+              if (rawType.includes("card") || rawType.includes("verdict") || rawType.includes("session") || rawType.includes("council")) {
                 await loadDashboard();
               }
             } catch {}

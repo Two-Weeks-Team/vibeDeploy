@@ -144,14 +144,25 @@ def _parse_video_ids_from_text(text: str, max_results: int) -> list[tuple[str, s
     return results
 
 
+def _extract_video_id(raw: str) -> str:
+    raw = raw.strip()
+    url_match = _YT_ID_RE.search(raw)
+    if url_match:
+        return url_match.group(1)
+    if _VALID_YT_ID_RE.match(raw):
+        return raw
+    return ""
+
+
 def _items_to_tuples(items: list, max_results: int) -> list[tuple[str, str, str]]:
     results = []
     for item in items[:max_results]:
         if not isinstance(item, dict):
             continue
-        vid = str(item.get("video_id", "")).strip()
+        raw_vid = str(item.get("video_id", "")).strip()
         title = str(item.get("title", "")).strip()
         desc = str(item.get("description", "")).strip()
-        if vid and _VALID_YT_ID_RE.match(vid) and title:
+        vid = _extract_video_id(raw_vid)
+        if vid and title:
             results.append((vid, title, desc))
     return results
