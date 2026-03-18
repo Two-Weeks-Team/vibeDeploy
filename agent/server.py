@@ -1292,6 +1292,9 @@ async def _trigger_zp_build(orch, session_id: str, card_id: str) -> None:
         except Exception:
             pass
 
+        captured_live_url = ""
+        captured_repo_url = ""
+
         build_prompt = f"Build a web app: {idea_title}."
         if card.domain and card.domain != "unknown":
             build_prompt += f" Domain: {card.domain}."
@@ -1326,6 +1329,12 @@ async def _trigger_zp_build(orch, session_id: str, card_id: str) -> None:
                     card.build_step = "validate"
                 elif "deploy" in phase_val:
                     card.build_step = "deploy"
+                for url_key in ("liveUrl", "live_url", "default_ingress"):
+                    if event_data.get(url_key):
+                        captured_live_url = str(event_data[url_key])
+                for url_key in ("repoUrl", "repo_url", "github_url", "repo"):
+                    if event_data.get(url_key):
+                        captured_repo_url = str(event_data[url_key])
                 try:
                     await _zp_store.update_card(card_id, build_step=card.build_step)
                     push_zp_event(
@@ -1361,6 +1370,10 @@ async def _trigger_zp_build(orch, session_id: str, card_id: str) -> None:
                     repo_url = deploy.get("repoUrl", "") or deploy.get("repo_url", "")
         except Exception:
             pass
+        if not live_url:
+            live_url = captured_live_url
+        if not repo_url:
+            repo_url = captured_repo_url
 
         card.live_url = live_url
         card.repo_url = repo_url
