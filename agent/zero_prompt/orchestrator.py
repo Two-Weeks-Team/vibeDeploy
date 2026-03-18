@@ -253,6 +253,18 @@ class StreamingOrchestrator:
             transcript_text = video_description or video_title or ""
             events.append(transcript_complete_event(video_id, "error", 0))
 
+        card.analysis_step = "insight"
+        await _db_update_card_safe(card_id, analysis_step="insight")
+        push_zp_event(
+            {
+                "type": "card.update",
+                "card_id": card_id,
+                "status": "analyzing",
+                "analysis_step": "insight",
+                "title": card.title,
+                "session_id": session_id,
+            }
+        )
         events.append(insight_start_event(video_id))
         try:
             from agent.zero_prompt.insight_extractor import extract_insight_from_transcript, extract_with_gemini
@@ -272,6 +284,18 @@ class StreamingOrchestrator:
         except Exception:
             pass
 
+        card.analysis_step = "papers"
+        await _db_update_card_safe(card_id, analysis_step="papers")
+        push_zp_event(
+            {
+                "type": "card.update",
+                "card_id": card_id,
+                "status": "analyzing",
+                "analysis_step": "papers",
+                "title": card.title,
+                "session_id": session_id,
+            }
+        )
         idea_query = f"{idea.name} {idea.domain}" if idea.name else video_title
         events.append(paper_search_event(idea_query, ["openalex", "arxiv"]))
         try:
@@ -288,6 +312,18 @@ class StreamingOrchestrator:
         except Exception:
             pass
 
+        card.analysis_step = "brainstorm"
+        await _db_update_card_safe(card_id, analysis_step="brainstorm")
+        push_zp_event(
+            {
+                "type": "card.update",
+                "card_id": card_id,
+                "status": "analyzing",
+                "analysis_step": "brainstorm",
+                "title": card.title,
+                "session_id": session_id,
+            }
+        )
         events.append(brainstorm_start_event(idea.name or video_title, len(papers)))
         try:
             from agent.zero_prompt.paper_brainstorm import enhance_idea_with_papers
@@ -306,6 +342,18 @@ class StreamingOrchestrator:
         except Exception:
             pass
 
+        card.analysis_step = "compete"
+        await _db_update_card_safe(card_id, analysis_step="compete")
+        push_zp_event(
+            {
+                "type": "card.update",
+                "card_id": card_id,
+                "status": "analyzing",
+                "analysis_step": "compete",
+                "title": card.title,
+                "session_id": session_id,
+            }
+        )
         events.append(compete_start_event(idea.name or video_title))
         market = None
         try:
@@ -328,6 +376,19 @@ class StreamingOrchestrator:
             )
         except Exception:
             pass
+
+        card.analysis_step = "verdict"
+        await _db_update_card_safe(card_id, analysis_step="verdict")
+        push_zp_event(
+            {
+                "type": "card.update",
+                "card_id": card_id,
+                "status": "analyzing",
+                "analysis_step": "verdict",
+                "title": card.title,
+                "session_id": session_id,
+            }
+        )
 
         if verdict_fn is not None:
             try:
@@ -469,43 +530,39 @@ class StreamingOrchestrator:
 
     def pass_card(self, session_id: str, card_id: str) -> dict:
         session = self._sessions.get(session_id)
-        if session is None:
-            return {"type": "zp.action.error", "error": "session_not_found"}
+        card = None
+        if session:
+            card = next((c for c in session.cards if c.card_id == card_id), None)
+            if card and card_id in session.build_queue:
+                session.build_queue.remove(card_id)
+            bq = self._build_queues.get(session_id)
+            if bq:
+                bq.remove(card_id)
 
-        card = next((c for c in session.cards if c.card_id == card_id), None)
-        if card is None:
-            return {"type": "zp.action.error", "error": "card_not_found"}
-
-        if card.status not in ("go_ready", "build_queued"):
-            return {"type": "zp.action.error", "error": "card_not_passable"}
-
-        if card_id in session.build_queue:
-            session.build_queue.remove(card_id)
-
-        bq = self._build_queues.get(session_id)
-        if bq:
-            bq.remove(card_id)
-
-        card.status = "passed"
+        if card:
+            card.status = "passed"
         _fire(_db_update_card_safe(card_id, status="passed"))
         push_zp_event({"type": "card.update", "card_id": card_id, "status": "passed", "session_id": session_id})
         return {"type": "zp.action.pass_card", "card_id": card_id}
 
     def delete_card(self, session_id: str, card_id: str) -> dict:
         session = self._sessions.get(session_id)
-        if session is None:
-            return {"type": "zp.action.error", "error": "session_not_found"}
+        card = None
+        if session:
+            card = next((c for c in session.cards if c.card_id == card_id), None)
 
-        card = next((c for c in session.cards if c.card_id == card_id), None)
-        if card is None:
-            return {"type": "zp.action.error", "error": "card_not_found"}
-
-        if card.status not in ("go_ready", "nogo", "passed", "build_failed", "deleted"):
-            return {"type": "zp.action.error", "error": "card_not_deletable"}
-
-        card.status = "deleted"
+        if card:
+            card.status = "deleted"
         _fire(_db_update_card_safe(card_id, status="deleted"))
-        push_zp_event({"type": "card.update", "card_id": card_id, "status": "deleted", "session_id": session_id})
+        push_zp_event(
+            {
+                "type": "card.update",
+                "card_id": card_id,
+                "status": "deleted",
+                "title": card.title if card else "",
+                "session_id": session_id,
+            }
+        )
         return {"type": "zp.action.delete_card", "card_id": card_id}
 
     def pause(self, session_id: str) -> dict:

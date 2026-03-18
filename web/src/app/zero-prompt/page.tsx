@@ -132,6 +132,10 @@ export default function ZeroPromptPage() {
           onQueueBuild={queueBuild} 
           onPassCard={passCard}
           onDeleteCard={deleteCard}
+          onReExplore={(cardId) => {
+            deleteCard(cardId);
+            startSession(1);
+          }}
         />
         
         <ActionFeed actions={actions} />

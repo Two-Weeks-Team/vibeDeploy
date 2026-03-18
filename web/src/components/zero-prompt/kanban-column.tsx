@@ -12,10 +12,11 @@ interface KanbanColumnProps {
   onQueueBuild: (cardId: string) => void;
   onPassCard: (cardId: string) => void;
   onDeleteCard?: (cardId: string) => void;
+  onReExplore?: (cardId: string) => void;
   onCardClick?: (card: ZPCard) => void;
 }
 
-export function KanbanColumn({ title, statuses, cards, onQueueBuild, onPassCard, onDeleteCard, onCardClick }: KanbanColumnProps) {
+export function KanbanColumn({ title, statuses, cards, onQueueBuild, onPassCard, onDeleteCard, onReExplore, onCardClick }: KanbanColumnProps) {
   const columnCards = cards.filter((c) => statuses.includes(c.status));
 
   return (
@@ -38,6 +39,7 @@ export function KanbanColumn({ title, statuses, cards, onQueueBuild, onPassCard,
               onQueueBuild={onQueueBuild} 
               onPassCard={onPassCard}
               onDeleteCard={onDeleteCard}
+              onReExplore={onReExplore}
               onClick={onCardClick}
             />
           ))

@@ -10,6 +10,7 @@ interface KanbanBoardProps {
   onQueueBuild: (cardId: string) => void;
   onPassCard: (cardId: string) => void;
   onDeleteCard?: (cardId: string) => void;
+  onReExplore?: (cardId: string) => void;
 }
 
 const COLUMNS: { id: string; title: string; statuses: CardStatus[] }[] = [
@@ -20,7 +21,7 @@ const COLUMNS: { id: string; title: string; statuses: CardStatus[] }[] = [
   { id: "nogo", title: "NO-GO / Passed", statuses: ["nogo", "passed", "build_failed"] },
 ];
 
-export function KanbanBoard({ cards, onQueueBuild, onPassCard, onDeleteCard }: KanbanBoardProps) {
+export function KanbanBoard({ cards, onQueueBuild, onPassCard, onDeleteCard, onReExplore }: KanbanBoardProps) {
   const [selectedCard, setSelectedCard] = useState<ZPCard | null>(null);
 
   return (
@@ -36,6 +37,7 @@ export function KanbanBoard({ cards, onQueueBuild, onPassCard, onDeleteCard }: K
             onQueueBuild={onQueueBuild}
             onPassCard={onPassCard}
             onDeleteCard={onDeleteCard}
+            onReExplore={onReExplore}
             onCardClick={setSelectedCard}
           />
         ))}
