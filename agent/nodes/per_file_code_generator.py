@@ -433,7 +433,9 @@ async def _generate_file_with_llm(spec: FileSpec, context: dict) -> str:
         import_rule = ""
     system_content = (
         "Generate exactly one file. Return ONLY valid JSON with this shape: "
-        '{"content":"full file content"}. No markdown fences, no prose.'
+        '{"content":"full file content"}. No markdown fences, no prose. '
+        "Keep code CONCISE: no comments, short variable names, minimal whitespace. "
+        "Every JSX element MUST be properly closed. File MUST end with closing brace."
     )
     if import_rule:
         system_content = f"{system_content}\n\n{import_rule}"
