@@ -69,7 +69,7 @@ export default function LandingPage() {
             Describe your app idea. The Vibe Council debates feasibility, then builds and deploys it.
           </motion.p>
           <motion.div variants={fadeUp} className="flex flex-col items-center gap-3 pt-6">
-            <Link href="/zero-prompt">
+            <Link href="/zero-prompt?autostart=true">
               <Button size="lg" className="h-14 px-8 text-lg font-bold gap-2 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600">
                 <Rocket className="w-5 h-5" />
                 Zero-Prompt Start
