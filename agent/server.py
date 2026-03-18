@@ -1062,90 +1062,101 @@ class ZPActionRequest(BaseModel):
     thread_id: str | None = None
 
 
+_ZP_FALLBACK_TOPICS = [
+    "AI fitness tracker app",
+    "Recipe sharing with AI recommendations",
+    "Smart budget expense tracker",
+    "Language learning spaced repetition",
+    "Pet health monitoring symptom checker",
+    "Project management for remote teams",
+    "AI resume builder with job matching",
+    "Meditation and sleep tracker",
+    "Restaurant queue management AI",
+    "Sustainable grocery delivery optimizer",
+    "AI flashcard study assistant",
+    "Social media sentiment dashboard",
+    "AR interior design visualizer",
+    "Code review automation tool",
+    "Handmade crafts marketplace",
+]
+
+
+async def _discover_videos() -> list[tuple[str, str, str]]:
+    try:
+        from .zero_prompt.discovery import YouTubeDiscovery
+
+        discovery = YouTubeDiscovery()
+        candidates = await discovery.fetch_candidate_pool(
+            max_results=30, min_views=5000, min_likes=100, min_engagement_rate=0.01
+        )
+        videos = [(c.video_id, c.title, c.description) for c in candidates]
+        if videos:
+            logger.info("[ZP] YouTube API discovery: %d videos", len(videos))
+            return videos
+    except Exception as exc:
+        logger.warning("[ZP] YouTube API failed: %s", str(exc)[:200])
+
+    push_zp_event({"type": "zp.discovery.grounding", "message": "Using Gemini AI to discover trending videos..."})
+    try:
+        from .zero_prompt.grounding_discovery import discover_videos_via_grounding
+
+        videos = await discover_videos_via_grounding(max_results=20)
+        if videos:
+            logger.info("[ZP] Gemini grounding discovery: %d videos", len(videos))
+            return videos
+    except Exception as exc:
+        logger.warning("[ZP] Gemini grounding failed: %s", str(exc)[:200])
+
+    logger.info("[ZP] Using hardcoded fallback topics")
+    return [(f"fallback-{i}", topic, topic) for i, topic in enumerate(_ZP_FALLBACK_TOPICS)]
+
+
+async def _run_zp_pipeline(orch, session_id: str, goal: int) -> None:
+    try:
+        push_zp_event({"type": "zp.discovery.start", "message": "Searching for trending videos..."})
+        videos = await _discover_videos()
+        batch = videos[: goal + 5]
+
+        for vid_id, vid_title, vid_desc in batch:
+            await orch.register_card(session_id, vid_id, vid_title)
+            push_zp_event(
+                {"type": "zp.card.registered", "video_id": vid_id, "title": vid_title, "session_id": session_id}
+            )
+
+        push_zp_event({"type": "zp.exploration.started", "total_videos": len(batch), "session_id": session_id})
+        logger.info("[ZP] Starting analysis of %d videos for session %s", len(batch), session_id)
+
+        for vid_id, vid_title, vid_desc in batch:
+            if not orch.should_continue_exploring(session_id):
+                break
+            step_events = await orch.exploration_step(
+                session_id, vid_id, video_title=vid_title, video_description=vid_desc
+            )
+            for evt in step_events:
+                push_zp_event(evt)
+            await _trigger_pending_builds(orch, session_id)
+
+        logger.info("[ZP] Pipeline complete for session %s", session_id)
+    except Exception:
+        logger.exception("[ZP] Pipeline failed for session %s", session_id)
+
+
 @app.post("/api/zero-prompt/start")
 @app.post("/zero-prompt/start")
 async def zero_prompt_start(request: ZPStartRequest):
-    import asyncio
-
     from .sse import format_sse as _fmt
     from .zero_prompt.events import ZP_SESSION_START
 
     orch = _get_zp_orchestrator()
     session, start_event = orch.create_session(goal=request.goal)
     session_id = session.session_id
+    goal = request.goal or 10
+
+    asyncio.create_task(_run_zp_pipeline(orch, session_id, goal))
 
     async def event_stream() -> AsyncGenerator[str, None]:
         yield _fmt(ZP_SESSION_START, start_event)
-        yield _fmt("zp.discovery.start", {"type": "zp.discovery.start", "message": "Searching for trending videos..."})
-
-        videos: list[tuple[str, str, str]] = []
-
-        try:
-            from .zero_prompt.discovery import YouTubeDiscovery
-
-            discovery = YouTubeDiscovery()
-            candidates = await discovery.fetch_candidate_pool(
-                max_results=30, min_views=5000, min_likes=100, min_engagement_rate=0.01
-            )
-            videos = [(c.video_id, c.title, c.description) for c in candidates]
-            logger.info("[ZP] YouTube API discovery: %d videos", len(videos))
-        except Exception as exc:
-            logger.warning("[ZP] YouTube API failed: %s", str(exc)[:200])
-
-        if not videos:
-            yield _fmt(
-                "zp.discovery.grounding",
-                {"type": "zp.discovery.grounding", "message": "Using Gemini AI to discover trending videos..."},
-            )
-            try:
-                from .zero_prompt.grounding_discovery import discover_videos_via_grounding
-
-                videos = await discover_videos_via_grounding(max_results=20)
-                logger.info("[ZP] Gemini grounding discovery: %d videos", len(videos))
-            except Exception as exc:
-                logger.warning("[ZP] Gemini grounding failed: %s", str(exc)[:200])
-
-        if not videos:
-            fallback_topics = [
-                "AI fitness tracker app",
-                "Recipe sharing with AI recommendations",
-                "Smart budget expense tracker",
-                "Language learning spaced repetition",
-                "Pet health monitoring symptom checker",
-                "Project management remote teams",
-                "AI resume builder job matching",
-                "Meditation guided sessions tracker",
-                "Restaurant queue management AI",
-                "Sustainable grocery delivery optimizer",
-                "AI flashcard study assistant",
-                "Social media sentiment dashboard",
-                "AR interior design visualizer",
-                "Code review automation tool",
-                "Handmade crafts marketplace",
-            ]
-            videos = [(f"fallback-{i}", topic, topic) for i, topic in enumerate(fallback_topics)]
-            logger.info("[ZP] Using hardcoded fallback topics")
-
-        goal = request.goal or 10
-        batch = videos[: goal + 5]
-
-        for vid_id, vid_title, vid_desc in batch:
-            await orch.register_card(session_id, vid_id, vid_title)
-            yield _fmt("zp.card.registered", {"type": "zp.card.registered", "video_id": vid_id, "title": vid_title})
-
-        async def _analyze_all():
-            for vid_id, vid_title, vid_desc in batch:
-                if not orch.should_continue_exploring(session_id):
-                    break
-                step_events = await orch.exploration_step(
-                    session_id, vid_id, video_title=vid_title, video_description=vid_desc
-                )
-                for evt in step_events:
-                    push_zp_event(evt)
-                await _trigger_pending_builds(orch, session_id)
-
-        asyncio.create_task(_analyze_all())
-        yield _fmt("zp.exploration.started", {"type": "zp.exploration.started", "total_videos": len(batch)})
+        yield _fmt("zp.pipeline.started", {"type": "zp.pipeline.started", "session_id": session_id, "goal": goal})
 
     return StreamingResponse(
         event_stream(),
