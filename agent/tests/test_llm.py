@@ -1,6 +1,13 @@
 import pytest
 
-from agent.llm import MODEL_CONFIG, ainvoke_with_retry, get_rate_limit_fallback_models, get_runtime_model_config
+from agent.llm import (
+    MODEL_CONFIG,
+    ainvoke_with_retry,
+    get_rate_limit_fallback_models,
+    get_runtime_model_config,
+    llm_auth_route_for_model,
+    llm_credentials_available,
+)
 
 
 class _RetryLLM:
@@ -137,3 +144,28 @@ def test_runtime_model_config_prefers_env_overrides(monkeypatch):
     assert runtime["code_gen_frontend"] == "openai-gpt-oss-20b"
     assert MODEL_CONFIG["code_gen_backend"] == "alibaba-qwen3-32b"
     assert MODEL_CONFIG["council"] == "deepseek-r1-distill-llama-70b"
+
+
+def test_llm_auth_route_prefers_do_inference_when_only_inference_key_exists(monkeypatch):
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.setenv("GRADIENT_MODEL_ACCESS_KEY", "do-key")
+
+    assert llm_auth_route_for_model("gpt-5.3-codex") == "do_inference"
+    assert llm_credentials_available("gpt-5.3-codex") is True
+
+
+def test_llm_auth_route_returns_none_without_any_credentials(monkeypatch):
+    for key in [
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "GEMINI_API_KEY",
+        "GOOGLE_API_KEY",
+        "GRADIENT_MODEL_ACCESS_KEY",
+        "DIGITALOCEAN_INFERENCE_KEY",
+    ]:
+        monkeypatch.delenv(key, raising=False)
+
+    assert llm_auth_route_for_model("gpt-5.3-codex") is None
+    assert llm_credentials_available("gpt-5.3-codex") is False

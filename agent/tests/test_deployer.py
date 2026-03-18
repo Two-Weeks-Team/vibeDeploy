@@ -10,6 +10,8 @@ from agent.nodes.deployer import (
     _is_do_app_limit_error,
     _prepare_files_for_push,
     _reclaim_do_app_capacity,
+    _spawn_local_backend_runtime,
+    deployer,
 )
 from agent.tools.digitalocean import build_app_spec
 
@@ -260,6 +262,83 @@ def test_generate_ci_yml_frontend_install_falls_back_when_lockfile_is_empty_or_i
 
     assert "if [ -s package-lock.json ]; then" in yml
     assert "npm ci || npm install" in yml
+
+
+@pytest.mark.asyncio
+async def test_local_deploy_mode_skips_github_and_do(monkeypatch):
+    called = {"local": 0, "github": 0}
+
+    async def fake_local(app_name, files, github_repo_url, reason, app_id=""):
+        called["local"] += 1
+        return {
+            "deploy_result": {
+                "app_id": app_id,
+                "live_url": "",
+                "github_repo": github_repo_url,
+                "status": "local_running",
+                "local_reason": reason,
+                "local_app_dir": "/tmp/demo",
+                "local_url": "http://127.0.0.1:9101",
+            },
+            "phase": "deployed",
+        }
+
+    async def fake_github_repo(*args, **kwargs):
+        called["github"] += 1
+        return {"status": "error", "error": "should not be called"}
+
+    monkeypatch.setenv("VIBEDEPLOY_DEPLOY_MODE", "local")
+    monkeypatch.setattr("agent.nodes.deployer._local_fallback_deploy", fake_local)
+    monkeypatch.setattr("agent.nodes.deployer.create_github_repo", fake_github_repo)
+
+    state = {
+        "frontend_code": {
+            "package.json": '{"name":"demo","private":true}',
+            "src/app/page.tsx": "export default function Page(){ return null }\n",
+            "src/app/globals.css": '@import "tailwindcss";\n',
+        },
+        "backend_code": {
+            "main.py": "from fastapi import FastAPI\napp=FastAPI()\n",
+            "requirements.txt": "fastapi\nuvicorn\n",
+        },
+        "blueprint": {"frontend_files": {"src/app/page.tsx": {}}, "backend_files": {"main.py": {}}},
+        "idea": {"name": "demo-app", "tagline": "demo"},
+        "build_validation": {"passed": True},
+        "code_eval_result": {"passed": True},
+        "scoring": {},
+    }
+
+    result = await deployer(state)
+    assert result["deploy_result"]["status"] == "local_running"
+    assert called["local"] == 1
+    assert called["github"] == 0
+
+
+@pytest.mark.asyncio
+async def test_spawn_local_backend_runtime_prefers_docker(monkeypatch, tmp_path):
+    async def fake_docker(base_dir, port):
+        assert port == 9105
+        return True
+
+    monkeypatch.setattr(
+        "agent.nodes.deployer.shutil.which", lambda name: "/usr/bin/docker" if name == "docker" else None
+    )
+    monkeypatch.setattr("agent.nodes.deployer._spawn_local_backend_runtime_docker", fake_docker)
+
+    result = await _spawn_local_backend_runtime(tmp_path, 9105)
+    assert result is True
+
+
+def test_get_deploy_blocker_allows_staged_gate_success_even_when_code_eval_failed():
+    blocker = _get_deploy_blocker(
+        frontend_code={"package.json": "{}", "src/app/page.tsx": "x", "src/app/globals.css": "x"},
+        backend_code={"main.py": "x", "requirements.txt": "x"},
+        blueprint={"frontend_files": {"src/app/page.tsx": {}}, "backend_files": {"main.py": {}}},
+        code_eval_result={"passed": False},
+        build_validation={"passed": True},
+        deploy_gate_result={"passed": True},
+    )
+    assert blocker is None
 
 
 def test_get_deploy_blocker_rejects_docs_only_bundle():

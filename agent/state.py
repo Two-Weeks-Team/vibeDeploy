@@ -114,6 +114,16 @@ class VibeDeployState(TypedDict):
 
     # API Contract
     api_contract: Optional[str]
+    spec_frozen: Optional[bool]
+    spec_freeze_errors: Optional[List[str]]
+    spec_freeze_attempt_count: Optional[int]
+    generated_types: Optional[Dict]
+    pydantic_models: Optional[str]
+    design_system_context: Optional[Dict]
+    wiring_validation: Optional[Dict]
+    wiring_attempt_count: Optional[int]
+    local_runtime_validation: Optional[Dict]
+    deploy_gate_result: Optional[Dict]
 
     # Deployment
     deploy_result: Optional[DeployResult]

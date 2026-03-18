@@ -98,9 +98,9 @@ def test_generate_single_file_api_template_contains_post_handler():
     spec = FileSpec(path="src/lib/api.ts", file_type="api", description="api client", dependencies=[])
     result = generate_single_file(spec, {"api_contract": "POST /api/plan", "already_generated": {}})
     content = result["src/lib/api.ts"]
-    assert "export async function POST" in content
-    assert "NextResponse.json" in content
-    assert "POST /api/plan" in content
+    assert "export async function createPlan" in content
+    assert "fetchItems" in content
+    assert 'method: "POST"' in content
 
 
 def test_generate_single_file_route_template_contains_router():
@@ -115,8 +115,9 @@ def test_generate_single_file_service_template_contains_class():
     spec = FileSpec(path="ai_service.py", file_type="service", description="svc", dependencies=[])
     result = generate_single_file(spec, {"already_generated": {}})
     content = result["ai_service.py"]
-    assert "class AiServiceService" in content
-    assert "def execute" in content
+    assert "def starter_profiles" in content
+    assert "def build_plan_payload" in content
+    assert "def build_insight_payload" in content
 
 
 def test_generate_single_file_config_template_for_package_json_is_valid_json():

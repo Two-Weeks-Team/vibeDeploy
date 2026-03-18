@@ -30,10 +30,8 @@ _TSCONFIG = {
     "exclude": ["node_modules"],
 }
 
-_NEXT_CONFIG_TS = """\
-import type { NextConfig } from "next";
-
-const nextConfig: NextConfig = {
+_NEXT_CONFIG_JS = """\
+module.exports = {
   output: "standalone",
   async rewrites() {
     return [
@@ -44,8 +42,6 @@ const nextConfig: NextConfig = {
     ];
   },
 };
-
-export default nextConfig;
 """
 
 _POSTCSS_CONFIG_JS = """\
@@ -103,10 +99,10 @@ _BASE_REQUIREMENTS = [
 _MAIN_PY_TEMPLATE = """\
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .models import Base, engine
+from models import Base, engine
 
 try:
-    from .routes import router as api_router
+    from routes import router as api_router
 except ImportError:
     api_router = None
 
@@ -233,7 +229,7 @@ def generate_scaffold(blueprint: dict[str, Any]) -> dict[str, str]:
     return {
         "web/package.json": json.dumps(package_json, indent=2),
         "web/tsconfig.json": json.dumps(_TSCONFIG, indent=2),
-        "web/next.config.ts": _NEXT_CONFIG_TS,
+        "web/next.config.js": _NEXT_CONFIG_JS,
         "web/postcss.config.js": _POSTCSS_CONFIG_JS,
         "web/src/app/layout.tsx": _LAYOUT_TSX,
         "web/src/app/globals.css": _build_globals_css(domain, pairing),
@@ -241,4 +237,28 @@ def generate_scaffold(blueprint: dict[str, Any]) -> dict[str, str]:
         "agent/models.py": _MODELS_PY,
         "agent/requirements.txt": "\n".join(requirements_lines) + "\n",
         "agent/ai_service.py": _AI_SERVICE_PY,
+    }
+
+
+def _split_scaffold_files(files: dict[str, str]) -> tuple[dict[str, str], dict[str, str]]:
+    frontend: dict[str, str] = {}
+    backend: dict[str, str] = {}
+    for path, content in files.items():
+        if path.startswith("web/"):
+            frontend[path.removeprefix("web/")] = content
+        elif path.startswith("agent/"):
+            backend[path.removeprefix("agent/")] = content
+        else:
+            backend[path] = content
+    return frontend, backend
+
+
+async def scaffold_generator_node(state: dict[str, Any], config=None) -> dict:
+    blueprint = state.get("blueprint") or {}
+    files = generate_scaffold(blueprint)
+    frontend, backend = _split_scaffold_files(files)
+    return {
+        "frontend_code": {**(state.get("frontend_code") or {}), **frontend},
+        "backend_code": {**(state.get("backend_code") or {}), **backend},
+        "phase": "scaffold_generated",
     }
