@@ -23,7 +23,34 @@ function formatEventMessage(data: Record<string, unknown>): string {
   if (type === "zp.session.complete") return "Session complete!";
   if (type === "zp.discovery.start") return "Searching for trending videos...";
   if (type === "zp.discovery.grounding") return "Using Gemini AI to discover trending videos...";
-  if (type === "zp.discovery.complete") return `Found ${data.count} trending videos`;
+  if (type === "zp.discovery.complete") return `Found ${data.count} trending videos to analyze`;
+  if (type === "zp.card.registered") return `New video queued for analysis: "${data.title}"`;
+  if (type === "zp.exploration.started") return `Starting autonomous exploration of ${data.total_videos} trending videos`;
+  if (type === "card.update") {
+    const title = data.title || String(data.card_id || "").slice(0, 8);
+    const step = String(data.analysis_step || "");
+    if (data.status === "analyzing") {
+      if (step === "transcript") return `Extracting transcript from "${title}"...`;
+      if (step === "insight") return `Analyzing app idea from "${title}"...`;
+      if (step === "papers") return `Searching academic papers for "${title}"...`;
+      if (step === "brainstorm") return `Brainstorming novel features for "${title}"...`;
+      if (step === "compete") return `Analyzing market competition for "${title}"...`;
+      if (step === "verdict") return `Computing GO/NO-GO verdict for "${title}"...`;
+      return `Analyzing "${title}"...`;
+    }
+    if (data.status === "go_ready") return `"${title}" passed validation — ready for build (score: ${data.score || "?"})`;
+    if (data.status === "nogo") return `"${title}" did not pass validation — NO-GO`;
+    if (data.status === "building") return `Building app from "${title}"...`;
+    if (data.status === "deployed") return `"${title}" deployed successfully!`;
+    if (data.status === "build_failed") return `Build failed for "${title}"`;
+    return `"${title}" status changed to ${data.status}`;
+  }
+  if (type === "card.enriched") return `Generated video summary, key insights, and MVP proposal for "${data.title || "card"}"`;
+  if (type === "card.build_step") {
+    const steps: Record<string, string> = { code_gen: "Generating code", validate: "Validating build", github: "Pushing to GitHub", deploy: "Deploying to DigitalOcean" };
+    return steps[String(data.build_step)] || `Build step: ${data.build_step}`;
+  }
+  if (type === "zp.build.done") return data.status === "deployed" ? "App deployed and live!" : "Build failed — will retry or skip";
   return type;
 }
 

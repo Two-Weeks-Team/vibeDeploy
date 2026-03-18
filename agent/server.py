@@ -1119,7 +1119,11 @@ async def zero_prompt_start(request: ZPStartRequest):
             for vid_id, vid_title, vid_desc in batch:
                 if not await orch.should_continue_exploring(session_id):
                     break
-                await orch.exploration_step(session_id, vid_id, video_title=vid_title, video_description=vid_desc)
+                step_events = await orch.exploration_step(
+                    session_id, vid_id, video_title=vid_title, video_description=vid_desc
+                )
+                for evt in step_events:
+                    push_zp_event(evt)
 
         asyncio.create_task(_analyze_all())
         yield _fmt("zp.exploration.started", {"type": "zp.exploration.started", "total_videos": len(batch)})
