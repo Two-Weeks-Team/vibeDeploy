@@ -164,16 +164,28 @@ export default function DemoPage() {
     }, 760);
     queueTimer(() => setCursor((prev) => ({ ...prev, clicking: false })), 980);
     queueTimer(() => setSelectedCardId(null), 5760);
+  }, [actions, moveCursorToElement, queueTimer, session, stage]);
+
+  useEffect(() => {
+    if (stage !== "dashboard" || !session || buildClickShownRef.current) return;
+
+    const thresholdReached = actions.some((action) => action.message.includes("[4/4] threshold reached"));
+    const targetCard = session.cards.find((card) => card.card_id === "nutriplan-aADukT");
+
+    if (!thresholdReached || !targetCard || targetCard.status !== "go_ready") return;
+
+    buildClickShownRef.current = true;
+    queueTimer(() => setSelectedCardId(null), 0);
+
     queueTimer(() => {
-      buildClickShownRef.current = true;
       const goButton = document.querySelector('[data-go-card-id="nutriplan-aADukT"]');
       moveCursorToElement(goButton);
-    }, 8000);
+    }, 260);
     queueTimer(() => {
       setCursor((prev) => ({ ...prev, clicking: true }));
       queueBuild("nutriplan-aADukT");
-    }, 10050);
-    queueTimer(() => setCursor((prev) => ({ ...prev, clicking: false })), 10520);
+    }, 610);
+    queueTimer(() => setCursor((prev) => ({ ...prev, clicking: false })), 860);
   }, [actions, moveCursorToElement, queueBuild, queueTimer, session, stage]);
 
   useEffect(() => {
