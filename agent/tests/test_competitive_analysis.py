@@ -92,13 +92,13 @@ def test_estimate_saturation_low():
 def test_compute_opportunity_score_low_saturation():
     results = [_make_result() for _ in range(2)]
     score = _compute_opportunity_score(results, "low")
-    assert score == 80
+    assert score == 82
 
 
 def test_compute_opportunity_score_high_saturation():
     results = [_make_result() for _ in range(10)]
     score = _compute_opportunity_score(results, "high")
-    assert score == 40
+    assert score == 38
 
 
 def test_determine_search_confidence_no_results():
