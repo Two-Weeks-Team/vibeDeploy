@@ -590,6 +590,13 @@ async def lifespan(app: FastAPI):
             await ensure_tables()
         except Exception:
             logger.warning("[ZP] Could not create ZP tables — DB may not be ready yet")
+        try:
+            orch = _get_zp_orchestrator()
+            loaded = await orch.load_sessions_from_db()
+            if loaded:
+                logger.info("[ZP] Restored %d session(s) from DB on startup", loaded)
+        except Exception:
+            logger.warning("[ZP] Could not restore ZP sessions from DB on startup")
     else:
         db_path = os.environ.get("DB_PATH", str(_AGENT_DIR / "vibedeploy.db"))
         _store = ResultStore(db_path=db_path)
@@ -1149,6 +1156,8 @@ async def zero_prompt_start(request: ZPStartRequest):
 @app.get("/zero-prompt/active")
 async def zero_prompt_active():
     orch = _get_zp_orchestrator()
+    if not orch._sessions:
+        await orch.load_sessions_from_db()
     sessions = [s.model_dump() for s in orch._sessions.values()]
     return {"sessions": sessions, "count": len(sessions)}
 
@@ -1157,7 +1166,7 @@ async def zero_prompt_active():
 @app.get("/zero-prompt/{session_id}")
 async def zero_prompt_get_session(session_id: str):
     orch = _get_zp_orchestrator()
-    session = orch.get_session(session_id)
+    session = await orch.ensure_session(session_id)
     if session is None:
         raise HTTPException(status_code=404, detail="session_not_found")
     return session.model_dump()
@@ -1167,6 +1176,7 @@ async def zero_prompt_get_session(session_id: str):
 @app.post("/zero-prompt/{session_id}/actions")
 async def zero_prompt_action(session_id: str, request: ZPActionRequest):
     orch = _get_zp_orchestrator()
+    await orch.ensure_session(session_id)
     action = request.action
     card_id = request.card_id
 
@@ -1222,7 +1232,7 @@ async def _trigger_zp_build(orch, session_id: str, card_id: str) -> None:
     from .db import zp_store as _zp_store
 
     try:
-        session = orch.get_session(session_id)
+        session = await orch.ensure_session(session_id)
         if session is None:
             return
         card = next((c for c in session.cards if c.card_id == card_id), None)
@@ -1327,7 +1337,7 @@ async def _trigger_zp_build(orch, session_id: str, card_id: str) -> None:
         logger.info("[ZP] Build completed for card %s: %s (url=%s)", card_id, idea_title, live_url)
     except Exception:
         logger.exception("[ZP] Build failed for card %s", card_id)
-        session = orch.get_session(session_id)
+        session = await orch.ensure_session(session_id)
         if session:
             card = next((c for c in session.cards if c.card_id == card_id), None)
             if card:
@@ -1343,7 +1353,7 @@ async def _trigger_zp_build(orch, session_id: str, card_id: str) -> None:
 
 async def _resume_exploration(orch, session_id: str) -> None:
     try:
-        session = orch.get_session(session_id)
+        session = await orch.ensure_session(session_id)
         if session is None or not session.remaining_videos:
             return
 
