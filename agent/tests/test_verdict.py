@@ -1,13 +1,13 @@
 from agent.zero_prompt.verdict import compute_verdict_score, determine_verdict
 
 
-def test_score_above_65_returns_go():
+def test_score_above_70_returns_go():
     score = compute_verdict_score(1.0, 1.0, 80, 0.5, 80)
     result = determine_verdict(score, 80, 0.5, 80)
     assert result.decision == "GO"
 
 
-def test_score_below_65_returns_no_go():
+def test_score_below_70_returns_no_go():
     score = compute_verdict_score(0.0, 0.0, 10, 0.0, 10)
     result = determine_verdict(score, 10, 0.0, 10)
     assert result.decision == "NO_GO"
@@ -83,13 +83,13 @@ def test_novelty_boost_capped_at_one():
     assert score_uncapped == score_at_cap == 15
 
 
-def test_boundary_score_65_is_go():
-    result = determine_verdict(score=65, market_opportunity=50, novelty_boost=0.2, differentiation=50)
+def test_boundary_score_70_is_go():
+    result = determine_verdict(score=70, market_opportunity=50, novelty_boost=0.2, differentiation=50)
     assert result.decision == "GO"
 
 
-def test_boundary_score_64_is_no_go():
-    result = determine_verdict(score=64, market_opportunity=50, novelty_boost=0.2, differentiation=50)
+def test_boundary_score_69_is_no_go():
+    result = determine_verdict(score=69, market_opportunity=50, novelty_boost=0.2, differentiation=50)
     assert result.decision == "NO_GO"
 
 

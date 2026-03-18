@@ -48,10 +48,10 @@ def determine_verdict(
     """Return a Verdict for the given score and signal values.
 
     Decision boundary:
-        score >= 65 → GO
-        score <  65 → NO_GO
+        score >= 70 → GO
+        score <  70 → NO_GO
     """
-    if score >= 65:
+    if score >= 70:
         reason = (
             f"Strong signals across all axes (score {score}) — high potential opportunity."
             if score >= 80

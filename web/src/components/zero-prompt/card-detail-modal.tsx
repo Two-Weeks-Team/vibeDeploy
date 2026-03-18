@@ -25,7 +25,7 @@ export function CardDetailModal({ card, isOpen, onClose, onQueueBuild, onPassCar
       <DialogContent className="sm:max-w-[550px] max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <div className="flex justify-between items-start mb-2">
-            <Badge variant={card.score >= 65 ? "default" : "destructive"}>
+            <Badge variant={card.score >= 70 ? "default" : "destructive"}>
               {card.status.replace("_", " ").toUpperCase()}
             </Badge>
             <Badge variant="outline" className="bg-background text-xs">
