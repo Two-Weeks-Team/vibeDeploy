@@ -1,12 +1,22 @@
 "use client";
 
+import { useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Rocket, Youtube, FlaskConical, Code2, Globe, Play, ExternalLink } from "lucide-react";
+import { Rocket, Youtube, FlaskConical, Code2, Globe, Play, ExternalLink, Lock } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import Image from "next/image";
+
+function extractVideoId(url: string): string | null {
+  try {
+    const u = new URL(url);
+    if (u.hostname.includes("youtube.com")) return u.searchParams.get("v");
+    if (u.hostname === "youtu.be") return u.pathname.slice(1);
+  } catch { /* ignore */ }
+  return null;
+}
 
 const COUNCIL_AGENTS = [
   { emoji: "🏗️", name: "Architect", role: "Technical Lead" },
@@ -40,6 +50,9 @@ const cardItem = {
 };
 
 export default function LandingPage() {
+  const [youtubeUrl, setYoutubeUrl] = useState("https://www.youtube.com/watch?v=aADukThvjXQ");
+  const videoId = useMemo(() => extractVideoId(youtubeUrl), [youtubeUrl]);
+
   return (
     <div className="flex min-h-screen flex-col items-center justify-center px-4 py-16 relative">
       <div className="absolute top-4 right-4">
@@ -104,46 +117,57 @@ export default function LandingPage() {
             <CardContent className="pt-6 space-y-4">
               <div className="flex gap-2">
                 <Input
-                  defaultValue="https://www.youtube.com/watch?v=aADukThvjXQ"
-                  readOnly
+                  value={youtubeUrl}
+                  onChange={(e) => setYoutubeUrl(e.target.value)}
+                  placeholder="https://www.youtube.com/watch?v=..."
                   className="font-mono text-sm"
                 />
-                <Button className="shrink-0 gap-2 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400">
-                  <Play className="w-4 h-4 fill-current" />
+                <Button
+                  className="shrink-0 gap-2 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400"
+                  onClick={() => alert("This feature is restricted to admin users and authorized IPs only.")}
+                >
+                  <Lock className="w-4 h-4" />
                   Start
                 </Button>
               </div>
 
-              <a
-                href="https://www.youtube.com/watch?v=aADukThvjXQ"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block group"
-              >
-                <div className="flex items-center gap-2 mb-2">
-                  <Youtube className="w-5 h-5 text-red-500" />
-                  <span className="text-sm font-medium">YouTube</span>
-                  <span className="text-sm text-muted-foreground">| trainer winny</span>
-                </div>
-                <p className="text-sm text-blue-400 group-hover:underline mb-3 flex items-center gap-1">
-                  How To Simplify Your Nutrition (Free Meal Plan)
-                  <ExternalLink className="w-3 h-3" />
-                </p>
-                <div className="relative aspect-video rounded-lg overflow-hidden bg-muted">
-                  <Image
-                    src="https://img.youtube.com/vi/aADukThvjXQ/maxresdefault.jpg"
-                    alt="How To Simplify Your Nutrition (Free Meal Plan) — trainer winny"
-                    fill
-                    className="object-cover"
-                    unoptimized
-                  />
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/30 transition-colors">
-                    <div className="w-16 h-16 rounded-full bg-black/60 flex items-center justify-center">
-                      <Play className="w-8 h-8 text-white fill-white ml-1" />
+              {videoId && (
+                <a
+                  href={youtubeUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block group"
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <Youtube className="w-5 h-5 text-red-500" />
+                    <span className="text-sm font-medium">YouTube</span>
+                  </div>
+                  <p className="text-sm text-blue-400 group-hover:underline mb-3 flex items-center gap-1">
+                    {youtubeUrl}
+                    <ExternalLink className="w-3 h-3" />
+                  </p>
+                  <div className="relative aspect-video rounded-lg overflow-hidden bg-muted">
+                    <Image
+                      src={`https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`}
+                      alt="YouTube video thumbnail"
+                      fill
+                      className="object-cover"
+                      unoptimized
+                    />
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/30 transition-colors">
+                      <div className="w-16 h-16 rounded-full bg-black/60 flex items-center justify-center">
+                        <Play className="w-8 h-8 text-white fill-white ml-1" />
+                      </div>
                     </div>
                   </div>
-                </div>
-              </a>
+                </a>
+              )}
+
+              {!videoId && youtubeUrl.length > 0 && (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  Paste a valid YouTube URL to see the preview.
+                </p>
+              )}
             </CardContent>
           </Card>
         </motion.div>
