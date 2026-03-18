@@ -48,11 +48,12 @@ async def test_zp_action_queue_build(app_client):
 
     resp = await app_client.post(
         f"/zero-prompt/{session_id}/actions",
-        json={"action": "force_go", "card_id": "missing-card"},
+        json={"action": "queue_build", "card_id": "missing-card"},
     )
-    assert resp.status_code == 500
+    assert resp.status_code == 200
     body = resp.json()
-    assert body["detail"] == "Internal Server Error"
+    assert body["type"] == "zp.action.error"
+    assert body["error"] in {"session_not_found", "card_not_found", "card_not_go_ready"}
 
 
 @pytest.mark.asyncio
