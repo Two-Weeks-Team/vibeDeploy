@@ -173,6 +173,20 @@ def test_boundary_score_69_is_no_go():
     assert result.decision == "NO_GO"
 
 
+def test_gate_blocked_high_score_is_clamped_for_display():
+    result = determine_verdict(
+        score=78,
+        market_viability=65,
+        mvp_differentiation=72,
+        execution_feasibility=75,
+        evidence_strength=55,
+        novelty_boost=0.12,
+        originality=45,
+    )
+    assert result.decision == "NO_GO"
+    assert result.score == 69
+
+
 def test_nutrition_mvp_can_clear_go_threshold():
     breakdown = build_mvp_score_breakdown(
         mvp_proposal={

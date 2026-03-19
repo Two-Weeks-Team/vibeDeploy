@@ -483,6 +483,7 @@ def determine_verdict(
     novelty_boost: float,
     originality: int,
 ) -> Verdict:
+    raw_score = score
     if (
         score >= 70
         and market_viability >= 55
@@ -507,10 +508,10 @@ def determine_verdict(
         originality=originality,
     )
     reason_messages = {
-        "market_saturated": f"The proposed MVP still lands in a crowded market (score {score}) — market pull is not yet strong enough.",
-        "weak_differentiation": f"The proposed MVP is still not differentiated enough (score {score}) — it needs a sharper wedge or clearer edge.",
-        "technical_risk": f"The proposed MVP is too broad or execution-risky (score {score}) — scope and implementation path need tightening.",
-        "weak_paper_backing": f"The proposed MVP lacks enough supporting evidence (score {score}) — validation and research backing are still thin.",
-        "low_confidence": f"The proposed MVP is not yet convincing across clarity, execution, and evidence (score {score}).",
+        "market_saturated": f"The proposed MVP still lands in a crowded market (weighted score {raw_score}) — market pull is not yet strong enough.",
+        "weak_differentiation": f"The proposed MVP is still not differentiated enough (weighted score {raw_score}) — it needs a sharper wedge or clearer edge.",
+        "technical_risk": f"The proposed MVP is too broad or execution-risky (weighted score {raw_score}) — scope and implementation path need tightening.",
+        "weak_paper_backing": f"The proposed MVP lacks enough supporting evidence (weighted score {raw_score}) — validation and research backing are still thin.",
+        "low_confidence": f"The proposed MVP is not yet convincing across clarity, execution, and evidence (weighted score {raw_score}).",
     }
-    return Verdict(score=score, decision="NO_GO", reason=reason_messages[reason_code], reason_code=reason_code)
+    return Verdict(score=min(score, 69), decision="NO_GO", reason=reason_messages[reason_code], reason_code=reason_code)

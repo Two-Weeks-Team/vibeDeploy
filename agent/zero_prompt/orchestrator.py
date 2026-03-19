@@ -577,9 +577,9 @@ class StreamingOrchestrator:
                     market_gap_count=len(mvp_market.gaps),
                     market_search_confidence=mvp_market.search_confidence,
                 )
-                score = int(score_breakdown.get("final_score", 0))
+                raw_score = int(score_breakdown.get("final_score", 0))
                 verdict = determine_verdict(
-                    score=score,
+                    score=raw_score,
                     market_viability=int(score_breakdown.get("market_viability_signal", 0)),
                     mvp_differentiation=int(score_breakdown.get("mvp_differentiation_signal", 0)),
                     execution_feasibility=int(score_breakdown.get("execution_feasibility_signal", 0)),
@@ -591,6 +591,9 @@ class StreamingOrchestrator:
                 reason = verdict.reason
                 reason_code = verdict.reason_code
                 score = verdict.score
+                score_breakdown["raw_score"] = raw_score
+                score_breakdown["display_score"] = score
+                score_breakdown["gate_blocked"] = raw_score != score
             except Exception:
                 decision, score, reason, reason_code = "NO_GO", 0, "verdict computation failed", "low_confidence"
 
