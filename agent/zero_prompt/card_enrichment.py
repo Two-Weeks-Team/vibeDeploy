@@ -50,9 +50,13 @@ async def enrich_card_with_gemini(
             '3. "mvp_proposal": object with:\n'
             '   - "app_name": catchy English app name\n'
             '   - "target_user": one-line primary user definition (English)\n'
+            '   - "problem_statement": one sentence describing the painful problem this MVP solves\n'
             '   - "core_feature": one-line core feature description (English)\n'
+            '   - "differentiation": one sentence explaining why this is meaningfully different from a generic alternative\n'
+            '   - "validation_signal": one concrete sign that this is worth building (ROI, repeated pain, willingness to pay, or workflow urgency)\n'
             '   - "tech_stack": recommended tech stack\n'
             '   - "key_pages": array of 3-4 main pages/screens (English)\n'
+            '   - "not_in_scope": array of 2-4 things explicitly excluded from the MVP\n'
             '   - "estimated_days": number (1-7)\n'
             "Return ONLY valid JSON, no markdown."
         )
@@ -114,9 +118,15 @@ def _rule_based_enrichment(
     mvp = {
         "app_name": idea_name or video_title[:30],
         "target_user": f"People looking for simpler {idea_domain} workflows" if idea_domain else "Busy consumers",
+        "problem_statement": f"People waste time stitching together generic {idea_domain} resources without a focused workflow."
+        if idea_domain
+        else "Users lack a focused workflow.",
         "core_feature": f"Automation solution for {idea_domain} domain",
+        "differentiation": "Uses a tailored workflow instead of a generic dashboard.",
+        "validation_signal": "No concrete validation signal available from fallback enrichment.",
         "tech_stack": "Next.js + Tailwind CSS + FastAPI",
         "key_pages": ["Dashboard", "Data Input", "Analysis Results", "Settings"],
+        "not_in_scope": ["Team collaboration", "Advanced analytics", "Marketplace integrations"],
         "estimated_days": 3,
     }
 

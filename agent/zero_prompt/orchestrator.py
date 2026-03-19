@@ -523,7 +523,11 @@ class StreamingOrchestrator:
                 from agent.zero_prompt.competitive_analysis import analyze_competition
                 from agent.zero_prompt.paper_brainstorm import enhance_idea_with_papers
                 from agent.zero_prompt.paper_search import search_papers
-                from agent.zero_prompt.verdict import build_mvp_score_breakdown, determine_verdict
+                from agent.zero_prompt.verdict import (
+                    build_mvp_score_breakdown,
+                    determine_verdict,
+                    measure_paper_support,
+                )
 
                 enrichment = await enrich_card_with_gemini(
                     video_title=video_title,
@@ -557,18 +561,21 @@ class StreamingOrchestrator:
                     str(mvp.get("core_feature") or mvp_query or idea.name or video_title),
                     mvp_papers,
                 )
+                relevant_papers, avg_paper_relevance = measure_paper_support(mvp_query or video_title, mvp_papers)
                 market_opportunity = mvp_market.market_opportunity_score
                 card.competitors_found = str(len(mvp_market.competitors))
                 card.saturation = mvp_market.saturation_level
-                card.papers_found = len(mvp_papers)
-                novelty_boost = mvp_enhanced.novelty_boost
+                card.papers_found = relevant_papers
+                novelty_boost = mvp_enhanced.novelty_boost if relevant_papers > 0 else 0.0
 
                 score_breakdown = build_mvp_score_breakdown(
                     mvp_proposal=card.mvp_proposal,
                     market_opportunity=market_opportunity,
                     novelty_boost=novelty_boost,
-                    papers_found=len(mvp_papers),
+                    relevant_papers=relevant_papers,
+                    avg_paper_relevance=avg_paper_relevance,
                     market_gap_count=len(mvp_market.gaps),
+                    market_search_confidence=mvp_market.search_confidence,
                 )
                 score = int(score_breakdown.get("final_score", 0))
                 verdict = determine_verdict(
@@ -578,6 +585,7 @@ class StreamingOrchestrator:
                     execution_feasibility=int(score_breakdown.get("execution_feasibility_signal", 0)),
                     evidence_strength=int(score_breakdown.get("evidence_strength_signal", 0)),
                     novelty_boost=novelty_boost,
+                    originality=int(score_breakdown.get("originality_signal", 0)),
                 )
                 decision = verdict.decision
                 reason = verdict.reason
@@ -593,7 +601,6 @@ class StreamingOrchestrator:
         card.reason_code = reason_code
         card.score_breakdown = score_breakdown
         card.domain = idea.domain if idea else ""
-        card.papers_found = len(papers) if papers else 0
         if not card.competitors_found:
             card.competitors_found = str(len(market.competitors)) if market else "0"
         if not card.saturation:
