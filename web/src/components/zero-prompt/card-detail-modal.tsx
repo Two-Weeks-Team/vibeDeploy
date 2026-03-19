@@ -3,8 +3,74 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Play, X, ExternalLink, Youtube, BookOpen, TrendingUp, Zap, Trash2 } from "lucide-react";
+import { Play, X, ExternalLink, Clapperboard, BookOpen, TrendingUp, Zap, Trash2 } from "lucide-react";
 import type { ZPCard } from "@/types/zero-prompt";
+
+const SCORE_CRITERIA = [
+  { label: "Proposal Clarity", weightKey: "proposal_clarity_weight", signalKey: "proposal_clarity_signal", pointsKey: "proposal_clarity_points", detail: "How concrete the app name, core feature, audience, stack, and screens are" },
+  { label: "Execution", weightKey: "execution_feasibility_weight", signalKey: "execution_feasibility_signal", pointsKey: "execution_feasibility_points", detail: "Whether the MVP scope looks buildable in the proposed timeframe" },
+  { label: "Market", weightKey: "market_viability_weight", signalKey: "market_viability_signal", pointsKey: "market_viability_points", detail: "How viable the proposed MVP looks after competition and audience checks" },
+  { label: "Differentiation", weightKey: "mvp_differentiation_weight", signalKey: "mvp_differentiation_signal", pointsKey: "mvp_differentiation_points", detail: "How distinct the MVP wedge is, not just how interesting the source video was" },
+  { label: "Evidence", weightKey: "evidence_strength_weight", signalKey: "evidence_strength_signal", pointsKey: "evidence_strength_points", detail: "How much supporting evidence exists from MVP-aligned research, technical grounding, and novelty" },
+] as const;
+
+function humanizeReasonCode(reasonCode?: string): string {
+  if (!reasonCode) return "";
+  return reasonCode.replace(/_/g, " ");
+}
+
+function getLowScoreSignals(card: ZPCard): string[] {
+  const signals: string[] = [];
+  const breakdown = card.score_breakdown;
+
+  if ((breakdown?.proposal_clarity_signal ?? 100) < 60) {
+    signals.push("The MVP proposal itself is still too vague — naming, core feature, audience, or screens need to be more concrete.");
+  }
+  if ((breakdown?.execution_feasibility_signal ?? 100) < 60) {
+    signals.push("The proposed MVP scope looks too broad or not execution-ready enough for a fast build.");
+  }
+  if ((breakdown?.market_viability_signal ?? 100) < 55) {
+    signals.push("Even with the MVP framing, the market still looks crowded or demand is not strong enough yet.");
+  }
+  if ((breakdown?.mvp_differentiation_signal ?? 100) < 55) {
+    signals.push("The MVP wedge is still too generic — it needs a sharper user promise or a clearer competitive edge.");
+  }
+  if ((breakdown?.evidence_strength_signal ?? 100) < 50) {
+    signals.push("The MVP does not yet have enough supporting evidence from research quality, technical grounding, or novelty signals.");
+  }
+
+  if (card.reason) {
+    signals.push(card.reason);
+  }
+  if (card.reason_code === "market_saturated") {
+    signals.push(`Competition is crowded${card.saturation ? ` (${card.saturation} saturation)` : ""}, so market opportunity scored poorly.`);
+  }
+  if (card.reason_code === "weak_differentiation") {
+    signals.push("The idea did not show enough unique features or defensible gaps versus existing competitors.");
+  }
+  if (card.reason_code === "weak_paper_backing") {
+    signals.push("The paper-backed novelty boost stayed too small, so the concept looked under-validated.");
+  }
+  if (card.reason_code === "low_confidence") {
+    signals.push("The combined MVP clarity, execution, market, and evidence signals were not strong enough to clear the GO threshold.");
+  }
+  if ((card.papers_found ?? 0) <= 1) {
+    signals.push(`Only ${card.papers_found ?? 0} relevant papers were found, which weakens the novelty portion of the score.`);
+  }
+  if ((card.novelty_boost ?? 0) < 0.05) {
+    signals.push(`Novelty boost is only +${((card.novelty_boost ?? 0) * 100).toFixed(0)}%, which contributes very little to the final score.`);
+  }
+  if (card.competitors_found && Number(card.competitors_found) >= 5) {
+    signals.push(`${card.competitors_found} competitors were found, which increases saturation pressure and hurts market/differentiation.`);
+  }
+
+  return Array.from(new Set(signals)).slice(0, 4);
+}
+
+function formatSignal(value?: number): string {
+  if (typeof value !== "number") return "n/a";
+  return `${value.toFixed(1)} / 100`;
+}
 
 interface CardDetailModalProps {
   card: ZPCard | null;
@@ -32,6 +98,8 @@ export function CardDetailModal({ card, isOpen, onClose, onQueueBuild, onPassCar
     keyPageCounts.set(page, count);
     return { page, key: `${card.card_id}-page-${count}-${page}` };
   });
+  const lowScoreSignals = getLowScoreSignals(card);
+  const hasExactBreakdown = SCORE_CRITERIA.every((item) => typeof card.score_breakdown?.[item.pointsKey] === "number");
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -68,6 +136,59 @@ export function CardDetailModal({ card, isOpen, onClose, onQueueBuild, onPassCar
           {card.reason && (
             <div className="bg-muted/30 p-3 rounded-lg border border-border/50">
               <p className="text-sm">{card.reason}</p>
+            </div>
+          )}
+
+          <div className="space-y-2 rounded-lg border border-border/50 bg-background/70 p-3">
+            <div className="flex items-center justify-between gap-3">
+              <h4 className="text-sm font-semibold">Score criteria</h4>
+              <span className="text-xs text-muted-foreground">GO if score is 70+</span>
+            </div>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              {SCORE_CRITERIA.map((item) => (
+                <div key={item.label} className="rounded-md border border-border/40 bg-muted/20 p-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-medium">{item.label}</span>
+                    <Badge variant="outline" className="text-[10px]">{card.score_breakdown?.[item.weightKey] ?? 0}%</Badge>
+                  </div>
+                  <p className="mt-1 text-[11px] text-muted-foreground">{item.detail}</p>
+                  {hasExactBreakdown ? (
+                    <div className="mt-2 space-y-1 text-[11px] text-muted-foreground">
+                      <div className="flex items-center justify-between gap-2">
+                        <span>Signal</span>
+                        <span className="font-medium text-foreground/80">{formatSignal(card.score_breakdown?.[item.signalKey])}</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span>Contribution</span>
+                        <span className="font-medium text-foreground/80">{card.score_breakdown?.[item.pointsKey]?.toFixed(1)} pts</span>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Final score = weighted sum of the five contributions above. The backend marks cards as GO at 70+.
+            </p>
+          </div>
+
+          {card.score < 70 && lowScoreSignals.length > 0 && (
+            <div className="space-y-2 rounded-lg border border-red-500/20 bg-red-500/5 p-3">
+              <div className="flex items-center justify-between gap-3">
+                <h4 className="text-sm font-semibold text-red-500">Why this score is low</h4>
+                {card.reason_code ? (
+                  <Badge variant="outline" className="text-xs text-red-500">
+                    {humanizeReasonCode(card.reason_code)}
+                  </Badge>
+                ) : null}
+              </div>
+              <ul className="space-y-1.5">
+                {lowScoreSignals.map((signal) => (
+                  <li key={`${card.card_id}-${signal}`} className="text-sm text-muted-foreground">
+                    - {signal}
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
 
@@ -112,7 +233,7 @@ export function CardDetailModal({ card, isOpen, onClose, onQueueBuild, onPassCar
           {youtubeUrl && (
             <a href={youtubeUrl} target="_blank" rel="noopener noreferrer"
                className="flex items-center gap-2 text-sm text-red-500 hover:underline">
-              <Youtube className="w-4 h-4" />
+              <Clapperboard className="w-4 h-4" />
               Watch source video
             </a>
           )}
@@ -120,7 +241,7 @@ export function CardDetailModal({ card, isOpen, onClose, onQueueBuild, onPassCar
           {card.video_summary && (
             <div className="space-y-1.5">
               <h4 className="text-sm font-semibold flex items-center gap-1.5">
-                <Youtube className="w-4 h-4 text-red-400" />
+                <Clapperboard className="w-4 h-4 text-red-400" />
                 Video Summary
               </h4>
               <p className="text-sm text-muted-foreground leading-relaxed bg-muted/20 p-3 rounded-lg">
