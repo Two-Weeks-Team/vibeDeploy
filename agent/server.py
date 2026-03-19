@@ -1064,6 +1064,8 @@ async def zp_events(request: Request):
 
 _zp_orchestrator = None
 _zp_pipeline_tasks: dict[str, asyncio.Task[None]] = {}
+_zp_build_tasks: dict[str, asyncio.Task[None]] = {}
+_zp_analysis_tasks: dict[str, asyncio.Task[None]] = {}
 
 
 def _get_zp_orchestrator():
@@ -1131,6 +1133,52 @@ def _launch_zp_pipeline(orch, session_id: str, goal: int) -> None:
             _zp_pipeline_tasks.pop(session_id, None)
 
     task.add_done_callback(_cleanup)
+
+
+def _launch_zp_build_task(orch, session_id: str, card_id: str) -> None:
+    task_key = f"{session_id}:{card_id}"
+    existing = _zp_build_tasks.get(task_key)
+    if existing and not existing.done():
+        return
+
+    task = asyncio.create_task(_trigger_zp_build(orch, session_id, card_id))
+    _zp_build_tasks[task_key] = task
+
+    def _cleanup(done_task: asyncio.Task[None]) -> None:
+        if _zp_build_tasks.get(task_key) is done_task:
+            _zp_build_tasks.pop(task_key, None)
+
+    task.add_done_callback(_cleanup)
+
+
+def _launch_zp_analysis_task(orch, session_id: str, video_id: str, title: str) -> None:
+    task_key = f"{session_id}:{video_id}"
+    existing = _zp_analysis_tasks.get(task_key)
+    if existing and not existing.done():
+        return
+
+    task = asyncio.create_task(_analyze_single(orch, session_id, video_id, title))
+    _zp_analysis_tasks[task_key] = task
+
+    def _cleanup(done_task: asyncio.Task[None]) -> None:
+        if _zp_analysis_tasks.get(task_key) is done_task:
+            _zp_analysis_tasks.pop(task_key, None)
+
+    task.add_done_callback(_cleanup)
+
+
+def _clear_zp_runtime(orch) -> None:
+    for task in list(_zp_pipeline_tasks.values()):
+        task.cancel()
+    _zp_pipeline_tasks.clear()
+    for task in list(_zp_build_tasks.values()):
+        task.cancel()
+    _zp_build_tasks.clear()
+    for task in list(_zp_analysis_tasks.values()):
+        task.cancel()
+    _zp_analysis_tasks.clear()
+    orch._sessions.clear()
+    orch._build_queues.clear()
 
 
 async def _discover_videos(session_id: str) -> list[tuple[str, str, str]]:
@@ -1319,8 +1367,20 @@ async def _run_zp_pipeline(orch, session_id: str, goal: int) -> None:
 @app.post("/api/zero-prompt/start")
 @app.post("/zero-prompt/start")
 async def zero_prompt_start(request: ZPStartRequest):
+    from .db import zp_store as _zps
+
     orch = _get_zp_orchestrator()
     goal = max(1, min(request.goal or _ZP_GO_READY_LIMIT, _ZP_GO_READY_LIMIT))
+
+    dashboard = await _zps.get_dashboard()
+    existing_session_id = dashboard.get("session_id")
+    if existing_session_id:
+        session = await orch.ensure_session(existing_session_id)
+        if session is not None:
+            if session.status != "completed":
+                asyncio.create_task(_maybe_resume_zp_pipeline(orch, existing_session_id))
+            return JSONResponse(session.model_dump())
+
     session, _start_event = orch.create_session(goal=goal)
     session_id = session.session_id
     await orch._db_create_session(session_id, goal)
@@ -1349,23 +1409,27 @@ async def zero_prompt_start(request: ZPStartRequest):
 async def zero_prompt_reset():
     from .db import zp_store as _zps
 
-    dashboard = await _zps.get_dashboard()
-    if dashboard.get("session_id"):
-        await _zps.reset_session(dashboard["session_id"])
     orch = _get_zp_orchestrator()
-    orch._sessions.clear()
-    orch._build_queues.clear()
+    dashboard = await _zps.get_dashboard()
+    await _zps.reset_all_sessions()
+    _clear_zp_runtime(orch)
     return {"type": "zp.reset", "deleted_session": dashboard.get("session_id")}
 
 
 @app.get("/api/zero-prompt/active")
 @app.get("/zero-prompt/active")
 async def zero_prompt_active():
+    from .db import zp_store as _zps
+
     orch = _get_zp_orchestrator()
-    if not orch._sessions:
-        await orch.load_sessions_from_db()
-    sessions = [s.model_dump() for s in orch._sessions.values()]
-    return {"sessions": sessions, "count": len(sessions)}
+    dashboard = await _zps.get_dashboard()
+    session_id = dashboard.get("session_id")
+    if not session_id:
+        return {"sessions": [], "count": 0}
+    session = await orch.ensure_session(session_id)
+    if session is None:
+        return {"sessions": [], "count": 0}
+    return {"sessions": [session.model_dump()], "count": 1}
 
 
 @app.get("/api/zero-prompt/{session_id}")
@@ -1404,7 +1468,7 @@ async def zero_prompt_action(session_id: str, request: ZPActionRequest):
         video_id = request.video_id or card_id
         title = request.title or video_id
         new_card_id = await orch.register_card(session_id, video_id, title)
-        asyncio.create_task(_analyze_single(orch, session_id, video_id, title))
+        _launch_zp_analysis_task(orch, session_id, video_id, title)
         result = {"type": "zp.action.add_video", "card_id": new_card_id, "video_id": video_id}
     elif action == "force_go":
         from .db import zp_store as _zps
@@ -1443,7 +1507,7 @@ async def zero_prompt_action(session_id: str, request: ZPActionRequest):
         result = {"type": "zp.action.force_go", "card_id": card_id}
     elif action == "queue_build":
         result = orch.queue_build(session_id, card_id)
-        asyncio.create_task(_trigger_zp_build(orch, session_id, card_id))
+        _launch_zp_build_task(orch, session_id, card_id)
     elif action == "pause":
         result = orch.pause(session_id)
     elif action == "resume":
@@ -1494,7 +1558,7 @@ async def _trigger_pending_builds(orch, session_id: str) -> None:
     for card_id in list(session.build_queue):
         card = next((c for c in session.cards if c.card_id == card_id), None)
         if card and card.status == "build_queued":
-            asyncio.create_task(_trigger_zp_build(orch, session_id, card_id))
+            _launch_zp_build_task(orch, session_id, card_id)
             break
 
 

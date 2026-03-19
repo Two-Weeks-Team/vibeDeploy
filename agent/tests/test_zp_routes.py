@@ -1,6 +1,76 @@
+import asyncio
+
 import pytest
 
 from agent.zero_prompt.schemas import ZPCard
+
+
+@pytest.fixture(autouse=True)
+async def reset_singleton_session(monkeypatch: pytest.MonkeyPatch):
+    import agent.server as srv
+    from agent.db import zp_store as _zps
+
+    orch = srv._get_zp_orchestrator()
+    srv._clear_zp_runtime(orch)
+
+    async def fake_get_dashboard():
+        sessions = list(orch._sessions.values())
+        if not sessions:
+            return {"session_id": None, "status": "idle", "cards": []}
+        session = sessions[-1]
+        return {
+            "session_id": session.session_id,
+            "status": session.status,
+            "goal_go_cards": session.goal_go_cards,
+            "cards": [card.model_dump() for card in session.cards if card.status != "deleted"],
+        }
+
+    async def fake_noop(*_args, **_kwargs):
+        return None
+
+    async def fake_add_card(_session_id: str, card_id: str, video_id: str, title: str = ""):
+        return {"card_id": card_id, "video_id": video_id, "title": title, "status": "analyzing"}
+
+    monkeypatch.setattr(_zps, "get_dashboard", fake_get_dashboard)
+    monkeypatch.setattr(_zps, "reset_all_sessions", fake_noop)
+    monkeypatch.setattr(_zps, "ensure_session", fake_noop)
+    monkeypatch.setattr(_zps, "add_card", fake_add_card)
+    monkeypatch.setattr(_zps, "update_card", fake_noop)
+    monkeypatch.setattr(_zps, "update_session_status", fake_noop)
+
+
+@pytest.mark.asyncio
+async def test_clear_runtime_cancels_build_tasks():
+    import agent.server as srv
+
+    async def sleeper():
+        await asyncio.sleep(60)
+
+    task = asyncio.create_task(sleeper())
+    srv._zp_build_tasks["s:c"] = task
+
+    srv._clear_zp_runtime(srv._get_zp_orchestrator())
+    await asyncio.sleep(0)
+
+    assert task.cancelled()
+    assert srv._zp_build_tasks == {}
+
+
+@pytest.mark.asyncio
+async def test_clear_runtime_cancels_analysis_tasks():
+    import agent.server as srv
+
+    async def sleeper():
+        await asyncio.sleep(60)
+
+    task = asyncio.create_task(sleeper())
+    srv._zp_analysis_tasks["s:v"] = task
+
+    srv._clear_zp_runtime(srv._get_zp_orchestrator())
+    await asyncio.sleep(0)
+
+    assert task.cancelled()
+    assert srv._zp_analysis_tasks == {}
 
 
 @pytest.mark.asyncio
@@ -42,23 +112,23 @@ async def test_zp_get_latest_session_uses_dashboard_session(app_client):
     second = await app_client.post("/zero-prompt/start", json={})
     latest_session_id = _extract_session_id(second)
 
-    async def fake_get_dashboard():
-        return {"session_id": latest_session_id, "status": "exploring", "goal_go_cards": 5, "cards": []}
-
-    from agent.db import zp_store as _zps
-
-    original_get_dashboard = _zps.get_dashboard
-    _zps.get_dashboard = fake_get_dashboard
-
-    try:
-        resp = await app_client.get("/zero-prompt/latest")
-    finally:
-        _zps.get_dashboard = original_get_dashboard
+    resp = await app_client.get("/zero-prompt/latest")
 
     assert resp.status_code == 200
     body = resp.json()
     assert body["session_id"] == latest_session_id
-    assert body["session_id"] != _extract_session_id(first)
+    assert body["session_id"] == _extract_session_id(first)
+
+
+@pytest.mark.asyncio
+async def test_zp_start_reuses_singleton_session(app_client):
+    first = await app_client.post("/zero-prompt/start", json={"goal": 2})
+    second = await app_client.post("/zero-prompt/start", json={"goal": 5})
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert _extract_session_id(first) == _extract_session_id(second)
+    assert second.json()["goal_go_cards"] == 2
 
 
 @pytest.mark.asyncio
@@ -87,9 +157,7 @@ async def test_zp_action_queue_build(app_client):
 @pytest.mark.asyncio
 async def test_zp_action_latest_targets_most_recent_session(app_client):
     import agent.server as srv
-    from agent.db import zp_store as _zps
 
-    await app_client.post("/zero-prompt/start", json={})
     latest = await app_client.post("/zero-prompt/start", json={})
     latest_session_id = _extract_session_id(latest)
     orch = srv._get_zp_orchestrator()
@@ -99,19 +167,10 @@ async def test_zp_action_latest_targets_most_recent_session(app_client):
         ZPCard(card_id="latest-card", video_id="v1", status="go_ready", score=80, title="Latest")
     )
 
-    async def fake_get_dashboard():
-        return {"session_id": latest_session_id, "status": latest_session.status, "goal_go_cards": 5, "cards": []}
-
-    original_get_dashboard = _zps.get_dashboard
-    _zps.get_dashboard = fake_get_dashboard
-
-    try:
-        resp = await app_client.post(
-            "/zero-prompt/latest/actions",
-            json={"action": "queue_build", "card_id": "latest-card"},
-        )
-    finally:
-        _zps.get_dashboard = original_get_dashboard
+    resp = await app_client.post(
+        "/zero-prompt/latest/actions",
+        json={"action": "queue_build", "card_id": "latest-card"},
+    )
 
     assert resp.status_code == 200
 
