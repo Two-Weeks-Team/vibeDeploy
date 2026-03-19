@@ -38,6 +38,9 @@ function getLowScoreSignals(card: ZPCard): string[] {
   if ((breakdown?.evidence_strength_signal ?? 100) < 50) {
     signals.push("The MVP does not yet have enough supporting evidence from research quality, technical grounding, or novelty signals.");
   }
+  if ((breakdown?.originality_signal ?? 100) < (breakdown?.originality_threshold ?? 55)) {
+    signals.push("The MVP still feels too commodity-like — similar idea lists, directories, or stale patterns already exist in the market.");
+  }
 
   if (card.reason) {
     signals.push(card.reason);
@@ -171,6 +174,20 @@ export function CardDetailModal({ card, isOpen, onClose, onQueueBuild, onPassCar
               Final score = weighted sum of the five contributions above. The backend marks cards as GO at 70+.
             </p>
           </div>
+
+          {typeof card.score_breakdown?.originality_signal === "number" && (
+            <div className="space-y-2 rounded-lg border border-border/50 bg-background/70 p-3">
+              <div className="flex items-center justify-between gap-3">
+                <h4 className="text-sm font-semibold">Originality gate</h4>
+                <Badge variant={card.score_breakdown.originality_signal >= (card.score_breakdown.originality_threshold ?? 55) ? "default" : "destructive"}>
+                  {card.score_breakdown.originality_signal.toFixed(0)} / 100
+                </Badge>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Blocks stale idea-list, directory, and generic “AI tools / business ideas” products even when the generated MVP copy looks polished.
+              </p>
+            </div>
+          )}
 
           {card.score < 70 && lowScoreSignals.length > 0 && (
             <div className="space-y-2 rounded-lg border border-red-500/20 bg-red-500/5 p-3">
