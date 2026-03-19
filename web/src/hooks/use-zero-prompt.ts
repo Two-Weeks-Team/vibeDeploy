@@ -3,7 +3,17 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { getDashboard, getSession, startSession, queueBuild, passCard, deleteCard } from "@/lib/zero-prompt-api";
 import { DASHBOARD_API_URL } from "@/lib/api";
-import type { ZPSession, ZPAction } from "@/types/zero-prompt";
+import type { ZPSession, ZPAction, ZPCard, CardStatus } from "@/types/zero-prompt";
+
+const TERMINAL_CARD_STATUSES = new Set<CardStatus>([
+  "go_ready",
+  "build_queued",
+  "building",
+  "deployed",
+  "nogo",
+  "passed",
+  "build_failed",
+]);
 
 function stringifyValue(value: unknown): string {
   if (typeof value === "string") return value;
@@ -106,6 +116,115 @@ function formatEventMessage(data: Record<string, unknown>): string {
   if (type === "zp.council.message") return `${data.agent}: ${data.message}`;
   if (type === "zp.auto_build.triggered") return `Auto-build triggered for "${data.title}" (score: ${data.score}) — goal reached!`;
   return type;
+}
+
+function applyEventToSession(prev: ZPSession | null, data: Record<string, unknown>): ZPSession | null {
+  if (!prev) return prev;
+  const type = String(data.type || "");
+  const targetSessionId = typeof data.session_id === "string" ? data.session_id : null;
+  if (targetSessionId && targetSessionId !== prev.session_id) {
+    return prev;
+  }
+
+  if (type === "zp.session.pause" || type === "zp.session.complete" || type === "zp.session.resume" || type === "zp.session.start") {
+    const nextStatus =
+      type === "zp.session.complete"
+        ? "completed"
+        : type === "zp.session.pause"
+          ? "paused"
+          : "exploring";
+
+    return { ...prev, status: nextStatus };
+  }
+
+  if (type === "zp.build.done") {
+    const cardId = String(data.card_id || "");
+    const status = String(data.status || "") as CardStatus;
+    if (!cardId || !status) return prev;
+    return {
+      ...prev,
+      cards: prev.cards.map((card) => (card.card_id === cardId ? { ...card, status } : card)),
+    };
+  }
+
+  if (type !== "card.update" && type !== "card.build_step" && type !== "card.enriched") {
+    return prev;
+  }
+
+  const cardId = String(data.card_id || "");
+  if (!cardId) return prev;
+
+  const nextPatch: Partial<ZPCard> = {
+    card_id: cardId,
+    video_id: String(data.video_id || cardId),
+    title: stringifyValue(data.title) || stringifyValue(data.video_id) || cardId,
+    score: Number(data.score || 0),
+    status: (String(data.status || "analyzing") as CardStatus),
+    reason: stringifyValue(data.reason),
+    reason_code: stringifyValue(data.reason_code),
+    domain: stringifyValue(data.domain),
+    papers_found: Number(data.papers_found || 0),
+    competitors_found: stringifyValue(data.competitors_found),
+    saturation: stringifyValue(data.saturation),
+    novelty_boost: Number(data.novelty_boost || 0),
+    analysis_step: stringifyValue(data.analysis_step),
+    build_step: stringifyValue(data.build_step),
+    build_phase: stringifyValue(data.build_phase),
+    build_node: stringifyValue(data.build_node),
+    repo_url: stringifyValue(data.repo_url),
+    live_url: stringifyValue(data.live_url),
+    thread_id: stringifyValue(data.thread_id) || null,
+  };
+
+  const index = prev.cards.findIndex((card) => card.card_id === cardId);
+  if (index === -1) {
+    return {
+      ...prev,
+      cards: [...prev.cards, nextPatch as ZPCard],
+    };
+  }
+
+  const current = prev.cards[index];
+  const merged: ZPCard = {
+    ...current,
+    ...nextPatch,
+    score: nextPatch.score || current.score,
+    reason: nextPatch.reason || current.reason,
+    reason_code: nextPatch.reason_code || current.reason_code,
+    domain: nextPatch.domain || current.domain,
+    papers_found: nextPatch.papers_found || current.papers_found,
+    competitors_found: nextPatch.competitors_found || current.competitors_found,
+    saturation: nextPatch.saturation || current.saturation,
+    novelty_boost: nextPatch.novelty_boost || current.novelty_boost,
+    analysis_step: nextPatch.analysis_step || current.analysis_step,
+    build_step: nextPatch.build_step || current.build_step,
+    build_phase: nextPatch.build_phase || current.build_phase,
+    build_node: nextPatch.build_node || current.build_node,
+    repo_url: nextPatch.repo_url || current.repo_url,
+    live_url: nextPatch.live_url || current.live_url,
+    thread_id: nextPatch.thread_id || current.thread_id,
+  };
+
+  const cards = [...prev.cards];
+  cards[index] = merged;
+  return { ...prev, cards };
+}
+
+function shouldRefreshDashboard(type: string, data: Record<string, unknown>): boolean {
+  if (type === "zp.session.start" || type === "zp.session.pause" || type === "zp.session.resume" || type === "zp.session.complete") {
+    return true;
+  }
+
+  if (type === "zp.build.done") {
+    return true;
+  }
+
+  if (type !== "card.update") {
+    return false;
+  }
+
+  const status = String(data.status || "") as CardStatus;
+  return TERMINAL_CARD_STATUSES.has(status);
 }
 
 export function useZeroPrompt() {
@@ -233,6 +352,7 @@ export function useZeroPrompt() {
               const rawType = String(data.type || "");
               const category = getActionCategory(rawType, data as Record<string, unknown>);
               const msg = formatEventMessage(data as Record<string, unknown>);
+              setSession((prev) => applyEventToSession(prev, data as Record<string, unknown>));
               if (msg && msg !== rawType) {
                 setActions((prev) => [{
                   type: category,
@@ -241,7 +361,7 @@ export function useZeroPrompt() {
                 }, ...prev].slice(0, 300));
               }
 
-              if (rawType.includes("card") || rawType.includes("verdict") || rawType.includes("session") || rawType.includes("council") || rawType.includes("build")) {
+              if (shouldRefreshDashboard(rawType, data as Record<string, unknown>)) {
                 scheduleDashboardRefresh();
               }
             } catch (err) {
