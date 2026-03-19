@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { getDashboard, getSession, startSession, queueBuild, passCard, deleteCard } from "@/lib/zero-prompt-api";
+import { getDashboard, getSession, startSession, queueBuild, passCard, deleteCard, deleteRejectedCards } from "@/lib/zero-prompt-api";
 import { DASHBOARD_API_URL } from "@/lib/api";
-import type { ZPSession, ZPAction, ZPCard, CardStatus } from "@/types/zero-prompt";
+import type { ZPSession, ZPAction, ZPCard, CardStatus, ZPScoreBreakdown } from "@/types/zero-prompt";
 
 const TERMINAL_CARD_STATUSES = new Set<CardStatus>([
   "go_ready",
@@ -32,6 +32,12 @@ function normalizeStringArray(value: unknown): string[] {
   return value.map((item) => stringifyValue(item)).filter(Boolean);
 }
 
+function normalizeScoreBreakdown(value: unknown): ZPScoreBreakdown | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const entries = Object.entries(value as Record<string, unknown>).map(([key, raw]) => [key, Number(raw)]);
+  return Object.fromEntries(entries.filter(([, raw]) => Number.isFinite(raw))) as ZPScoreBreakdown;
+}
+
 function normalizeSession(raw: ZPSession | (ZPSession & { session_id?: string | null })): ZPSession | null {
   if (!(raw as { session_id?: string | null }).session_id) return null;
   return {
@@ -41,12 +47,14 @@ function normalizeSession(raw: ZPSession | (ZPSession & { session_id?: string | 
       ...card,
       title: stringifyValue(card.title) || stringifyValue(card.video_id),
       reason: stringifyValue(card.reason),
+      score_breakdown: normalizeScoreBreakdown(card.score_breakdown),
       domain: stringifyValue(card.domain),
       video_summary: stringifyValue(card.video_summary),
       insights: normalizeStringArray(card.insights),
-      mvp_proposal: card.mvp_proposal
+          mvp_proposal: card.mvp_proposal
         ? {
             app_name: stringifyValue(card.mvp_proposal.app_name),
+            target_user: stringifyValue(card.mvp_proposal.target_user),
             core_feature: stringifyValue(card.mvp_proposal.core_feature),
             tech_stack: stringifyValue(card.mvp_proposal.tech_stack),
             key_pages: normalizeStringArray(card.mvp_proposal.key_pages),
@@ -162,6 +170,7 @@ function applyEventToSession(prev: ZPSession | null, data: Record<string, unknow
     status: (String(data.status || "analyzing") as CardStatus),
     reason: stringifyValue(data.reason),
     reason_code: stringifyValue(data.reason_code),
+    score_breakdown: normalizeScoreBreakdown(data.score_breakdown),
     domain: stringifyValue(data.domain),
     papers_found: Number(data.papers_found || 0),
     competitors_found: stringifyValue(data.competitors_found),
@@ -191,6 +200,7 @@ function applyEventToSession(prev: ZPSession | null, data: Record<string, unknow
     score: nextPatch.score || current.score,
     reason: nextPatch.reason || current.reason,
     reason_code: nextPatch.reason_code || current.reason_code,
+    score_breakdown: nextPatch.score_breakdown || current.score_breakdown,
     domain: nextPatch.domain || current.domain,
     papers_found: nextPatch.papers_found || current.papers_found,
     competitors_found: nextPatch.competitors_found || current.competitors_found,
@@ -459,6 +469,19 @@ export function useZeroPrompt() {
     }
   }, [loadDashboard, session]);
 
+  const handleDeleteRejectedCards = useCallback(async () => {
+    if (!session) return;
+    try {
+      await deleteRejectedCards(session.session_id);
+      await loadDashboard();
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem("zp_session_id", session.session_id);
+      }
+    } catch (err) {
+      console.error("Failed to delete rejected cards", err);
+    }
+  }, [loadDashboard, session]);
+
   return {
     session,
     actions,
@@ -472,5 +495,6 @@ export function useZeroPrompt() {
     queueBuild: handleQueueBuild,
     passCard: handlePassCard,
     deleteCard: handleDeleteCard,
+    deleteRejectedCards: handleDeleteRejectedCards,
   };
 }

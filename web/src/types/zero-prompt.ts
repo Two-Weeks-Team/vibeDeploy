@@ -1,5 +1,24 @@
 export type CardStatus = "analyzing" | "go_ready" | "build_queued" | "building" | "deployed" | "nogo" | "passed" | "build_failed";
 
+export interface ZPScoreBreakdown {
+  proposal_clarity_weight?: number;
+  execution_feasibility_weight?: number;
+  market_viability_weight?: number;
+  mvp_differentiation_weight?: number;
+  evidence_strength_weight?: number;
+  proposal_clarity_signal?: number;
+  execution_feasibility_signal?: number;
+  market_viability_signal?: number;
+  mvp_differentiation_signal?: number;
+  evidence_strength_signal?: number;
+  proposal_clarity_points?: number;
+  execution_feasibility_points?: number;
+  market_viability_points?: number;
+  mvp_differentiation_points?: number;
+  evidence_strength_points?: number;
+  final_score?: number;
+}
+
 export interface ZPCard {
   card_id: string;
   video_id: string;
@@ -8,6 +27,7 @@ export interface ZPCard {
   score: number;
   reason?: string;
   reason_code?: string;
+  score_breakdown?: ZPScoreBreakdown;
   domain?: string;
   papers_found?: number;
   competitors_found?: string;
@@ -24,6 +44,7 @@ export interface ZPCard {
   insights?: string[];
   mvp_proposal?: {
     app_name?: string;
+    target_user?: string;
     core_feature?: string;
     tech_stack?: string;
     key_pages?: string[];

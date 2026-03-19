@@ -73,6 +73,15 @@ export async function deleteCard(sessionId: string, cardId: string): Promise<voi
   if (!response.ok) throw new Error("Failed to delete card");
 }
 
+export async function deleteRejectedCards(sessionId: string): Promise<void> {
+  const response = await fetch(`${DASHBOARD_API_URL}/zero-prompt/${sessionId}/actions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "delete_rejected_cards" }),
+  });
+  if (!response.ok) throw new Error("Failed to delete rejected cards");
+}
+
 export function getBuildEventsUrl(sessionId: string, cardId: string): string {
   return `${DASHBOARD_API_URL}/zero-prompt/${sessionId}/build/${cardId}/events`;
 }
