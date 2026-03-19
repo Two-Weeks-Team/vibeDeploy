@@ -26,6 +26,7 @@ function ZeroPromptWorkspace() {
     queueBuild,
     passCard,
     deleteCard,
+    deleteRejectedCards,
   } = useZeroPrompt();
 
   useEffect(() => {
@@ -88,6 +89,7 @@ function ZeroPromptWorkspace() {
           onQueueBuild={queueBuild}
           onPassCard={passCard}
           onDeleteCard={deleteCard}
+          onDeleteRejectedCards={deleteRejectedCards}
           onReExplore={(cardId) => {
             deleteCard(cardId);
           }}

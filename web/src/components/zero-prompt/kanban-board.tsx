@@ -11,6 +11,7 @@ interface KanbanBoardProps {
   onQueueBuild: (cardId: string) => void;
   onPassCard: (cardId: string) => void;
   onDeleteCard?: (cardId: string) => void;
+  onDeleteRejectedCards?: () => void;
   onReExplore?: (cardId: string) => void;
   autoCloseMs?: number;
   selectedCardId?: string | null;
@@ -31,7 +32,7 @@ const COLUMNS: { id: string; title: string; statuses: CardStatus[] }[] = [
   { id: "nogo", title: "Rejected / Skipped", statuses: ["nogo", "passed", "build_failed"] },
 ];
 
-export function KanbanBoard({ cards, sessionId, onQueueBuild, onPassCard, onDeleteCard, onReExplore, autoCloseMs, selectedCardId, onSelectedCardChange }: KanbanBoardProps) {
+export function KanbanBoard({ cards, sessionId, onQueueBuild, onPassCard, onDeleteCard, onDeleteRejectedCards, onReExplore, autoCloseMs, selectedCardId, onSelectedCardChange }: KanbanBoardProps) {
   const [internalSelectedCard, setInternalSelectedCard] = useState<ZPCard | null>(null);
   const selectedCard = onSelectedCardChange
     ? cards.find((card) => card.card_id === selectedCardId) ?? null
@@ -63,6 +64,7 @@ export function KanbanBoard({ cards, sessionId, onQueueBuild, onPassCard, onDele
             cards={cards}
             maxItems={COLUMN_LIMITS[col.id]}
             sessionId={sessionId}
+            onDeleteRejectedCards={col.id === "nogo" ? onDeleteRejectedCards : undefined}
             onQueueBuild={onQueueBuild}
             onPassCard={onPassCard}
             onDeleteCard={onDeleteCard}
