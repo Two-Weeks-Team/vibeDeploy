@@ -1050,6 +1050,7 @@ async def zp_events(request: Request):
 
 
 _zp_orchestrator = None
+_zp_pipeline_tasks: dict[str, asyncio.Task[None]] = {}
 
 
 def _get_zp_orchestrator():
@@ -1092,6 +1093,32 @@ _ZP_FALLBACK_TOPICS = [
     "Handmade crafts marketplace",
 ]
 
+_ZP_EXPLORING_LIMIT = 5
+_ZP_GO_READY_LIMIT = 5
+_ZP_REJECTED_LIMIT = 5
+_ZP_MAX_ROUNDS = 5
+
+
+def _should_launch_zp_pipeline_background_task() -> bool:
+    if not _test_api_enabled():
+        return True
+    return not bool(os.getenv("PYTEST_CURRENT_TEST"))
+
+
+def _launch_zp_pipeline(orch, session_id: str, goal: int) -> None:
+    existing = _zp_pipeline_tasks.get(session_id)
+    if existing and not existing.done():
+        return
+
+    task = asyncio.create_task(_run_zp_pipeline(orch, session_id, goal))
+    _zp_pipeline_tasks[session_id] = task
+
+    def _cleanup(done_task: asyncio.Task[None]) -> None:
+        if _zp_pipeline_tasks.get(session_id) is done_task:
+            _zp_pipeline_tasks.pop(session_id, None)
+
+    task.add_done_callback(_cleanup)
+
 
 async def _discover_videos(session_id: str) -> list[tuple[str, str, str]]:
     try:
@@ -1133,9 +1160,8 @@ def _count_go_cards(session) -> int:
     return sum(1 for c in session.cards if c.status == "go_ready")
 
 
-def _count_pending_cards(session) -> int:
-    pending = {"analyzing", "go_ready"}
-    return sum(1 for c in session.cards if c.status in pending)
+def _count_exploring_cards(session) -> int:
+    return sum(1 for c in session.cards if c.status == "analyzing")
 
 
 def _count_rejected_cards(session) -> int:
@@ -1143,46 +1169,87 @@ def _count_rejected_cards(session) -> int:
     return sum(1 for c in session.cards if c.status in rejected)
 
 
-async def _run_zp_pipeline(orch, session_id: str, goal: int) -> None:
+async def _set_zp_session_status(orch, session_id: str, status: str) -> None:
+    session = await orch.ensure_session(session_id)
+    if session is not None:
+        session.status = status
     try:
-        seen_video_ids: set[str] = set()
-        round_num = 0
-        max_rounds = 5
-        max_pending_cards = 5
+        from .db import zp_store as _zps
 
-        while round_num < max_rounds:
-            session = orch.get_session(session_id)
+        await _zps.update_session_status(session_id, status=status)
+    except Exception:
+        logger.exception("[ZP] Failed to persist status=%s for session %s", status, session_id)
+
+
+async def _maybe_resume_zp_pipeline(orch, session_id: str) -> None:
+    if not _should_launch_zp_pipeline_background_task():
+        return
+
+    session = await orch.ensure_session(session_id)
+    if session is None or session.status == "completed":
+        return
+
+    if _count_go_cards(session) >= session.goal_go_cards:
+        return
+    if _count_rejected_cards(session) >= _ZP_REJECTED_LIMIT:
+        return
+    if _count_exploring_cards(session) >= _ZP_EXPLORING_LIMIT:
+        return
+
+    if session.status != "exploring":
+        await _set_zp_session_status(orch, session_id, "exploring")
+        push_zp_event({"type": "zp.session.resume", "session_id": session_id})
+
+    _launch_zp_pipeline(orch, session_id, session.goal_go_cards)
+
+
+async def _run_zp_pipeline(orch, session_id: str, goal: int) -> None:
+    final_status = "completed"
+    final_event = {"type": "zp.session.complete", "session_id": session_id, "reason": "max_rounds_reached"}
+    try:
+        session = await orch.ensure_session(session_id)
+        seen_video_ids: set[str] = {card.video_id for card in session.cards} if session else set()
+        round_num = 0
+
+        while round_num < _ZP_MAX_ROUNDS:
+            session = await orch.ensure_session(session_id)
             if session and _count_go_cards(session) >= goal:
                 logger.info("[ZP] Goal reached (%d GO cards) for session %s", goal, session_id)
+                final_status = "paused"
+                final_event = {
+                    "type": "zp.session.pause",
+                    "reason": "goal_reached",
+                    "go_ready_cards": _count_go_cards(session),
+                    "session_id": session_id,
+                }
                 break
-            if session and _count_rejected_cards(session) >= 10:
-                session.status = "paused"
-                logger.info("[ZP] Rejected cap reached (10 cards) for session %s", session_id)
-                try:
-                    from .db import zp_store as _zps
-
-                    await _zps.update_session_status(session_id, status="paused")
-                except Exception:
-                    logger.exception("[ZP] Failed to persist paused status for %s", session_id)
-                push_zp_event(
-                    {
-                        "type": "zp.session.pause",
-                        "reason": "rejected_cap_reached",
-                        "rejected_cards": _count_rejected_cards(session),
-                        "session_id": session_id,
-                    }
-                )
+            if session and _count_rejected_cards(session) >= _ZP_REJECTED_LIMIT:
+                logger.info("[ZP] Rejected cap reached (%d cards) for session %s", _ZP_REJECTED_LIMIT, session_id)
+                final_status = "paused"
+                final_event = {
+                    "type": "zp.session.pause",
+                    "reason": "rejected_cap_reached",
+                    "rejected_cards": _count_rejected_cards(session),
+                    "session_id": session_id,
+                }
                 break
 
-            available_slots = max_pending_cards
+            available_slots = _ZP_EXPLORING_LIMIT
             if session:
-                available_slots = max(0, max_pending_cards - _count_pending_cards(session))
+                available_slots = max(0, _ZP_EXPLORING_LIMIT - _count_exploring_cards(session))
             if available_slots <= 0:
                 logger.info(
                     "[ZP] Pending card limit reached (%d), stopping registration for session %s",
-                    max_pending_cards,
+                    _ZP_EXPLORING_LIMIT,
                     session_id,
                 )
+                final_status = "paused"
+                final_event = {
+                    "type": "zp.session.pause",
+                    "reason": "exploring_cap_reached",
+                    "exploring_cards": _count_exploring_cards(session) if session else 0,
+                    "session_id": session_id,
+                }
                 break
 
             round_num += 1
@@ -1198,6 +1265,13 @@ async def _run_zp_pipeline(orch, session_id: str, goal: int) -> None:
             new_videos = [(vid_id, title, desc) for vid_id, title, desc in videos if vid_id not in seen_video_ids]
             if not new_videos:
                 logger.info("[ZP] No new videos found in round %d, stopping", round_num)
+                final_status = "completed"
+                final_event = {
+                    "type": "zp.session.complete",
+                    "reason": "no_new_videos",
+                    "rounds": round_num,
+                    "session_id": session_id,
+                }
                 break
 
             batch = new_videos[:available_slots]
@@ -1217,44 +1291,48 @@ async def _run_zp_pipeline(orch, session_id: str, goal: int) -> None:
                     push_zp_event(evt)
                 await _trigger_pending_builds(orch, session_id)
 
-                session = orch.get_session(session_id)
+                session = await orch.ensure_session(session_id)
                 if session and _count_go_cards(session) >= goal:
                     logger.info("[ZP] Goal reached mid-round (%d GO cards)", goal)
+                    final_status = "paused"
+                    final_event = {
+                        "type": "zp.session.pause",
+                        "reason": "goal_reached",
+                        "go_ready_cards": _count_go_cards(session),
+                        "session_id": session_id,
+                    }
                     break
-                if session and _count_rejected_cards(session) >= 10:
-                    session.status = "paused"
+                if session and _count_rejected_cards(session) >= _ZP_REJECTED_LIMIT:
                     logger.info("[ZP] Rejected cap reached mid-round for session %s", session_id)
-                    try:
-                        from .db import zp_store as _zps
-
-                        await _zps.update_session_status(session_id, status="paused")
-                    except Exception:
-                        logger.exception("[ZP] Failed to persist paused status for %s", session_id)
-                    push_zp_event(
-                        {
-                            "type": "zp.session.pause",
-                            "reason": "rejected_cap_reached",
-                            "rejected_cards": _count_rejected_cards(session),
-                            "session_id": session_id,
-                        }
-                    )
+                    final_status = "paused"
+                    final_event = {
+                        "type": "zp.session.pause",
+                        "reason": "rejected_cap_reached",
+                        "rejected_cards": _count_rejected_cards(session),
+                        "session_id": session_id,
+                    }
                     break
 
         logger.info("[ZP] Pipeline complete for session %s", session_id)
     except Exception:
         logger.exception("[ZP] Pipeline failed for session %s", session_id)
+        final_status = "paused"
+        final_event = {"type": "zp.session.pause", "reason": "pipeline_error", "session_id": session_id}
+    finally:
+        await _set_zp_session_status(orch, session_id, final_status)
+        push_zp_event(final_event)
 
 
 @app.post("/api/zero-prompt/start")
 @app.post("/zero-prompt/start")
 async def zero_prompt_start(request: ZPStartRequest):
     orch = _get_zp_orchestrator()
-    session, _start_event = orch.create_session(goal=request.goal)
+    goal = max(1, min(request.goal or _ZP_GO_READY_LIMIT, _ZP_GO_READY_LIMIT))
+    session, _start_event = orch.create_session(goal=goal)
     session_id = session.session_id
-    goal = request.goal or 5
 
-    if not _test_api_enabled():
-        asyncio.create_task(_run_zp_pipeline(orch, session_id, goal))
+    if _should_launch_zp_pipeline_background_task():
+        _launch_zp_pipeline(orch, session_id, goal)
     push_zp_event(
         {"type": "zp.session.start", "session_id": session_id, "goal_go_cards": goal, "session_status": session.status}
     )
@@ -1310,22 +1388,16 @@ async def zero_prompt_get_session(session_id: str):
 @app.post("/zero-prompt/{session_id}/actions")
 async def zero_prompt_action(session_id: str, request: ZPActionRequest):
     orch = _get_zp_orchestrator()
-    await orch.ensure_session(session_id)
+    session = await orch.ensure_session(session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="session_not_found")
     action = request.action
     card_id = request.card_id
 
     if action == "delete_card":
-        from .db import zp_store as _zps
-
-        await _zps.update_card(card_id, status="deleted")
-        push_zp_event({"type": "card.update", "card_id": card_id, "status": "deleted", "session_id": session_id})
-        result = {"type": "zp.action.delete_card", "card_id": card_id}
+        result = orch.delete_card(session_id, card_id)
     elif action == "pass_card":
-        from .db import zp_store as _zps
-
-        await _zps.update_card(card_id, status="passed")
-        push_zp_event({"type": "card.update", "card_id": card_id, "status": "passed", "session_id": session_id})
-        result = {"type": "zp.action.pass_card", "card_id": card_id}
+        result = orch.pass_card(session_id, card_id)
     elif action == "add_video":
         video_id = request.video_id or card_id
         title = request.title or video_id
@@ -1366,6 +1438,9 @@ async def zero_prompt_action(session_id: str, request: ZPActionRequest):
 
     if result.get("type") == "zp.action.error":
         raise HTTPException(status_code=422, detail=result["error"])
+
+    if action in {"queue_build", "pass_card", "delete_card", "force_go", "resume"}:
+        asyncio.create_task(_maybe_resume_zp_pipeline(orch, session_id))
 
     return result
 
