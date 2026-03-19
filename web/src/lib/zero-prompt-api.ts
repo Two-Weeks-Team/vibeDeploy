@@ -1,5 +1,5 @@
 import { DASHBOARD_API_URL } from "./api";
-import type { ZPSession } from "@/types/zero-prompt";
+import type { ZPCard, ZPSession } from "@/types/zero-prompt";
 
 const LATEST_SESSION_ID = "latest";
 
@@ -50,6 +50,13 @@ export async function getSession(id: string): Promise<ZPSession> {
 
 export async function getLatestSession(): Promise<ZPSession> {
   return getSession(LATEST_SESSION_ID);
+}
+
+export async function getDeployedCards(limit = 50): Promise<ZPCard[]> {
+  const response = await fetch(`${DASHBOARD_API_URL}/zero-prompt/deployed?limit=${limit}`);
+  if (!response.ok) throw new Error("Failed to get deployed cards");
+  const data = await response.json();
+  return data.cards || [];
 }
 
 export async function queueBuild(sessionId: string, cardId: string): Promise<void> {

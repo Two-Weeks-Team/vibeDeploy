@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { getDashboard, startSession, queueBuild, passCard, deleteCard, deleteRejectedCards } from "@/lib/zero-prompt-api";
+import { getDashboard, getDeployedCards, startSession, queueBuild, passCard, deleteCard, deleteRejectedCards } from "@/lib/zero-prompt-api";
 import { DASHBOARD_API_URL } from "@/lib/api";
 import { DEMO_CARDS } from "@/lib/demo-data";
 import type { ZPSession, ZPAction, ZPCard, CardStatus, ZPScoreBreakdown } from "@/types/zero-prompt";
@@ -36,8 +36,13 @@ function normalizeStringArray(value: unknown): string[] {
 
 function normalizeScoreBreakdown(value: unknown): ZPScoreBreakdown | undefined {
   if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
-  const entries = Object.entries(value as Record<string, unknown>).map(([key, raw]) => [key, Number(raw)]);
-  return Object.fromEntries(entries.filter(([, raw]) => Number.isFinite(raw))) as ZPScoreBreakdown;
+  const entries = Object.entries(value as Record<string, unknown>).map(([key, raw]) => {
+    if (typeof raw === "boolean") return [key, raw];
+    return [key, Number(raw)];
+  });
+  return Object.fromEntries(
+    entries.filter(([, raw]) => typeof raw === "boolean" || Number.isFinite(raw as number)),
+  ) as ZPScoreBreakdown;
 }
 
 function applyDemoCardOverlay(card: ZPCard): ZPCard {
@@ -282,6 +287,7 @@ function shouldRefreshDashboard(type: string, data: Record<string, unknown>): bo
 
 export function useZeroPrompt(initialSession: ZPSession | null = null) {
   const [session, setSession] = useState<ZPSession | null>(initialSession ? normalizeSession(initialSession) : null);
+  const [deployedCards, setDeployedCards] = useState<ZPCard[]>([]);
   const [actions, setActions] = useState<ZPAction[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const [isCompleted, setIsCompleted] = useState(initialSession?.status === "completed");
@@ -298,7 +304,7 @@ export function useZeroPrompt(initialSession: ZPSession | null = null) {
 
   const loadDashboard = useCallback(async () => {
     try {
-      const data = await getDashboard();
+      const [data, deployed] = await Promise.all([getDashboard(), getDeployedCards()]);
       const normalized = normalizeSession(data as ZPSession & { session_id: string | null });
       if (normalized) {
         setSession(normalized);
@@ -310,6 +316,33 @@ export function useZeroPrompt(initialSession: ZPSession | null = null) {
           setEventSessionId(null);
         }
       }
+      setDeployedCards(
+        deployed.map((card) =>
+          applyDemoCardOverlay({
+            ...card,
+            title: stringifyValue(card.title) || stringifyValue(card.video_id),
+            reason: stringifyValue(card.reason),
+            score_breakdown: normalizeScoreBreakdown(card.score_breakdown),
+            domain: stringifyValue(card.domain),
+            video_summary: stringifyValue(card.video_summary),
+            insights: normalizeStringArray(card.insights),
+            mvp_proposal: card.mvp_proposal
+              ? {
+                  app_name: stringifyValue(card.mvp_proposal.app_name),
+                  target_user: stringifyValue(card.mvp_proposal.target_user),
+                  problem_statement: stringifyValue(card.mvp_proposal.problem_statement),
+                  core_feature: stringifyValue(card.mvp_proposal.core_feature),
+                  differentiation: stringifyValue(card.mvp_proposal.differentiation),
+                  validation_signal: stringifyValue(card.mvp_proposal.validation_signal),
+                  tech_stack: stringifyValue(card.mvp_proposal.tech_stack),
+                  key_pages: normalizeStringArray(card.mvp_proposal.key_pages),
+                  not_in_scope: normalizeStringArray(card.mvp_proposal.not_in_scope),
+                  estimated_days: Number(card.mvp_proposal.estimated_days || 0) || undefined,
+                }
+              : undefined,
+          }),
+        ),
+      );
     } catch (err) {
       console.error("Failed to load dashboard", err);
     } finally {
@@ -524,5 +557,6 @@ export function useZeroPrompt(initialSession: ZPSession | null = null) {
     passCard: handlePassCard,
     deleteCard: handleDeleteCard,
     deleteRejectedCards: handleDeleteRejectedCards,
+    deployedCards,
   };
 }

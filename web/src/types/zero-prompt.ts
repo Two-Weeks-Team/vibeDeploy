@@ -19,6 +19,9 @@ export interface ZPScoreBreakdown {
   mvp_differentiation_points?: number;
   evidence_strength_points?: number;
   final_score?: number;
+  raw_score?: number;
+  display_score?: number;
+  gate_blocked?: boolean;
 }
 
 export interface ZPCard {
