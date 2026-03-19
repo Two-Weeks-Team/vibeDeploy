@@ -6,6 +6,8 @@ export interface ZPScoreBreakdown {
   market_viability_weight?: number;
   mvp_differentiation_weight?: number;
   evidence_strength_weight?: number;
+  originality_signal?: number;
+  originality_threshold?: number;
   proposal_clarity_signal?: number;
   execution_feasibility_signal?: number;
   market_viability_signal?: number;
@@ -45,9 +47,13 @@ export interface ZPCard {
   mvp_proposal?: {
     app_name?: string;
     target_user?: string;
+    problem_statement?: string;
     core_feature?: string;
+    differentiation?: string;
+    validation_signal?: string;
     tech_stack?: string;
     key_pages?: string[];
+    not_in_scope?: string[];
     estimated_days?: number;
   };
 }

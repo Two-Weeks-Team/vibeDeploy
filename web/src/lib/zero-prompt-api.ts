@@ -1,6 +1,8 @@
 import { DASHBOARD_API_URL } from "./api";
 import type { ZPSession } from "@/types/zero-prompt";
 
+const LATEST_SESSION_ID = "latest";
+
 function parseStartSessionResponse(raw: string): ZPSession {
   const trimmed = raw.trim();
   if (!trimmed) throw new Error("Empty start session response");
@@ -46,8 +48,12 @@ export async function getSession(id: string): Promise<ZPSession> {
   return response.json();
 }
 
+export async function getLatestSession(): Promise<ZPSession> {
+  return getSession(LATEST_SESSION_ID);
+}
+
 export async function queueBuild(sessionId: string, cardId: string): Promise<void> {
-  const response = await fetch(`${DASHBOARD_API_URL}/zero-prompt/${sessionId}/actions`, {
+  const response = await fetch(`${DASHBOARD_API_URL}/zero-prompt/${sessionId || LATEST_SESSION_ID}/actions`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action: "queue_build", card_id: cardId }),
@@ -56,7 +62,7 @@ export async function queueBuild(sessionId: string, cardId: string): Promise<voi
 }
 
 export async function passCard(sessionId: string, cardId: string): Promise<void> {
-  const response = await fetch(`${DASHBOARD_API_URL}/zero-prompt/${sessionId}/actions`, {
+  const response = await fetch(`${DASHBOARD_API_URL}/zero-prompt/${sessionId || LATEST_SESSION_ID}/actions`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action: "pass_card", card_id: cardId }),
@@ -65,7 +71,7 @@ export async function passCard(sessionId: string, cardId: string): Promise<void>
 }
 
 export async function deleteCard(sessionId: string, cardId: string): Promise<void> {
-  const response = await fetch(`${DASHBOARD_API_URL}/zero-prompt/${sessionId}/actions`, {
+  const response = await fetch(`${DASHBOARD_API_URL}/zero-prompt/${sessionId || LATEST_SESSION_ID}/actions`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action: "delete_card", card_id: cardId }),
@@ -74,7 +80,7 @@ export async function deleteCard(sessionId: string, cardId: string): Promise<voi
 }
 
 export async function deleteRejectedCards(sessionId: string): Promise<void> {
-  const response = await fetch(`${DASHBOARD_API_URL}/zero-prompt/${sessionId}/actions`, {
+  const response = await fetch(`${DASHBOARD_API_URL}/zero-prompt/${sessionId || LATEST_SESSION_ID}/actions`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action: "delete_rejected_cards" }),
@@ -83,5 +89,5 @@ export async function deleteRejectedCards(sessionId: string): Promise<void> {
 }
 
 export function getBuildEventsUrl(sessionId: string, cardId: string): string {
-  return `${DASHBOARD_API_URL}/zero-prompt/${sessionId}/build/${cardId}/events`;
+  return `${DASHBOARD_API_URL}/zero-prompt/${sessionId || LATEST_SESSION_ID}/build/${cardId}/events`;
 }

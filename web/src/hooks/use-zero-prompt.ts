@@ -1,9 +1,12 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { getDashboard, getSession, startSession, queueBuild, passCard, deleteCard, deleteRejectedCards } from "@/lib/zero-prompt-api";
+import { getDashboard, startSession, queueBuild, passCard, deleteCard, deleteRejectedCards } from "@/lib/zero-prompt-api";
 import { DASHBOARD_API_URL } from "@/lib/api";
+import { DEMO_CARDS } from "@/lib/demo-data";
 import type { ZPSession, ZPAction, ZPCard, CardStatus, ZPScoreBreakdown } from "@/types/zero-prompt";
+
+const DEMO_CARD_BY_VIDEO_ID = new Map(DEMO_CARDS.map((card) => [card.video_id, card]));
 
 const TERMINAL_CARD_STATUSES = new Set<CardStatus>([
   "go_ready",
@@ -11,7 +14,6 @@ const TERMINAL_CARD_STATUSES = new Set<CardStatus>([
   "building",
   "deployed",
   "nogo",
-  "passed",
   "build_failed",
 ]);
 
@@ -38,12 +40,41 @@ function normalizeScoreBreakdown(value: unknown): ZPScoreBreakdown | undefined {
   return Object.fromEntries(entries.filter(([, raw]) => Number.isFinite(raw))) as ZPScoreBreakdown;
 }
 
+function applyDemoCardOverlay(card: ZPCard): ZPCard {
+  const demoCard = DEMO_CARD_BY_VIDEO_ID.get(card.video_id);
+  if (!demoCard) return card;
+
+  return {
+    ...card,
+    ...demoCard,
+    card_id: card.card_id,
+    video_id: card.video_id,
+    status: card.status,
+    score: card.score,
+    reason: card.reason,
+    reason_code: card.reason_code,
+    score_breakdown: card.score_breakdown,
+    papers_found: card.papers_found,
+    competitors_found: card.competitors_found,
+    saturation: card.saturation,
+    novelty_boost: card.novelty_boost,
+    thread_id: card.thread_id,
+    build_step: card.build_step,
+    analysis_step: card.analysis_step,
+    repo_url: card.repo_url || demoCard.repo_url,
+    live_url: card.live_url || demoCard.live_url,
+    build_phase: card.build_phase,
+    build_node: card.build_node,
+  };
+}
+
 function normalizeSession(raw: ZPSession | (ZPSession & { session_id?: string | null })): ZPSession | null {
   if (!(raw as { session_id?: string | null }).session_id) return null;
   return {
     ...raw,
     session_id: String((raw as { session_id: string }).session_id),
     cards: (raw.cards || []).map((card) => ({
+      ...applyDemoCardOverlay({
       ...card,
       title: stringifyValue(card.title) || stringifyValue(card.video_id),
       reason: stringifyValue(card.reason),
@@ -55,13 +86,17 @@ function normalizeSession(raw: ZPSession | (ZPSession & { session_id?: string | 
         ? {
             app_name: stringifyValue(card.mvp_proposal.app_name),
             target_user: stringifyValue(card.mvp_proposal.target_user),
+            problem_statement: stringifyValue(card.mvp_proposal.problem_statement),
             core_feature: stringifyValue(card.mvp_proposal.core_feature),
+            differentiation: stringifyValue(card.mvp_proposal.differentiation),
+            validation_signal: stringifyValue(card.mvp_proposal.validation_signal),
             tech_stack: stringifyValue(card.mvp_proposal.tech_stack),
             key_pages: normalizeStringArray(card.mvp_proposal.key_pages),
+            not_in_scope: normalizeStringArray(card.mvp_proposal.not_in_scope),
             estimated_days: Number(card.mvp_proposal.estimated_days || 0) || undefined,
           }
         : undefined,
-    })),
+    })})),
   };
 }
 
@@ -185,6 +220,14 @@ function applyEventToSession(prev: ZPSession | null, data: Record<string, unknow
     thread_id: stringifyValue(data.thread_id) || null,
   };
 
+  const rawStatus = String(data.status || "");
+  if (rawStatus === "deleted") {
+    return {
+      ...prev,
+      cards: prev.cards.filter((card) => card.card_id !== cardId),
+    };
+  }
+
   const index = prev.cards.findIndex((card) => card.card_id === cardId);
   if (index === -1) {
     return {
@@ -259,13 +302,12 @@ export function useZeroPrompt() {
       const normalized = normalizeSession(data as ZPSession & { session_id: string | null });
       if (normalized) {
         setSession(normalized);
-        setEventSessionId(normalized.session_id);
+        setEventSessionId(null);
         setIsCompleted(normalized.status === "completed");
       } else {
-        setSession(null);
-        setEventSessionId(null);
-        if (typeof window !== "undefined") {
-          window.localStorage.removeItem("zp_session_id");
+        if (!sessionRef.current) {
+          setSession(null);
+          setEventSessionId(null);
         }
       }
     } catch (err) {
@@ -287,41 +329,20 @@ export function useZeroPrompt() {
   }, [loadDashboard]);
 
   useEffect(() => {
-    const restore = async () => {
-      try {
-        const storedSessionId = typeof window !== "undefined" ? window.localStorage.getItem("zp_session_id") : null;
-        if (storedSessionId) {
-          const restored = await getSession(storedSessionId);
-          const normalized = normalizeSession(restored as ZPSession & { session_id?: string | null });
-          if (normalized) {
-            setSession(normalized);
-            setEventSessionId(normalized.session_id);
-            setIsCompleted(normalized.status === "completed");
-            setHasLoadedDashboard(true);
-            return;
-          }
-        }
-      } catch {
-        if (typeof window !== "undefined") {
-          window.localStorage.removeItem("zp_session_id");
-        }
-      }
-
-      await loadDashboard();
-    };
-
-    void restore();
+    void loadDashboard();
   }, [loadDashboard]);
 
   useEffect(() => {
-    if (!eventSessionId) return;
     const controller = new AbortController();
     let cancelled = false;
     let retryCount = 0;
 
     const connect = async () => {
       try {
-        const res = await fetch(`${DASHBOARD_API_URL}/zero-prompt/events?session_id=${encodeURIComponent(eventSessionId)}`, {
+        const eventsUrl = eventSessionId
+          ? `${DASHBOARD_API_URL}/zero-prompt/events?session_id=${encodeURIComponent(eventSessionId)}`
+          : `${DASHBOARD_API_URL}/zero-prompt/events`;
+        const res = await fetch(eventsUrl, {
           signal: controller.signal,
         });
         if (!res.ok || !res.body) throw new Error(`SSE failed: ${res.status}`);
@@ -346,7 +367,7 @@ export function useZeroPrompt() {
               const data = JSON.parse(trimmed.slice(6));
 
               if (data.type === "snapshot") {
-                if (data.session_id && data.session_id === eventSessionId) {
+                if (!eventSessionId || (data.session_id && data.session_id === eventSessionId)) {
                   const normalized = normalizeSession(data as ZPSession & { session_id: string | null });
                   if (normalized) {
                     setSession(normalized);
@@ -355,7 +376,7 @@ export function useZeroPrompt() {
                 continue;
               }
 
-              if (data.session_id && data.session_id !== eventSessionId) {
+              if (eventSessionId && data.session_id && data.session_id !== eventSessionId) {
                 continue;
               }
 
@@ -421,10 +442,7 @@ export function useZeroPrompt() {
       const normalized = normalizeSession(started);
       if (normalized) {
         setSession(normalized);
-        setEventSessionId(normalized.session_id);
-        if (typeof window !== "undefined") {
-          window.localStorage.setItem("zp_session_id", normalized.session_id);
-        }
+        setEventSessionId(null);
       }
       setActions([]);
       return true;
@@ -439,48 +457,58 @@ export function useZeroPrompt() {
   const handleQueueBuild = useCallback(async (cardId: string) => {
     if (!session) return;
     try {
-      await queueBuild(session.session_id, cardId);
-      await loadDashboard();
+      await queueBuild("latest", cardId);
+      setSession((prev) => prev ? {
+        ...prev,
+        cards: prev.cards.map((card) => card.card_id === cardId ? { ...card, status: "build_queued" } : card),
+      } : prev);
+      scheduleDashboardRefresh();
     } catch (err) {
       console.error("Failed to queue build", err);
     }
-  }, [loadDashboard, session]);
+  }, [scheduleDashboardRefresh, session]);
 
   const handlePassCard = useCallback(async (cardId: string) => {
     if (!session) return;
     try {
-      await passCard(session.session_id, cardId);
-      await loadDashboard();
+      await passCard("latest", cardId);
+      setSession((prev) => prev ? {
+        ...prev,
+        cards: prev.cards.map((card) => card.card_id === cardId ? { ...card, status: "passed" } : card),
+      } : prev);
+      scheduleDashboardRefresh();
     } catch (err) {
       console.error("Failed to pass card", err);
     }
-  }, [loadDashboard, session]);
+  }, [scheduleDashboardRefresh, session]);
 
   const handleDeleteCard = useCallback(async (cardId: string) => {
     if (!session) return;
     try {
-      await deleteCard(session.session_id, cardId);
-      await loadDashboard();
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem("zp_session_id", session.session_id);
-      }
+      await deleteCard("latest", cardId);
+      setSession((prev) => prev ? {
+        ...prev,
+        cards: prev.cards.filter((card) => card.card_id !== cardId),
+      } : prev);
+      scheduleDashboardRefresh();
     } catch (err) {
       console.error("Failed to delete card", err);
     }
-  }, [loadDashboard, session]);
+  }, [scheduleDashboardRefresh, session]);
 
   const handleDeleteRejectedCards = useCallback(async () => {
     if (!session) return;
     try {
-      await deleteRejectedCards(session.session_id);
-      await loadDashboard();
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem("zp_session_id", session.session_id);
-      }
+      await deleteRejectedCards("latest");
+      setSession((prev) => prev ? {
+        ...prev,
+        cards: prev.cards.filter((card) => !["nogo", "passed", "build_failed"].includes(card.status)),
+      } : prev);
+      scheduleDashboardRefresh();
     } catch (err) {
       console.error("Failed to delete rejected cards", err);
     }
-  }, [loadDashboard, session]);
+  }, [scheduleDashboardRefresh, session]);
 
   return {
     session,
