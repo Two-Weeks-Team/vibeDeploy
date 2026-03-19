@@ -1069,6 +1069,7 @@ class ZPStartRequest(BaseModel):
 class ZPActionRequest(BaseModel):
     action: str
     card_id: str = ""
+    card_ids: list[str] = []
     video_id: str = ""
     title: str = ""
     success: bool | None = None
@@ -1163,6 +1164,11 @@ def _count_exploring_cards(session) -> int:
     return sum(1 for c in session.cards if c.status == "analyzing")
 
 
+def _count_rejected_cards(session) -> int:
+    rejected = {"nogo", "passed", "build_failed"}
+    return sum(1 for c in session.cards if c.status in rejected)
+
+
 async def _set_zp_session_status(orch, session_id: str, status: str) -> None:
     session = await orch.ensure_session(session_id)
     if session is not None:
@@ -1175,12 +1181,14 @@ async def _set_zp_session_status(orch, session_id: str, status: str) -> None:
         logger.exception("[ZP] Failed to persist status=%s for session %s", status, session_id)
 
 
-async def _maybe_resume_zp_pipeline(orch, session_id: str) -> None:
+async def _maybe_resume_zp_pipeline(orch, session_id: str, *, allow_completed_restart: bool = False) -> None:
     if not _should_launch_zp_pipeline_background_task():
         return
 
     session = await orch.ensure_session(session_id)
-    if session is None or session.status == "completed":
+    if session is None:
+        return
+    if session.status == "completed" and not allow_completed_restart:
         return
 
     if _count_go_cards(session) >= session.goal_go_cards:
@@ -1368,6 +1376,8 @@ async def zero_prompt_action(session_id: str, request: ZPActionRequest):
 
     if action == "delete_card":
         result = orch.delete_card(session_id, card_id)
+    elif action == "delete_rejected_cards":
+        result = orch.delete_rejected_cards(session_id)
     elif action == "pass_card":
         result = orch.pass_card(session_id, card_id)
     elif action == "add_video":
@@ -1379,15 +1389,33 @@ async def zero_prompt_action(session_id: str, request: ZPActionRequest):
     elif action == "force_go":
         from .db import zp_store as _zps
 
-        await _zps.update_card(card_id, status="go_ready", score=75, build_step="")
+        force_go_breakdown = {
+            "proposal_clarity_weight": 25,
+            "execution_feasibility_weight": 20,
+            "market_viability_weight": 25,
+            "mvp_differentiation_weight": 20,
+            "evidence_strength_weight": 10,
+            "proposal_clarity_signal": 80.0,
+            "execution_feasibility_signal": 75.0,
+            "market_viability_signal": 70.0,
+            "mvp_differentiation_signal": 75.0,
+            "evidence_strength_signal": 75.0,
+            "proposal_clarity_points": 20.0,
+            "execution_feasibility_points": 15.0,
+            "market_viability_points": 17.5,
+            "mvp_differentiation_points": 15.0,
+            "evidence_strength_points": 7.5,
+            "final_score": 75,
+        }
+        await _zps.update_card(card_id, status="go_ready", score=75, build_step="", score_breakdown=force_go_breakdown)
         session = await orch.ensure_session(session_id)
         if session:
             for card in session.cards:
                 if card.card_id == card_id:
                     card.status = "go_ready"
                     card.score = 75
+                    card.score_breakdown = force_go_breakdown
                     card.build_step = ""
-                    card.build_queue = []
                     break
             if card_id in session.build_queue:
                 session.build_queue.remove(card_id)
@@ -1411,8 +1439,14 @@ async def zero_prompt_action(session_id: str, request: ZPActionRequest):
     if result.get("type") == "zp.action.error":
         raise HTTPException(status_code=422, detail=result["error"])
 
-    if action in {"queue_build", "pass_card", "delete_card", "force_go", "resume"}:
+    if action in {"queue_build", "pass_card", "force_go", "resume"}:
         asyncio.create_task(_maybe_resume_zp_pipeline(orch, session_id))
+    elif action in {"delete_card", "delete_rejected_cards"}:
+        refreshed_session = await orch.ensure_session(session_id)
+        allow_completed_restart = bool(refreshed_session and _count_rejected_cards(refreshed_session) == 0)
+        asyncio.create_task(
+            _maybe_resume_zp_pipeline(orch, session_id, allow_completed_restart=allow_completed_restart)
+        )
 
     return result
 

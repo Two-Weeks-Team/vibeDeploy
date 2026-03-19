@@ -1,5 +1,7 @@
 import pytest
 
+from agent.zero_prompt.schemas import ZPCard
+
 
 @pytest.mark.asyncio
 async def test_zp_start_returns_json_session(app_client):
@@ -116,3 +118,75 @@ async def test_run_zp_pipeline_does_not_pause_after_five_rejections(monkeypatch:
     assert session.status == "completed"
     assert len(session.cards) == 5
     assert all(card.status == "nogo" for card in session.cards)
+
+
+@pytest.mark.asyncio
+async def test_zp_action_delete_rejected_cards(app_client):
+    import agent.server as srv
+
+    orch = srv._get_zp_orchestrator()
+    session, _ = orch.create_session(goal=5)
+    session.status = "completed"
+    session.cards.extend(
+        [
+            ZPCard(card_id="c1", video_id="v1", status="nogo", score=40, title="Rejected 1"),
+            ZPCard(card_id="c2", video_id="v2", status="passed", score=42, title="Rejected 2"),
+        ]
+    )
+
+    resp = await app_client.post(
+        f"/zero-prompt/{session.session_id}/actions",
+        json={"action": "delete_rejected_cards"},
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["type"] == "zp.action.delete_rejected_cards"
+    assert body["deleted_count"] == 2
+    assert all(card.status == "deleted" for card in session.cards)
+
+
+@pytest.mark.asyncio
+async def test_maybe_resume_allows_completed_restart_when_rejections_cleared(monkeypatch: pytest.MonkeyPatch):
+    import agent.server as srv
+
+    orch = srv._get_zp_orchestrator()
+    session, _ = orch.create_session(goal=5)
+    session.status = "completed"
+    session.cards.append(ZPCard(card_id="gone", video_id="v1", status="deleted", score=0, title="Gone"))
+
+    launched: list[tuple[str, int]] = []
+
+    monkeypatch.setattr(srv, "_should_launch_zp_pipeline_background_task", lambda: True)
+    monkeypatch.setattr(srv, "_launch_zp_pipeline", lambda _orch, session_id, goal: launched.append((session_id, goal)))
+    monkeypatch.setattr(srv, "push_zp_event", lambda *_args, **_kwargs: None)
+
+    await srv._maybe_resume_zp_pipeline(orch, session.session_id, allow_completed_restart=True)
+
+    assert session.status == "exploring"
+    assert launched == [(session.session_id, session.goal_go_cards)]
+
+
+@pytest.mark.asyncio
+async def test_force_go_sets_consistent_score_breakdown(app_client, monkeypatch: pytest.MonkeyPatch):
+    import agent.server as srv
+
+    orch = srv._get_zp_orchestrator()
+    session, _ = orch.create_session(goal=5)
+    session.cards.append(ZPCard(card_id="go1", video_id="v1", status="nogo", score=21, title="Force GO Card"))
+
+    async def fake_update_card(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr("agent.db.zp_store.update_card", fake_update_card)
+
+    resp = await app_client.post(
+        f"/zero-prompt/{session.session_id}/actions",
+        json={"action": "force_go", "card_id": "go1"},
+    )
+
+    assert resp.status_code == 200
+    card = session.cards[0]
+    assert card.status == "go_ready"
+    assert card.score == 75
+    assert card.score_breakdown["proposal_clarity_points"] == 20.0
