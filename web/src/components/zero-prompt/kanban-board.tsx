@@ -17,6 +17,12 @@ interface KanbanBoardProps {
   onSelectedCardChange?: (cardId: string | null) => void;
 }
 
+const COLUMN_LIMITS: Partial<Record<string, number>> = {
+  analyzing: 5,
+  go_ready: 5,
+  nogo: 5,
+};
+
 const COLUMNS: { id: string; title: string; statuses: CardStatus[] }[] = [
   { id: "analyzing", title: "Exploring", statuses: ["analyzing"] },
   { id: "go_ready", title: "GO Ready", statuses: ["go_ready"] },
@@ -55,6 +61,7 @@ export function KanbanBoard({ cards, sessionId, onQueueBuild, onPassCard, onDele
             title={col.title}
             statuses={col.statuses}
             cards={cards}
+            maxItems={COLUMN_LIMITS[col.id]}
             sessionId={sessionId}
             onQueueBuild={onQueueBuild}
             onPassCard={onPassCard}
