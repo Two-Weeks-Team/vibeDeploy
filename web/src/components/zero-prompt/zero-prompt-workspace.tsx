@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { Rocket } from "lucide-react";
 import { useZeroPrompt } from "@/hooks/use-zero-prompt";
 import { StatusBar } from "@/components/zero-prompt/status-bar";
@@ -11,11 +11,9 @@ import type { ZPSession } from "@/types/zero-prompt";
 
 const DEFAULT_GOAL = 5;
 
-export function ZeroPromptWorkspace({ initialSession }: { initialSession: ZPSession | null }) {
+export function ZeroPromptWorkspace({ initialSession, autostart = false }: { initialSession: ZPSession | null; autostart?: boolean }) {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const hasAutostartedRef = useRef(false);
-  const autostart = searchParams.get("autostart") === "true";
   const {
     session,
     deployedCards,

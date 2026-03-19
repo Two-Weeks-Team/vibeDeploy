@@ -1,4 +1,3 @@
-import { Suspense } from "react";
 import { DASHBOARD_API_URL } from "@/lib/api";
 import { ZeroPromptWorkspace } from "@/components/zero-prompt/zero-prompt-workspace";
 import type { ZPSession } from "@/types/zero-prompt";
@@ -15,11 +14,13 @@ async function getInitialSession(): Promise<ZPSession | null> {
   }
 }
 
-export default async function ZeroPromptPage() {
-  const initialSession = await getInitialSession();
-  return (
-    <Suspense fallback={<div className="min-h-screen bg-background p-4 text-foreground sm:p-6 lg:p-8"><div className="mx-auto max-w-[1600px]"><p className="text-sm text-muted-foreground">Loading Zero-Prompt workspace...</p></div></div>}>
-      <ZeroPromptWorkspace initialSession={initialSession} />
-    </Suspense>
-  );
+export default async function ZeroPromptPage({ searchParams }: { searchParams?: Promise<Record<string, string | string[] | undefined>> }) {
+  const [session, resolvedSearchParams] = await Promise.all([
+    getInitialSession(),
+    searchParams ?? Promise.resolve({} as Record<string, string | string[] | undefined>),
+  ]);
+  const autostartParam = resolvedSearchParams?.autostart;
+  const autostart = Array.isArray(autostartParam) ? autostartParam.includes("true") : autostartParam === "true";
+
+  return <ZeroPromptWorkspace initialSession={session} autostart={autostart} />;
 }
