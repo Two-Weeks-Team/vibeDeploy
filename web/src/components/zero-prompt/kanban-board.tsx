@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import type { ZPCard, CardStatus } from "@/types/zero-prompt";
 import { KanbanColumn } from "./kanban-column";
 import { CardDetailModal } from "./card-detail-modal";
 
 interface KanbanBoardProps {
   cards: ZPCard[];
+  deployedCards?: ZPCard[];
   sessionId?: string;
   onQueueBuild: (cardId: string) => void;
   onPassCard: (cardId: string) => void;
@@ -32,25 +33,39 @@ const COLUMNS: { id: string; title: string; statuses: CardStatus[] }[] = [
   { id: "nogo", title: "Rejected / Skipped", statuses: ["nogo", "passed", "build_failed"] },
 ];
 
-export function KanbanBoard({ cards, sessionId, onQueueBuild, onPassCard, onDeleteCard, onDeleteRejectedCards, onReExplore, autoCloseMs, selectedCardId, onSelectedCardChange }: KanbanBoardProps) {
+export function KanbanBoard({ cards, deployedCards = [], sessionId, onQueueBuild, onPassCard, onDeleteCard, onDeleteRejectedCards, onReExplore, autoCloseMs, selectedCardId, onSelectedCardChange }: KanbanBoardProps) {
   const [internalSelectedCard, setInternalSelectedCard] = useState<ZPCard | null>(null);
+  const liveCards = [
+    ...cards.filter((card) => card.status === "deployed"),
+    ...deployedCards.filter((card) => !cards.some((sessionCard) => sessionCard.card_id === card.card_id)),
+  ];
+  const cardsForBoard = [
+    ...cards.filter((card) => card.status !== "deployed"),
+    ...liveCards,
+  ];
   const selectedCard = onSelectedCardChange
-    ? cards.find((card) => card.card_id === selectedCardId) ?? null
+    ? cardsForBoard.find((card) => card.card_id === selectedCardId) ?? null
     : internalSelectedCard;
 
-  const setSelectedCard = useCallback((card: ZPCard | null) => {
+  const setSelectedCard = (card: ZPCard | null) => {
     if (onSelectedCardChange) {
       onSelectedCardChange(card?.card_id ?? null);
       return;
     }
     setInternalSelectedCard(card);
-  }, [onSelectedCardChange]);
+  };
 
   useEffect(() => {
     if (!selectedCard || !autoCloseMs) return;
-    const timer = setTimeout(() => setSelectedCard(null), autoCloseMs);
+    const timer = setTimeout(() => {
+      if (onSelectedCardChange) {
+        onSelectedCardChange(null);
+      } else {
+        setInternalSelectedCard(null);
+      }
+    }, autoCloseMs);
     return () => clearTimeout(timer);
-  }, [selectedCard, autoCloseMs, setSelectedCard]);
+  }, [selectedCard, autoCloseMs, onSelectedCardChange]);
 
   return (
     <>
@@ -61,7 +76,7 @@ export function KanbanBoard({ cards, sessionId, onQueueBuild, onPassCard, onDele
             id={col.id}
             title={col.title}
             statuses={col.statuses}
-            cards={cards}
+            cards={cardsForBoard}
             maxItems={COLUMN_LIMITS[col.id]}
             sessionId={sessionId}
             onDeleteRejectedCards={col.id === "nogo" ? onDeleteRejectedCards : undefined}

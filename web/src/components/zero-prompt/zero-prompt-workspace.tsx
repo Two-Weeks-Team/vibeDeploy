@@ -18,6 +18,7 @@ export function ZeroPromptWorkspace({ initialSession }: { initialSession: ZPSess
   const autostart = searchParams.get("autostart") === "true";
   const {
     session,
+    deployedCards,
     actions,
     isConnected,
     isCompleted,
@@ -86,6 +87,7 @@ export function ZeroPromptWorkspace({ initialSession }: { initialSession: ZPSess
 
         <KanbanBoard
           cards={session?.cards || []}
+          deployedCards={deployedCards}
           sessionId={session?.session_id}
           onQueueBuild={queueBuild}
           onPassCard={passCard}

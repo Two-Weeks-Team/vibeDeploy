@@ -103,6 +103,8 @@ export function CardDetailModal({ card, isOpen, onClose, onQueueBuild, onPassCar
   });
   const lowScoreSignals = getLowScoreSignals(card);
   const hasExactBreakdown = SCORE_CRITERIA.every((item) => typeof card.score_breakdown?.[item.pointsKey] === "number");
+  const rawScore = card.score_breakdown?.raw_score;
+  const gateBlocked = Boolean(card.score_breakdown?.gate_blocked);
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -142,10 +144,19 @@ export function CardDetailModal({ card, isOpen, onClose, onQueueBuild, onPassCar
             </div>
           )}
 
+          {gateBlocked && typeof rawScore === "number" && rawScore > card.score && (
+            <div className="space-y-1 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
+              <h4 className="text-sm font-semibold text-amber-500">Gate-adjusted score</h4>
+              <p className="text-sm text-muted-foreground">
+                Weighted score was {rawScore}, but a hard gate failed, so the displayed score is capped at {card.score}.
+              </p>
+            </div>
+          )}
+
           <div className="space-y-2 rounded-lg border border-border/50 bg-background/70 p-3">
             <div className="flex items-center justify-between gap-3">
               <h4 className="text-sm font-semibold">Score criteria</h4>
-              <span className="text-xs text-muted-foreground">GO if score is 70+</span>
+              <span className="text-xs text-muted-foreground">GO if score is 70+ and hard gates pass</span>
             </div>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               {SCORE_CRITERIA.map((item) => (
@@ -171,7 +182,7 @@ export function CardDetailModal({ card, isOpen, onClose, onQueueBuild, onPassCar
               ))}
             </div>
             <p className="text-[11px] text-muted-foreground">
-              Final score = weighted sum of the five contributions above. The backend marks cards as GO at 70+.
+              Displayed score = weighted sum of the five contributions above, clamped if a hard gate fails.
             </p>
           </div>
 
