@@ -271,9 +271,7 @@ class StreamingOrchestrator:
             return False
         committed_statuses = {"go_ready", "build_queued", "building", "deployed"}
         committed_count = sum(1 for card in session.cards if card.status in committed_statuses)
-        rejected_statuses = {"nogo", "passed", "build_failed"}
-        rejected_count = sum(1 for card in session.cards if card.status in rejected_statuses)
-        return committed_count < session.goal_go_cards and rejected_count < 10
+        return committed_count < session.goal_go_cards
 
     async def register_card(self, session_id: str, video_id: str, title: str = "") -> str:
         card_id = str(uuid.uuid4())

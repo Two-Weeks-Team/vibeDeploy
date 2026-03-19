@@ -76,6 +76,16 @@ class TestShouldContinueExploring:
         session.cards.append(card)
         assert orch.should_continue_exploring(session.session_id) is True
 
+    def test_continues_even_with_many_rejected_cards(self):
+        orch = StreamingOrchestrator()
+        session, _ = orch.create_session(goal=3)
+        import uuid
+
+        for i in range(10):
+            session.cards.append(ZPCard(card_id=str(uuid.uuid4()), video_id=f"v{i}", status="nogo", score=20))
+
+        assert orch.should_continue_exploring(session.session_id) is True
+
     def test_paused_session_does_not_continue(self):
         orch = StreamingOrchestrator()
         session, _ = orch.create_session(goal=5)
