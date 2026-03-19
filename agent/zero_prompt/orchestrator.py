@@ -202,6 +202,7 @@ class StreamingOrchestrator:
                         thread_id=cd.get("thread_id"),
                         reason=cd.get("reason", ""),
                         reason_code=cd.get("reason_code", ""),
+                        score_breakdown=cd.get("score_breakdown", {}),
                         domain=cd.get("domain", ""),
                         papers_found=cd.get("papers_found", 0),
                         competitors_found=cd.get("competitors_found", ""),
@@ -505,6 +506,8 @@ class StreamingOrchestrator:
             }
         )
 
+        score_breakdown: dict[str, float | int] = {}
+
         if verdict_fn is not None:
             try:
                 decision, score, reason, reason_code = await verdict_fn(session_id, video_id, card_id)
@@ -516,79 +519,11 @@ class StreamingOrchestrator:
                 return events
         else:
             try:
-                from agent.zero_prompt.verdict import compute_verdict_score, determine_verdict
-
-                raw_confidence = idea.confidence_score if idea else 0.0
-                transcript_quality = (
-                    1.0 if transcript_source == "auto" else 0.65 if transcript_source == "metadata_fallback" else 0.25
-                )
-                confidence = max(0.05, raw_confidence) * transcript_quality
-
-                transcript_base = (
-                    0.30 if transcript_source == "auto" else 0.20 if transcript_source == "metadata_fallback" else 0.05
-                )
-                paper_bonus = min(len(papers) * 0.15, 0.45) if papers else 0.0
-                engagement = min(1.0, transcript_base + paper_bonus)
-
-                feature_bonus = min(len(idea.key_features) * 7, 28) if idea else 0
-                gap_bonus = min(len(market.gaps) * 8, 24) if market else 0
-                competitor_penalty = min((len(market.competitors) if market else 0) * 2, 16)
-                differentiation = max(18, min(90, 40 + feature_bonus + gap_bonus - competitor_penalty))
-
-                score = compute_verdict_score(
-                    confidence, engagement, market_opportunity, novelty_boost, differentiation
-                )
-                verdict = determine_verdict(score, market_opportunity, novelty_boost, differentiation)
-                decision = verdict.decision
-                reason = verdict.reason
-                reason_code = verdict.reason_code
-                score = verdict.score
-            except Exception:
-                decision, score, reason, reason_code = "NO_GO", 0, "verdict computation failed", "low_confidence"
-
-        card.title = idea.name or video_title or video_id
-        card.score = score
-        card.reason = reason
-        card.reason_code = reason_code
-        card.domain = idea.domain if idea else ""
-        card.papers_found = len(papers) if papers else 0
-        card.competitors_found = str(len(market.competitors)) if market else "0"
-        card.saturation = market.saturation_level if market else ""
-        card.novelty_boost = novelty_boost
-
-        if decision == "GO":
-            card.status = "go_ready"
-            events.append(verdict_go_event(score, reason, reason_code))
-
-            try:
-                await _db_update_card_safe(
-                    card_id,
-                    title=card.title,
-                    status="go_ready",
-                    score=score,
-                    reason=reason,
-                    reason_code=reason_code,
-                    domain=card.domain,
-                    papers_found=card.papers_found,
-                    competitors_found=card.competitors_found,
-                    saturation=card.saturation,
-                    novelty_boost=novelty_boost,
-                )
-                push_zp_event(
-                    {
-                        "type": "card.update",
-                        "card_id": card_id,
-                        "status": "go_ready",
-                        "score": score,
-                        "title": card.title,
-                        "session_id": session_id,
-                    }
-                )
-            except Exception:
-                pass
-
-            try:
                 from agent.zero_prompt.card_enrichment import enrich_card_with_gemini
+                from agent.zero_prompt.competitive_analysis import analyze_competition
+                from agent.zero_prompt.paper_brainstorm import enhance_idea_with_papers
+                from agent.zero_prompt.paper_search import search_papers
+                from agent.zero_prompt.verdict import build_mvp_score_breakdown, determine_verdict
 
                 enrichment = await enrich_card_with_gemini(
                     video_title=video_title,
@@ -603,26 +538,115 @@ class StreamingOrchestrator:
                 card.video_summary = enrichment.get("video_summary", "")
                 card.insights = enrichment.get("insights", [])
                 card.mvp_proposal = enrichment.get("mvp_proposal", {})
-                try:
-                    await _db_update_card_safe(
-                        card_id,
-                        video_summary=card.video_summary,
-                        insights=card.insights,
-                        mvp_proposal=card.mvp_proposal,
-                    )
-                    push_zp_event(
-                        {
-                            "type": "card.enriched",
-                            "card_id": card_id,
-                            "status": "go_ready",
-                            "session_id": session_id,
-                            "title": card.title,
-                            "video_summary": card.video_summary,
-                        }
-                    )
-                except Exception:
-                    pass
 
+                mvp = card.mvp_proposal or {}
+                mvp_query = " ".join(
+                    part
+                    for part in [
+                        str(mvp.get("app_name") or "").strip(),
+                        str(mvp.get("core_feature") or "").strip(),
+                        str(mvp.get("target_user") or "").strip(),
+                    ]
+                    if part
+                )
+                mvp_market = await analyze_competition(
+                    mvp_query or (idea.name if idea else video_title), search_limit=8
+                )
+                mvp_papers = await search_papers(mvp_query or (idea.name if idea else video_title), max_results=3)
+                mvp_enhanced = enhance_idea_with_papers(
+                    str(mvp.get("core_feature") or mvp_query or idea.name or video_title),
+                    mvp_papers,
+                )
+                market_opportunity = mvp_market.market_opportunity_score
+                card.competitors_found = str(len(mvp_market.competitors))
+                card.saturation = mvp_market.saturation_level
+                card.papers_found = len(mvp_papers)
+                novelty_boost = mvp_enhanced.novelty_boost
+
+                score_breakdown = build_mvp_score_breakdown(
+                    mvp_proposal=card.mvp_proposal,
+                    market_opportunity=market_opportunity,
+                    novelty_boost=novelty_boost,
+                    papers_found=len(mvp_papers),
+                    market_gap_count=len(mvp_market.gaps),
+                )
+                score = int(score_breakdown.get("final_score", 0))
+                verdict = determine_verdict(
+                    score=score,
+                    market_viability=int(score_breakdown.get("market_viability_signal", 0)),
+                    mvp_differentiation=int(score_breakdown.get("mvp_differentiation_signal", 0)),
+                    execution_feasibility=int(score_breakdown.get("execution_feasibility_signal", 0)),
+                    evidence_strength=int(score_breakdown.get("evidence_strength_signal", 0)),
+                    novelty_boost=novelty_boost,
+                )
+                decision = verdict.decision
+                reason = verdict.reason
+                reason_code = verdict.reason_code
+                score = verdict.score
+            except Exception:
+                decision, score, reason, reason_code = "NO_GO", 0, "verdict computation failed", "low_confidence"
+
+        mvp_title = str((card.mvp_proposal or {}).get("app_name") or "").strip()
+        card.title = mvp_title or idea.name or video_title or video_id
+        card.score = score
+        card.reason = reason
+        card.reason_code = reason_code
+        card.score_breakdown = score_breakdown
+        card.domain = idea.domain if idea else ""
+        card.papers_found = len(papers) if papers else 0
+        if not card.competitors_found:
+            card.competitors_found = str(len(market.competitors)) if market else "0"
+        if not card.saturation:
+            card.saturation = market.saturation_level if market else ""
+        card.novelty_boost = novelty_boost
+
+        if decision == "GO":
+            card.status = "go_ready"
+            events.append(verdict_go_event(score, reason, reason_code))
+
+            try:
+                await _db_update_card_safe(
+                    card_id,
+                    title=card.title,
+                    status="go_ready",
+                    score=score,
+                    reason=reason,
+                    reason_code=reason_code,
+                    score_breakdown=card.score_breakdown,
+                    domain=card.domain,
+                    papers_found=card.papers_found,
+                    competitors_found=card.competitors_found,
+                    saturation=card.saturation,
+                    novelty_boost=novelty_boost,
+                    video_summary=card.video_summary,
+                    insights=card.insights,
+                    mvp_proposal=card.mvp_proposal,
+                )
+                push_zp_event(
+                    {
+                        "type": "card.update",
+                        "card_id": card_id,
+                        "status": "go_ready",
+                        "score": score,
+                        "score_breakdown": card.score_breakdown,
+                        "title": card.title,
+                        "session_id": session_id,
+                    }
+                )
+                push_zp_event(
+                    {
+                        "type": "card.enriched",
+                        "card_id": card_id,
+                        "status": "go_ready",
+                        "session_id": session_id,
+                        "title": card.title,
+                        "video_summary": card.video_summary,
+                    }
+                )
+            except Exception:
+                pass
+
+            try:
                 mvp = card.mvp_proposal or {}
                 tech = mvp.get("tech_stack", _DEFAULT_TECH_STACK)
                 pages = mvp.get("key_pages", [])
@@ -661,11 +685,15 @@ class StreamingOrchestrator:
                     score=score,
                     reason=reason,
                     reason_code=reason_code,
+                    score_breakdown=card.score_breakdown,
                     domain=card.domain,
                     papers_found=card.papers_found,
                     competitors_found=card.competitors_found,
                     saturation=card.saturation,
                     novelty_boost=novelty_boost,
+                    video_summary=card.video_summary,
+                    insights=card.insights,
+                    mvp_proposal=card.mvp_proposal,
                 )
                 push_zp_event(
                     {
@@ -674,8 +702,19 @@ class StreamingOrchestrator:
                         "status": "nogo",
                         "score": score,
                         "reason": reason,
+                        "score_breakdown": card.score_breakdown,
                         "title": card.title,
                         "session_id": session_id,
+                    }
+                )
+                push_zp_event(
+                    {
+                        "type": "card.enriched",
+                        "card_id": card_id,
+                        "status": "nogo",
+                        "session_id": session_id,
+                        "title": card.title,
+                        "video_summary": card.video_summary,
                     }
                 )
             except Exception:
@@ -744,6 +783,40 @@ class StreamingOrchestrator:
             }
         )
         return {"type": "zp.action.delete_card", "card_id": card_id}
+
+    def delete_rejected_cards(self, session_id: str) -> dict:
+        session = self._sessions.get(session_id)
+        if session is None:
+            return {"type": "zp.action.error", "error": "session_not_found"}
+
+        rejected_statuses = {"nogo", "passed", "build_failed"}
+        deleted_card_ids: list[str] = []
+
+        for card in session.cards:
+            if card.status not in rejected_statuses:
+                continue
+            card.status = "deleted"
+            deleted_card_ids.append(card.card_id)
+            _fire(_db_update_card_safe(card.card_id, status="deleted"))
+            push_zp_event(
+                {
+                    "type": "card.update",
+                    "card_id": card.card_id,
+                    "status": "deleted",
+                    "title": card.title,
+                    "session_id": session_id,
+                }
+            )
+
+        push_zp_event(
+            {
+                "type": "zp.cards.bulk_deleted",
+                "deleted_count": len(deleted_card_ids),
+                "deleted_card_ids": deleted_card_ids,
+                "session_id": session_id,
+            }
+        )
+        return {"type": "zp.action.delete_rejected_cards", "deleted_count": len(deleted_card_ids)}
 
     def pause(self, session_id: str) -> dict:
         session = self._sessions.get(session_id)

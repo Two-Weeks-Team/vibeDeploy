@@ -49,6 +49,7 @@ async def enrich_card_with_gemini(
             '2. "insights": array of 3-5 actionable insights (English, each 1 sentence)\n'
             '3. "mvp_proposal": object with:\n'
             '   - "app_name": catchy English app name\n'
+            '   - "target_user": one-line primary user definition (English)\n'
             '   - "core_feature": one-line core feature description (English)\n'
             '   - "tech_stack": recommended tech stack\n'
             '   - "key_pages": array of 3-4 main pages/screens (English)\n'
@@ -112,6 +113,7 @@ def _rule_based_enrichment(
 
     mvp = {
         "app_name": idea_name or video_title[:30],
+        "target_user": f"People looking for simpler {idea_domain} workflows" if idea_domain else "Busy consumers",
         "core_feature": f"Automation solution for {idea_domain} domain",
         "tech_stack": "Next.js + Tailwind CSS + FastAPI",
         "key_pages": ["Dashboard", "Data Input", "Analysis Results", "Settings"],

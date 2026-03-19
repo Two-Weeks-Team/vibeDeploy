@@ -288,6 +288,19 @@ class TestDeleteCard:
         result = orch.delete_card(session.session_id, "c1")
         assert result["type"] == "zp.action.delete_card"
 
+    @pytest.mark.asyncio
+    async def test_delete_rejected_cards_marks_all_rejected_deleted(self):
+        orch = StreamingOrchestrator()
+        session, _ = orch.create_session()
+        await orch.exploration_step(session.session_id, "v1", verdict_fn=_nogo_verdict)
+        await orch.exploration_step(session.session_id, "v2", verdict_fn=_nogo_verdict)
+
+        result = orch.delete_rejected_cards(session.session_id)
+
+        assert result["type"] == "zp.action.delete_rejected_cards"
+        assert result["deleted_count"] == 2
+        assert all(card.status == "deleted" for card in session.cards)
+
 
 class TestPauseResume:
     def test_pause_sets_paused(self):
@@ -316,6 +329,37 @@ class TestPauseResume:
         orch = StreamingOrchestrator()
         result = orch.pause("no-such")
         assert result["type"] == "zp.action.error"
+
+
+class TestHydration:
+    @pytest.mark.asyncio
+    async def test_hydrate_session_from_db_preserves_score_breakdown(self, monkeypatch: pytest.MonkeyPatch):
+        async def fake_get_session(_session_id: str):
+            return {
+                "session_id": "hydrated-session",
+                "status": "paused",
+                "goal_go_cards": 5,
+                "cards": [
+                    {
+                        "card_id": "c1",
+                        "video_id": "v1",
+                        "status": "nogo",
+                        "score": 44,
+                        "title": "Hydrated Card",
+                        "reason": "low confidence",
+                        "reason_code": "low_confidence",
+                        "score_breakdown": {"proposal_clarity_points": 8.0, "market_viability_points": 9.5},
+                    }
+                ],
+            }
+
+        monkeypatch.setattr("agent.db.zp_store.get_session", fake_get_session)
+
+        orch = StreamingOrchestrator()
+        session = await orch._hydrate_session_from_db("hydrated-session")
+
+        assert session is not None
+        assert session.cards[0].score_breakdown["proposal_clarity_points"] == 8.0
 
 
 class TestStartNextBuild:
