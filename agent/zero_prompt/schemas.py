@@ -105,6 +105,7 @@ class ZPCard(BaseModel):
     thread_id: str | None = None
     reason: str = ""
     reason_code: str = ""
+    score_breakdown: dict = {}
     domain: str = ""
     papers_found: int = 0
     competitors_found: str = ""

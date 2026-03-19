@@ -29,6 +29,7 @@ async def ensure_tables() -> None:
                 domain TEXT DEFAULT '',
                 reason TEXT DEFAULT '',
                 reason_code TEXT DEFAULT '',
+                score_breakdown JSONB DEFAULT '{}'::jsonb,
                 papers_found INT DEFAULT 0,
                 competitors_found TEXT DEFAULT '',
                 saturation TEXT DEFAULT '',
@@ -53,6 +54,7 @@ async def ensure_tables() -> None:
             "ALTER TABLE zp_cards ADD COLUMN IF NOT EXISTS build_events JSONB DEFAULT '[]'::jsonb",
             "ALTER TABLE zp_cards ADD COLUMN IF NOT EXISTS build_phase TEXT DEFAULT ''",
             "ALTER TABLE zp_cards ADD COLUMN IF NOT EXISTS build_node TEXT DEFAULT ''",
+            "ALTER TABLE zp_cards ADD COLUMN IF NOT EXISTS score_breakdown JSONB DEFAULT '{}'::jsonb",
         ]
         for migration in migrations:
             try:
@@ -148,7 +150,7 @@ async def update_card(card_id: str, **fields: object) -> None:
     sets = []
     values = []
     for i, (k, v) in enumerate(fields.items(), 1):
-        if k in ("insights", "mvp_proposal"):
+        if k in ("insights", "mvp_proposal", "score_breakdown"):
             sets.append(f"{k} = ${i}::jsonb")
             values.append(json.dumps(v) if not isinstance(v, str) else v)
         else:
@@ -201,4 +203,6 @@ def _card_row_to_dict(row: object) -> dict:
         d["insights"] = json.loads(d["insights"])
     if isinstance(d.get("mvp_proposal"), str):
         d["mvp_proposal"] = json.loads(d["mvp_proposal"])
+    if isinstance(d.get("score_breakdown"), str):
+        d["score_breakdown"] = json.loads(d["score_breakdown"])
     return d
