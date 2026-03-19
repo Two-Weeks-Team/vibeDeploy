@@ -1,14 +1,20 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { Suspense, useEffect, useRef } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Rocket } from "lucide-react";
 import { useZeroPrompt } from "@/hooks/use-zero-prompt";
 import { StatusBar } from "@/components/zero-prompt/status-bar";
 import { KanbanBoard } from "@/components/zero-prompt/kanban-board";
 import { ActionFeed } from "@/components/zero-prompt/action-feed";
 
-export default function ZeroPromptPage() {
-  const hasStartedRef = useRef(false);
+const DEFAULT_GOAL = 5;
+
+function ZeroPromptWorkspace() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const hasAutostartedRef = useRef(false);
+  const autostart = searchParams.get("autostart") === "true";
   const {
     session,
     actions,
@@ -23,41 +29,51 @@ export default function ZeroPromptPage() {
   } = useZeroPrompt();
 
   useEffect(() => {
-    if (hasLoadedDashboard && !session && !isLoading && !hasStartedRef.current) {
-      hasStartedRef.current = true;
-      startSession(5);
+    if (!autostart || !hasLoadedDashboard || isLoading || hasAutostartedRef.current) {
+      return;
     }
-  }, [session, isLoading, hasLoadedDashboard, startSession]);
+
+    hasAutostartedRef.current = true;
+
+    void (async () => {
+      const started = await startSession(DEFAULT_GOAL);
+      if (started) {
+        router.replace("/zero-prompt");
+      }
+    })();
+  }, [autostart, hasLoadedDashboard, isLoading, router, startSession]);
 
   return (
-    <div className="min-h-screen bg-background text-foreground p-4 sm:p-6 lg:p-8">
-      <div className="max-w-[1600px] mx-auto space-y-6">
-        <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
+    <div className="min-h-screen bg-background p-4 text-foreground sm:p-6 lg:p-8">
+      <div className="mx-auto max-w-[1600px] space-y-6">
+        <header className="mb-8 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight flex items-center gap-2">
-              <Rocket className="w-6 h-6 text-blue-500" />
+            <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight sm:text-3xl">
+              <Rocket className="h-6 w-6 text-blue-500" />
               Zero-Prompt Workspace
             </h1>
-            <p className="text-sm text-muted-foreground mt-1">
+            <p className="mt-1 text-sm text-muted-foreground">
               {session
                 ? `Session: ${session.session_id.slice(0, 8)}... • Status: ${session.status}`
-                : isLoading ? "Starting..." : "Connecting to agent..."}
+                : isLoading
+                  ? "Starting..."
+                  : "Connecting to agent..."}
             </p>
           </div>
           <div className="flex items-center gap-2 text-sm">
             {isConnected ? (
               <>
-                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                <span className="text-green-500">Live — Exploring</span>
+                <span className="h-2 w-2 animate-pulse rounded-full bg-green-500" />
+                <span className="text-green-500">Live - Exploring</span>
               </>
             ) : isCompleted ? (
               <>
-                <span className="w-2 h-2 rounded-full bg-blue-500" />
+                <span className="h-2 w-2 rounded-full bg-blue-500" />
                 <span className="text-blue-500">Complete</span>
               </>
             ) : isLoading ? (
               <>
-                <span className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse" />
+                <span className="h-2 w-2 animate-pulse rounded-full bg-yellow-500" />
                 <span className="text-yellow-500">Starting...</span>
               </>
             ) : null}
@@ -80,5 +96,23 @@ export default function ZeroPromptPage() {
         <ActionFeed actions={actions} />
       </div>
     </div>
+  );
+}
+
+function LoadingFallback() {
+  return (
+    <div className="min-h-screen bg-background p-4 text-foreground sm:p-6 lg:p-8">
+      <div className="mx-auto max-w-[1600px]">
+        <p className="text-sm text-muted-foreground">Loading Zero-Prompt workspace...</p>
+      </div>
+    </div>
+  );
+}
+
+export default function ZeroPromptPage() {
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <ZeroPromptWorkspace />
+    </Suspense>
   );
 }

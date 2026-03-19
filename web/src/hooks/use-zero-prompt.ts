@@ -267,7 +267,7 @@ export function useZeroPrompt() {
     };
   }, [eventSessionId, loadDashboard]);
 
-  const handleStartSession = async (goal?: number) => {
+  const handleStartSession = useCallback(async (goal?: number) => {
     setIsLoading(true);
     setError(null);
     try {
@@ -281,14 +281,16 @@ export function useZeroPrompt() {
         }
       }
       setActions([]);
+      return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to start");
+      return false;
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
-  const handleQueueBuild = async (cardId: string) => {
+  const handleQueueBuild = useCallback(async (cardId: string) => {
     if (!session) return;
     try {
       await queueBuild(session.session_id, cardId);
@@ -296,9 +298,9 @@ export function useZeroPrompt() {
     } catch (err) {
       console.error("Failed to queue build", err);
     }
-  };
+  }, [loadDashboard, session]);
 
-  const handlePassCard = async (cardId: string) => {
+  const handlePassCard = useCallback(async (cardId: string) => {
     if (!session) return;
     try {
       await passCard(session.session_id, cardId);
@@ -306,9 +308,9 @@ export function useZeroPrompt() {
     } catch (err) {
       console.error("Failed to pass card", err);
     }
-  };
+  }, [loadDashboard, session]);
 
-  const handleDeleteCard = async (cardId: string) => {
+  const handleDeleteCard = useCallback(async (cardId: string) => {
     if (!session) return;
     try {
       await deleteCard(session.session_id, cardId);
@@ -319,7 +321,7 @@ export function useZeroPrompt() {
     } catch (err) {
       console.error("Failed to delete card", err);
     }
-  };
+  }, [loadDashboard, session]);
 
   return {
     session,
