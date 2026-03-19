@@ -280,13 +280,13 @@ function shouldRefreshDashboard(type: string, data: Record<string, unknown>): bo
   return TERMINAL_CARD_STATUSES.has(status);
 }
 
-export function useZeroPrompt() {
-  const [session, setSession] = useState<ZPSession | null>(null);
+export function useZeroPrompt(initialSession: ZPSession | null = null) {
+  const [session, setSession] = useState<ZPSession | null>(initialSession ? normalizeSession(initialSession) : null);
   const [actions, setActions] = useState<ZPAction[]>([]);
   const [isConnected, setIsConnected] = useState(false);
-  const [isCompleted, setIsCompleted] = useState(false);
+  const [isCompleted, setIsCompleted] = useState(initialSession?.status === "completed");
   const [isLoading, setIsLoading] = useState(false);
-  const [hasLoadedDashboard, setHasLoadedDashboard] = useState(false);
+  const [hasLoadedDashboard, setHasLoadedDashboard] = useState(initialSession !== null);
   const [error, setError] = useState<string | null>(null);
   const sessionRef = useRef<ZPSession | null>(null);
   const [eventSessionId, setEventSessionId] = useState<string | null>(null);
