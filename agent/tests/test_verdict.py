@@ -155,7 +155,7 @@ def test_boundary_score_70_is_go():
         execution_feasibility=70,
         evidence_strength=55,
         novelty_boost=0.15,
-        originality=60,
+        originality=65,
     )
     assert result.decision == "GO"
 
@@ -197,7 +197,7 @@ def test_nutrition_mvp_can_clear_go_threshold():
     assert breakdown["final_score"] >= 70
     assert breakdown["proposal_clarity_signal"] >= 70
     assert breakdown["execution_feasibility_signal"] >= 70
-    assert breakdown["originality_signal"] >= 55
+    assert breakdown["originality_signal"] >= 65
 
 
 def test_generic_mvp_stays_below_go_threshold():
@@ -222,7 +222,7 @@ def test_generic_mvp_stays_below_go_threshold():
         market_search_confidence="normal",
     )
     assert breakdown["final_score"] < 70
-    assert breakdown["originality_signal"] < 55
+    assert breakdown["originality_signal"] < 65
 
 
 def test_generic_business_idea_directory_stays_below_go_threshold():
@@ -248,7 +248,7 @@ def test_generic_business_idea_directory_stays_below_go_threshold():
     )
     assert breakdown["final_score"] < 70
     assert breakdown["mvp_differentiation_signal"] < 60
-    assert breakdown["originality_signal"] < 55
+    assert breakdown["originality_signal"] < 65
 
 
 def test_verdict_model_structure():

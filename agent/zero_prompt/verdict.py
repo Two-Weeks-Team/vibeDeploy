@@ -43,6 +43,12 @@ _COMMODITY_MVP_MARKERS = (
     "discover ideas",
     "idea finder",
     "inspiration",
+    "list of",
+    "collection of",
+    "catalog",
+    "library of",
+    "showcase",
+    "roundup",
     "resource library",
     "tools directory",
     "free tools",
@@ -55,6 +61,9 @@ _VALIDATION_WEAK_MARKERS = (
     "generic demand",
     "could help",
     "might help",
+    "often talk about",
+    "creators mention",
+    "people want",
 )
 
 
@@ -134,6 +143,11 @@ def _originality_score(
     lowered = " ".join([problem_statement, core_feature, differentiation, validation_signal]).lower()
     if "business ideas" in lowered or "free tools" in lowered:
         score -= 12
+
+    if commodity_count >= 2:
+        score = min(score, 45)
+    if any(marker in lowered for marker in ("business ideas", "free tools", "success stories", "directory", "catalog")):
+        score = min(score, 45)
 
     return _clamp(score)
 
@@ -399,7 +413,7 @@ def build_mvp_score_breakdown(
         "mvp_differentiation_signal": mvp_differentiation,
         "evidence_strength_signal": evidence_strength,
         "originality_signal": originality,
-        "originality_threshold": 55,
+        "originality_threshold": 65,
         "proposal_clarity_points": proposal_points,
         "execution_feasibility_points": execution_points,
         "market_viability_points": market_points,
@@ -438,7 +452,7 @@ def _no_go_reason_code(
     novelty_boost: float,
     originality: int,
 ) -> str:
-    if originality < 55:
+    if originality < 65:
         return "weak_differentiation"
     if execution_feasibility < 55:
         return "technical_risk"
@@ -475,7 +489,7 @@ def determine_verdict(
         and mvp_differentiation >= 60
         and execution_feasibility >= 55
         and evidence_strength >= 45
-        and originality >= 55
+        and originality >= 65
     ):
         reason = (
             f"The proposed MVP is concrete, scoped, and differentiated enough to build (score {score})."
