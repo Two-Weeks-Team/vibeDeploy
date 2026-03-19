@@ -130,6 +130,13 @@ async def reset_session(session_id: str) -> None:
         await conn.execute("DELETE FROM zp_sessions WHERE id = $1", session_id)
 
 
+async def reset_all_sessions() -> None:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        await conn.execute("DELETE FROM zp_cards")
+        await conn.execute("DELETE FROM zp_sessions")
+
+
 async def add_card(session_id: str, card_id: str, video_id: str, title: str = "") -> dict:
     pool = await get_pool()
     async with pool.acquire() as conn:
