@@ -118,6 +118,7 @@ export function useZeroPrompt() {
   const [error, setError] = useState<string | null>(null);
   const sessionRef = useRef<ZPSession | null>(null);
   const [eventSessionId, setEventSessionId] = useState<string | null>(null);
+  const refreshTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     sessionRef.current = session;
@@ -144,6 +145,17 @@ export function useZeroPrompt() {
       setHasLoadedDashboard(true);
     }
   }, []);
+
+  const scheduleDashboardRefresh = useCallback(() => {
+    if (refreshTimeoutRef.current !== null) {
+      return;
+    }
+
+    refreshTimeoutRef.current = window.setTimeout(() => {
+      refreshTimeoutRef.current = null;
+      void loadDashboard();
+    }, 250);
+  }, [loadDashboard]);
 
   useEffect(() => {
     const restore = async () => {
@@ -230,7 +242,7 @@ export function useZeroPrompt() {
               }
 
               if (rawType.includes("card") || rawType.includes("verdict") || rawType.includes("session") || rawType.includes("council") || rawType.includes("build")) {
-                await loadDashboard();
+                scheduleDashboardRefresh();
               }
             } catch (err) {
               if (process.env.NODE_ENV === "development") {
@@ -263,9 +275,13 @@ export function useZeroPrompt() {
     return () => {
       cancelled = true;
       controller.abort();
+      if (refreshTimeoutRef.current !== null) {
+        window.clearTimeout(refreshTimeoutRef.current);
+        refreshTimeoutRef.current = null;
+      }
       setIsConnected(false);
     };
-  }, [eventSessionId, loadDashboard]);
+  }, [eventSessionId, scheduleDashboardRefresh]);
 
   const handleStartSession = useCallback(async (goal?: number) => {
     setIsLoading(true);
