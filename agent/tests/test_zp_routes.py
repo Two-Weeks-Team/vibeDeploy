@@ -31,12 +31,16 @@ async def reset_singleton_session(monkeypatch: pytest.MonkeyPatch):
     async def fake_add_card(_session_id: str, card_id: str, video_id: str, title: str = ""):
         return {"card_id": card_id, "video_id": video_id, "title": title, "status": "analyzing"}
 
+    async def fake_get_deployed_cards_across_sessions(limit: int = 50):
+        return []
+
     monkeypatch.setattr(_zps, "get_dashboard", fake_get_dashboard)
     monkeypatch.setattr(_zps, "reset_all_sessions", fake_noop)
     monkeypatch.setattr(_zps, "ensure_session", fake_noop)
     monkeypatch.setattr(_zps, "add_card", fake_add_card)
     monkeypatch.setattr(_zps, "update_card", fake_noop)
     monkeypatch.setattr(_zps, "update_session_status", fake_noop)
+    monkeypatch.setattr(_zps, "get_deployed_cards_across_sessions", fake_get_deployed_cards_across_sessions)
 
 
 @pytest.mark.asyncio
@@ -173,6 +177,24 @@ async def test_zp_action_latest_targets_most_recent_session(app_client):
     )
 
     assert resp.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_zp_deployed_cards_returns_inventory(app_client, monkeypatch: pytest.MonkeyPatch):
+    from agent.db import zp_store as _zps
+
+    async def fake_get_deployed_cards_across_sessions(limit: int = 50):
+        assert limit == 10
+        return [
+            {"card_id": "live-1", "title": "Live App", "status": "deployed", "live_url": "https://live.example.com"}
+        ]
+
+    monkeypatch.setattr(_zps, "get_deployed_cards_across_sessions", fake_get_deployed_cards_across_sessions)
+
+    resp = await app_client.get("/zero-prompt/deployed?limit=10")
+
+    assert resp.status_code == 200
+    assert resp.json()["cards"][0]["card_id"] == "live-1"
 
 
 @pytest.mark.asyncio

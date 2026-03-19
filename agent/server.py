@@ -1009,6 +1009,19 @@ async def zp_dashboard():
         return {"session_id": None, "status": "idle", "cards": []}
 
 
+@app.get("/api/zero-prompt/deployed")
+@app.get("/zero-prompt/deployed")
+async def zp_deployed_cards(limit: int = 50):
+    try:
+        from .db.zp_store import get_deployed_cards_across_sessions
+
+        cards = await get_deployed_cards_across_sessions(limit=limit)
+        return {"cards": cards}
+    except Exception:
+        logger.exception("[ZP] Failed to load deployed cards inventory")
+        return {"cards": []}
+
+
 async def _resolve_zp_session_id(requested_session_id: str | None) -> str | None:
     if requested_session_id and requested_session_id not in {"latest", "current"}:
         return requested_session_id
@@ -1182,36 +1195,63 @@ def _clear_zp_runtime(orch) -> None:
 
 
 async def _discover_videos(session_id: str) -> list[tuple[str, str, str]]:
-    try:
+    async def discover_via_youtube() -> list[tuple[str, str, str]]:
         from .zero_prompt.discovery import YouTubeDiscovery
 
         discovery = YouTubeDiscovery()
         candidates = await discovery.fetch_candidate_pool(
             max_results=30, min_views=5000, min_likes=100, min_engagement_rate=0.01
         )
-        videos = [(c.video_id, c.title, c.description) for c in candidates]
-        if videos:
-            logger.info("[ZP] YouTube API discovery: %d videos", len(videos))
-            return videos
-    except Exception as exc:
-        logger.warning("[ZP] YouTube API failed: %s", str(exc)[:200])
+        return [(c.video_id, c.title, c.description) for c in candidates]
 
-    push_zp_event(
-        {
-            "type": "zp.discovery.grounding",
-            "message": "Using Gemini AI to discover trending videos...",
-            "session_id": session_id,
-        }
-    )
+    async def discover_via_grounding() -> list[tuple[str, str, str]]:
+        return await discover_videos_via_grounding(max_results=20)
+
+    discovery_tasks: dict[str, asyncio.Task[list[tuple[str, str, str]]]] = {
+        "youtube": asyncio.create_task(discover_via_youtube())
+    }
+
     try:
         from .zero_prompt.grounding_discovery import discover_videos_via_grounding
 
-        videos = await discover_videos_via_grounding(max_results=20)
-        if videos:
-            logger.info("[ZP] Gemini grounding discovery: %d videos", len(videos))
-            return videos
-    except Exception as exc:
-        logger.warning("[ZP] Gemini grounding failed: %s", str(exc)[:200])
+        push_zp_event(
+            {
+                "type": "zp.discovery.grounding",
+                "message": "Using Gemini AI to discover trending videos...",
+                "session_id": session_id,
+            }
+        )
+        discovery_tasks["grounding"] = asyncio.create_task(discover_via_grounding())
+    except Exception:
+        pass
+
+    pending = set(discovery_tasks.values())
+    failed_sources: set[str] = set()
+    source_names = {task: source for source, task in discovery_tasks.items()}
+
+    try:
+        while pending:
+            done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+            for task in done:
+                source = source_names[task]
+                try:
+                    videos = task.result()
+                except Exception as exc:
+                    failed_sources.add(source)
+                    logger.warning("[ZP] %s discovery failed: %s", source.title(), str(exc)[:200])
+                    continue
+
+                if videos:
+                    logger.info("[ZP] %s discovery: %d videos", source.title(), len(videos))
+                    for remaining in pending:
+                        remaining.cancel()
+                    return videos
+
+        if "youtube" in failed_sources and "grounding" in discovery_tasks:
+            logger.info("[ZP] No YouTube candidates returned; grounding fallback exhausted")
+    finally:
+        for task in pending:
+            task.cancel()
 
     logger.info("[ZP] Using hardcoded fallback topics")
     return [(f"fallback-{i}", topic, topic) for i, topic in enumerate(_ZP_FALLBACK_TOPICS)]

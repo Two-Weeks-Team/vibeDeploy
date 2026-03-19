@@ -123,6 +123,22 @@ async def get_dashboard() -> dict:
         }
 
 
+async def get_deployed_cards_across_sessions(limit: int = 50) -> list[dict]:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT *
+            FROM zp_cards
+            WHERE status = 'deployed' AND status != 'deleted' AND COALESCE(live_url, '') != ''
+            ORDER BY created_at DESC
+            LIMIT $1
+            """,
+            limit,
+        )
+        return [_card_row_to_dict(row) for row in rows]
+
+
 async def reset_session(session_id: str) -> None:
     pool = await get_pool()
     async with pool.acquire() as conn:
@@ -133,7 +149,7 @@ async def reset_session(session_id: str) -> None:
 async def reset_all_sessions() -> None:
     pool = await get_pool()
     async with pool.acquire() as conn:
-        await conn.execute("DELETE FROM zp_cards")
+        await conn.execute("DELETE FROM zp_cards WHERE status != 'deployed'")
         await conn.execute("DELETE FROM zp_sessions")
 
 
