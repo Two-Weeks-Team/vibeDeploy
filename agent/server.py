@@ -1095,7 +1095,6 @@ _ZP_FALLBACK_TOPICS = [
 
 _ZP_EXPLORING_LIMIT = 5
 _ZP_GO_READY_LIMIT = 5
-_ZP_REJECTED_LIMIT = 5
 _ZP_MAX_ROUNDS = 5
 
 
@@ -1164,11 +1163,6 @@ def _count_exploring_cards(session) -> int:
     return sum(1 for c in session.cards if c.status == "analyzing")
 
 
-def _count_rejected_cards(session) -> int:
-    rejected = {"nogo", "passed", "build_failed"}
-    return sum(1 for c in session.cards if c.status in rejected)
-
-
 async def _set_zp_session_status(orch, session_id: str, status: str) -> None:
     session = await orch.ensure_session(session_id)
     if session is not None:
@@ -1190,8 +1184,6 @@ async def _maybe_resume_zp_pipeline(orch, session_id: str) -> None:
         return
 
     if _count_go_cards(session) >= session.goal_go_cards:
-        return
-    if _count_rejected_cards(session) >= _ZP_REJECTED_LIMIT:
         return
     if _count_exploring_cards(session) >= _ZP_EXPLORING_LIMIT:
         return
@@ -1220,16 +1212,6 @@ async def _run_zp_pipeline(orch, session_id: str, goal: int) -> None:
                     "type": "zp.session.pause",
                     "reason": "goal_reached",
                     "go_ready_cards": _count_go_cards(session),
-                    "session_id": session_id,
-                }
-                break
-            if session and _count_rejected_cards(session) >= _ZP_REJECTED_LIMIT:
-                logger.info("[ZP] Rejected cap reached (%d cards) for session %s", _ZP_REJECTED_LIMIT, session_id)
-                final_status = "paused"
-                final_event = {
-                    "type": "zp.session.pause",
-                    "reason": "rejected_cap_reached",
-                    "rejected_cards": _count_rejected_cards(session),
                     "session_id": session_id,
                 }
                 break
@@ -1299,16 +1281,6 @@ async def _run_zp_pipeline(orch, session_id: str, goal: int) -> None:
                         "type": "zp.session.pause",
                         "reason": "goal_reached",
                         "go_ready_cards": _count_go_cards(session),
-                        "session_id": session_id,
-                    }
-                    break
-                if session and _count_rejected_cards(session) >= _ZP_REJECTED_LIMIT:
-                    logger.info("[ZP] Rejected cap reached mid-round for session %s", session_id)
-                    final_status = "paused"
-                    final_event = {
-                        "type": "zp.session.pause",
-                        "reason": "rejected_cap_reached",
-                        "rejected_cards": _count_rejected_cards(session),
                         "session_id": session_id,
                     }
                     break
