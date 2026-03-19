@@ -37,6 +37,31 @@ async def test_zp_get_session(app_client):
 
 
 @pytest.mark.asyncio
+async def test_zp_get_latest_session_uses_dashboard_session(app_client):
+    first = await app_client.post("/zero-prompt/start", json={})
+    second = await app_client.post("/zero-prompt/start", json={})
+    latest_session_id = _extract_session_id(second)
+
+    async def fake_get_dashboard():
+        return {"session_id": latest_session_id, "status": "exploring", "goal_go_cards": 5, "cards": []}
+
+    from agent.db import zp_store as _zps
+
+    original_get_dashboard = _zps.get_dashboard
+    _zps.get_dashboard = fake_get_dashboard
+
+    try:
+        resp = await app_client.get("/zero-prompt/latest")
+    finally:
+        _zps.get_dashboard = original_get_dashboard
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["session_id"] == latest_session_id
+    assert body["session_id"] != _extract_session_id(first)
+
+
+@pytest.mark.asyncio
 async def test_zp_get_session_not_found(app_client):
     resp = await app_client.get("/zero-prompt/unknown-session-id")
     assert resp.status_code == 404
@@ -57,6 +82,38 @@ async def test_zp_action_queue_build(app_client):
         body = resp.json()
         assert body["type"] == "zp.action.error"
         assert body["error"] in {"session_not_found", "card_not_found", "card_not_go_ready"}
+
+
+@pytest.mark.asyncio
+async def test_zp_action_latest_targets_most_recent_session(app_client):
+    import agent.server as srv
+    from agent.db import zp_store as _zps
+
+    await app_client.post("/zero-prompt/start", json={})
+    latest = await app_client.post("/zero-prompt/start", json={})
+    latest_session_id = _extract_session_id(latest)
+    orch = srv._get_zp_orchestrator()
+    latest_session = orch.get_session(latest_session_id)
+    assert latest_session is not None
+    latest_session.cards.append(
+        ZPCard(card_id="latest-card", video_id="v1", status="go_ready", score=80, title="Latest")
+    )
+
+    async def fake_get_dashboard():
+        return {"session_id": latest_session_id, "status": latest_session.status, "goal_go_cards": 5, "cards": []}
+
+    original_get_dashboard = _zps.get_dashboard
+    _zps.get_dashboard = fake_get_dashboard
+
+    try:
+        resp = await app_client.post(
+            "/zero-prompt/latest/actions",
+            json={"action": "queue_build", "card_id": "latest-card"},
+        )
+    finally:
+        _zps.get_dashboard = original_get_dashboard
+
+    assert resp.status_code == 200
 
 
 @pytest.mark.asyncio

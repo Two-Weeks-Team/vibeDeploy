@@ -1009,6 +1009,19 @@ async def zp_dashboard():
         return {"session_id": None, "status": "idle", "cards": []}
 
 
+async def _resolve_zp_session_id(requested_session_id: str | None) -> str | None:
+    if requested_session_id and requested_session_id not in {"latest", "current"}:
+        return requested_session_id
+
+    try:
+        from .db.zp_store import get_dashboard
+
+        dashboard = await get_dashboard()
+        return dashboard.get("session_id")
+    except Exception:
+        return None
+
+
 @app.get("/api/zero-prompt/events")
 @app.get("/zero-prompt/events")
 async def zp_events(request: Request):
@@ -1310,6 +1323,7 @@ async def zero_prompt_start(request: ZPStartRequest):
     goal = max(1, min(request.goal or _ZP_GO_READY_LIMIT, _ZP_GO_READY_LIMIT))
     session, _start_event = orch.create_session(goal=goal)
     session_id = session.session_id
+    await orch._db_create_session(session_id, goal)
 
     if _should_launch_zp_pipeline_background_task():
         _launch_zp_pipeline(orch, session_id, goal)
@@ -1357,6 +1371,9 @@ async def zero_prompt_active():
 @app.get("/api/zero-prompt/{session_id}")
 @app.get("/zero-prompt/{session_id}")
 async def zero_prompt_get_session(session_id: str):
+    session_id = await _resolve_zp_session_id(session_id)
+    if not session_id:
+        raise HTTPException(status_code=404, detail="session_not_found")
     orch = _get_zp_orchestrator()
     session = await orch.ensure_session(session_id)
     if session is None:
@@ -1367,6 +1384,9 @@ async def zero_prompt_get_session(session_id: str):
 @app.post("/api/zero-prompt/{session_id}/actions")
 @app.post("/zero-prompt/{session_id}/actions")
 async def zero_prompt_action(session_id: str, request: ZPActionRequest):
+    session_id = await _resolve_zp_session_id(session_id)
+    if not session_id:
+        raise HTTPException(status_code=404, detail="session_not_found")
     orch = _get_zp_orchestrator()
     session = await orch.ensure_session(session_id)
     if session is None:
@@ -1700,6 +1720,9 @@ async def _resume_exploration(orch, session_id: str) -> None:
 @app.get("/api/zero-prompt/{session_id}/build/{card_id}/events")
 @app.get("/zero-prompt/{session_id}/build/{card_id}/events")
 async def zero_prompt_build_events(session_id: str, card_id: str):
+    session_id = await _resolve_zp_session_id(session_id)
+    if not session_id:
+        raise HTTPException(status_code=404, detail="session_not_found")
     orch = _get_zp_orchestrator()
     session = await orch.ensure_session(session_id)
     if session is None:
@@ -1753,6 +1776,9 @@ async def zero_prompt_build_events(session_id: str, card_id: str):
 @app.get("/api/zero-prompt/{session_id}/build/{card_id}")
 @app.get("/zero-prompt/{session_id}/build/{card_id}")
 async def zero_prompt_build_status(session_id: str, card_id: str):
+    session_id = await _resolve_zp_session_id(session_id)
+    if not session_id:
+        raise HTTPException(status_code=404, detail="session_not_found")
     orch = _get_zp_orchestrator()
     session = await orch.ensure_session(session_id)
     if session is None:
