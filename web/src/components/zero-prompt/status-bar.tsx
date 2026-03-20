@@ -18,6 +18,16 @@ export function StatusBar({ session, isConnected }: StatusBarProps) {
   const goReadyCount = cards.filter(c => c.status === "go_ready").length;
   const buildQueueCount = cards.filter(c => c.status === "build_queued" || c.status === "building").length;
   const deployedCount = cards.filter(c => c.status === "deployed").length;
+  const sessionBadgeClass = session.status === "exploring"
+    ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20"
+    : session.status === "paused"
+      ? "bg-amber-500/10 text-amber-500 border-amber-500/20"
+      : "bg-blue-500/10 text-blue-500 border-blue-500/20";
+  const sessionBadgeText = session.status === "exploring"
+    ? (isConnected ? "Running" : "Reconnecting")
+    : session.status === "paused"
+      ? "Paused"
+      : "Completed";
 
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
@@ -29,8 +39,8 @@ export function StatusBar({ session, isConnected }: StatusBarProps) {
             </p>
             <p className="text-2xl font-bold mt-1">{analyzedCount}</p>
           </div>
-          <Badge variant="outline" className={isConnected ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : "bg-red-500/10 text-red-500 border-red-500/20"}>
-            {isConnected ? "Live" : "Offline"}
+          <Badge variant="outline" className={sessionBadgeClass}>
+            {sessionBadgeText}
           </Badge>
         </CardContent>
       </Card>

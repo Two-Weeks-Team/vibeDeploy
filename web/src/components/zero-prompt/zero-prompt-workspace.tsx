@@ -19,7 +19,6 @@ export function ZeroPromptWorkspace({ initialSession, autostart = false }: { ini
     deployedCards,
     actions,
     isConnected,
-    isCompleted,
     isLoading,
     hasLoadedDashboard,
     startSession,
@@ -62,12 +61,17 @@ export function ZeroPromptWorkspace({ initialSession, autostart = false }: { ini
             </p>
           </div>
           <div className="flex items-center gap-2 text-sm">
-            {isConnected ? (
+            {session?.status === "exploring" ? (
               <>
                 <span className="h-2 w-2 animate-pulse rounded-full bg-green-500" />
-                <span className="text-green-500">Live - Exploring</span>
+                <span className="text-green-500">{isConnected ? "Live - Exploring" : "Reconnecting..."}</span>
               </>
-            ) : isCompleted ? (
+            ) : session?.status === "paused" ? (
+              <>
+                <span className="h-2 w-2 rounded-full bg-amber-500" />
+                <span className="text-amber-500">Paused</span>
+              </>
+            ) : session?.status === "completed" ? (
               <>
                 <span className="h-2 w-2 rounded-full bg-blue-500" />
                 <span className="text-blue-500">Complete</span>
