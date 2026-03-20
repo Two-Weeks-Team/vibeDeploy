@@ -211,6 +211,50 @@ async def test_zp_action_unknown_returns_400(app_client):
 
 
 @pytest.mark.asyncio
+async def test_pause_action_finalizes_analyzing_cards(app_client):
+    import agent.server as srv
+
+    start = await app_client.post("/zero-prompt/start", json={})
+    session_id = _extract_session_id(start)
+    orch = srv._get_zp_orchestrator()
+    session = orch.get_session(session_id)
+    assert session is not None
+    session.cards.append(ZPCard(card_id="an-1", video_id="v1", status="analyzing", score=0, title="Pending"))
+
+    resp = await app_client.post(
+        f"/zero-prompt/{session_id}/actions",
+        json={"action": "pause"},
+    )
+
+    assert resp.status_code == 200
+    assert session.status == "paused"
+    assert session.cards[0].status == "passed"
+    assert session.cards[0].reason_code == "session_paused"
+
+
+@pytest.mark.asyncio
+async def test_pipeline_pause_finalizes_analyzing_cards(monkeypatch: pytest.MonkeyPatch):
+    import agent.server as srv
+
+    orch = srv._get_zp_orchestrator()
+    session, _ = orch.create_session(goal=1)
+    session.cards.append(ZPCard(card_id="go-1", video_id="v-go", status="go_ready", score=80, title="Ready"))
+    session.cards.append(ZPCard(card_id="an-2", video_id="v-an", status="analyzing", score=0, title="Pending"))
+
+    async def fake_set_status(_orch, _session_id, status):
+        session.status = status
+
+    monkeypatch.setattr(srv, "_set_zp_session_status", fake_set_status)
+    monkeypatch.setattr(srv, "push_zp_event", lambda *_args, **_kwargs: None)
+
+    await srv._run_zp_pipeline(orch, session.session_id, 1)
+
+    assert session.status == "paused"
+    assert session.cards[1].status == "passed"
+    assert session.cards[1].reason_code == "goal_reached"
+
+
+@pytest.mark.asyncio
 async def test_run_zp_pipeline_does_not_pause_after_five_rejections(monkeypatch: pytest.MonkeyPatch):
     import agent.server as srv
 

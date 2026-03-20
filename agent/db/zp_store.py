@@ -150,6 +150,7 @@ async def reset_all_sessions() -> None:
     pool = await get_pool()
     async with pool.acquire() as conn:
         await conn.execute("DELETE FROM zp_cards WHERE status != 'deployed'")
+        await conn.execute("UPDATE zp_cards SET session_id = NULL WHERE status = 'deployed'")
         await conn.execute("DELETE FROM zp_sessions")
 
 

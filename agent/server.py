@@ -1282,6 +1282,43 @@ async def _set_zp_session_status(orch, session_id: str, status: str) -> None:
         logger.exception("[ZP] Failed to persist status=%s for session %s", status, session_id)
 
 
+async def _finalize_unresolved_cards(orch, session_id: str, *, reason: str, reason_code: str) -> None:
+    session = await orch.ensure_session(session_id)
+    if session is None:
+        return
+
+    for card in session.cards:
+        if card.status != "analyzing":
+            continue
+        card.status = "passed"
+        card.reason = reason
+        card.reason_code = reason_code
+        card.analysis_step = "stopped"
+        try:
+            from .db import zp_store as _zps
+
+            await _zps.update_card(
+                card.card_id,
+                status="passed",
+                reason=reason,
+                reason_code=reason_code,
+                analysis_step="stopped",
+            )
+        except Exception:
+            logger.exception("[ZP] Failed to finalize analyzing card %s", card.card_id)
+        push_zp_event(
+            {
+                "type": "card.update",
+                "card_id": card.card_id,
+                "status": "passed",
+                "reason": reason,
+                "reason_code": reason_code,
+                "title": card.title,
+                "session_id": session_id,
+            }
+        )
+
+
 async def _maybe_resume_zp_pipeline(orch, session_id: str, *, allow_completed_restart: bool = False) -> None:
     if not _should_launch_zp_pipeline_background_task():
         return
@@ -1400,6 +1437,14 @@ async def _run_zp_pipeline(orch, session_id: str, goal: int) -> None:
         final_status = "paused"
         final_event = {"type": "zp.session.pause", "reason": "pipeline_error", "session_id": session_id}
     finally:
+        if final_status in {"paused", "completed"}:
+            pause_reason = final_event.get("reason") if isinstance(final_event, dict) else None
+            await _finalize_unresolved_cards(
+                orch,
+                session_id,
+                reason="Skipped because the session stopped before analysis finished.",
+                reason_code=str(pause_reason or "session_stopped"),
+            )
         await _set_zp_session_status(orch, session_id, final_status)
         push_zp_event(final_event)
 
@@ -1550,6 +1595,12 @@ async def zero_prompt_action(session_id: str, request: ZPActionRequest):
         _launch_zp_build_task(orch, session_id, card_id)
     elif action == "pause":
         result = orch.pause(session_id)
+        await _finalize_unresolved_cards(
+            orch,
+            session_id,
+            reason="Skipped because the session was paused before analysis finished.",
+            reason_code="session_paused",
+        )
     elif action == "resume":
         result = orch.resume(session_id)
     elif action == "start_next_build":
