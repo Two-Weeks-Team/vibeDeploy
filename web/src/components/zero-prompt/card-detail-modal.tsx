@@ -14,6 +14,14 @@ const SCORE_CRITERIA = [
   { label: "Evidence", weightKey: "evidence_strength_weight", signalKey: "evidence_strength_signal", pointsKey: "evidence_strength_points", detail: "How much supporting evidence exists from MVP-aligned research, technical grounding, and novelty" },
 ] as const;
 
+const INTERRUPTED_REASON_CODES = new Set([
+  "session_paused",
+  "goal_reached",
+  "exploring_cap_reached",
+  "session_stopped",
+  "pipeline_error",
+]);
+
 function humanizeReasonCode(reasonCode?: string): string {
   if (!reasonCode) return "";
   return reasonCode.replace(/_/g, " ");
@@ -75,6 +83,10 @@ function formatSignal(value?: number): string {
   return `${value.toFixed(1)} / 100`;
 }
 
+function isInterruptedCard(card: ZPCard): boolean {
+  return card.analysis_step === "stopped" || INTERRUPTED_REASON_CODES.has(card.reason_code ?? "");
+}
+
 interface CardDetailModalProps {
   card: ZPCard | null;
   isOpen: boolean;
@@ -105,14 +117,17 @@ export function CardDetailModal({ card, isOpen, onClose, onQueueBuild, onPassCar
   const hasExactBreakdown = SCORE_CRITERIA.every((item) => typeof card.score_breakdown?.[item.pointsKey] === "number");
   const rawScore = card.score_breakdown?.raw_score;
   const gateBlocked = Boolean(card.score_breakdown?.gate_blocked);
+  const interrupted = isInterruptedCard(card);
+  const statusLabel = card.status === "passed" ? "SKIPPED" : card.status.replace("_", " ").toUpperCase();
+  const statusVariant = interrupted ? "secondary" : card.score >= 70 ? "default" : "destructive";
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-[550px] max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <div className="flex justify-between items-start mb-2">
-            <Badge variant={card.score >= 70 ? "default" : "destructive"}>
-              {card.status.replace("_", " ").toUpperCase()}
+            <Badge variant={statusVariant}>
+              {statusLabel}
             </Badge>
             <Badge variant="outline" className="bg-background text-xs">
               {card.card_id.slice(0, 8)}
@@ -127,11 +142,20 @@ export function CardDetailModal({ card, isOpen, onClose, onQueueBuild, onPassCar
         <div className="py-4 space-y-4">
           <div className="flex items-center gap-4">
             <div>
-              <p className="text-xs text-muted-foreground mb-1">Vibe Score</p>
-              <span className={`text-3xl font-bold ${card.score >= 70 ? "text-emerald-500" : card.score >= 50 ? "text-amber-500" : "text-red-500"}`}>
-                {card.score}
-              </span>
-              <span className="text-sm text-muted-foreground ml-1">/ 100</span>
+              <p className="text-xs text-muted-foreground mb-1">{interrupted ? "Vibe Score" : "Vibe Score"}</p>
+              {interrupted ? (
+                <>
+                  <span className="text-3xl font-bold text-muted-foreground">-</span>
+                  <span className="text-sm text-muted-foreground ml-2">Not scored</span>
+                </>
+              ) : (
+                <>
+                  <span className={`text-3xl font-bold ${card.score >= 70 ? "text-emerald-500" : card.score >= 50 ? "text-amber-500" : "text-red-500"}`}>
+                    {card.score}
+                  </span>
+                  <span className="text-sm text-muted-foreground ml-1">/ 100</span>
+                </>
+              )}
             </div>
             {card.reason_code && (
               <Badge variant="outline" className="ml-auto">{card.reason_code.replace(/_/g, " ")}</Badge>
@@ -144,7 +168,7 @@ export function CardDetailModal({ card, isOpen, onClose, onQueueBuild, onPassCar
             </div>
           )}
 
-          {gateBlocked && typeof rawScore === "number" && rawScore > card.score && (
+          {!interrupted && gateBlocked && typeof rawScore === "number" && rawScore > card.score && (
             <div className="space-y-1 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
               <h4 className="text-sm font-semibold text-amber-500">Gate-adjusted score</h4>
               <p className="text-sm text-muted-foreground">
@@ -153,7 +177,7 @@ export function CardDetailModal({ card, isOpen, onClose, onQueueBuild, onPassCar
             </div>
           )}
 
-          <div className="space-y-2 rounded-lg border border-border/50 bg-background/70 p-3">
+          {!interrupted && <div className="space-y-2 rounded-lg border border-border/50 bg-background/70 p-3">
             <div className="flex items-center justify-between gap-3">
               <h4 className="text-sm font-semibold">Score criteria</h4>
               <span className="text-xs text-muted-foreground">GO if score is 70+ and hard gates pass</span>
@@ -184,9 +208,9 @@ export function CardDetailModal({ card, isOpen, onClose, onQueueBuild, onPassCar
             <p className="text-[11px] text-muted-foreground">
               Displayed score = weighted sum of the five contributions above, clamped if a hard gate fails.
             </p>
-          </div>
+          </div>}
 
-          {typeof card.score_breakdown?.originality_signal === "number" && (
+          {!interrupted && typeof card.score_breakdown?.originality_signal === "number" && (
             <div className="space-y-2 rounded-lg border border-border/50 bg-background/70 p-3">
               <div className="flex items-center justify-between gap-3">
                 <h4 className="text-sm font-semibold">Originality gate</h4>
@@ -200,7 +224,7 @@ export function CardDetailModal({ card, isOpen, onClose, onQueueBuild, onPassCar
             </div>
           )}
 
-          {card.score < 70 && lowScoreSignals.length > 0 && (
+          {!interrupted && card.score < 70 && lowScoreSignals.length > 0 && (
             <div className="space-y-2 rounded-lg border border-red-500/20 bg-red-500/5 p-3">
               <div className="flex items-center justify-between gap-3">
                 <h4 className="text-sm font-semibold text-red-500">Why this score is low</h4>
