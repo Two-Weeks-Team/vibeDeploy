@@ -69,7 +69,7 @@ export function KanbanBoard({ cards, deployedCards = [], sessionId, onQueueBuild
 
   return (
     <>
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6 overflow-x-auto pb-4">
+      <div role="region" aria-label="Idea pipeline Kanban board" className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6 overflow-x-auto pb-4">
         {COLUMNS.map((col) => (
           <KanbanColumn
             key={col.id}

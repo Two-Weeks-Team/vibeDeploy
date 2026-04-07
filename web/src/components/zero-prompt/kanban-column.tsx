@@ -27,7 +27,7 @@ export function KanbanColumn({ title, statuses, cards, maxItems, onDeleteRejecte
   const isWindowed = typeof maxItems === "number" && columnCards.length > maxItems;
 
   return (
-    <div className="flex flex-col min-w-[280px] bg-muted/30 rounded-xl p-3 border border-border/50">
+    <div role="group" aria-label={`${title} column, ${columnCards.length} items`} className="flex flex-col min-w-[280px] bg-muted/30 rounded-xl p-3 border border-border/50">
       <div className="mb-3 space-y-2 px-1">
         <div className="flex items-center justify-between gap-2">
           <h3 className="font-semibold text-sm">{title}</h3>
