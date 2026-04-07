@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { ActivePipeline, DashboardEvent, NodeMetadata, PipelineNodeStatus } from "@/types/dashboard";
 
 import { DASHBOARD_API_URL } from "@/lib/api";
+import { appendApiKey } from "@/lib/fetch-with-auth";
 import { createSSEClient } from "@/lib/sse-client";
 
 const ACTIVE_POLL_MS = 30_000;
@@ -97,7 +98,7 @@ export function usePipelineMonitor() {
     setConnected(true);
 
     const abort = createSSEClient({
-      url: `${DASHBOARD_API_URL}/dashboard/events`,
+      url: appendApiKey(`${DASHBOARD_API_URL}/dashboard/events`),
       body: {},
       onEvent: (sseEvent) => {
         try {
@@ -250,7 +251,8 @@ export function usePipelineMonitor() {
 
   const fetchActive = useCallback(async () => {
     try {
-      const res = await fetch(`${DASHBOARD_API_URL}/dashboard/active`);
+      const { authenticatedFetch } = await import("@/lib/fetch-with-auth");
+      const res = await authenticatedFetch(`${DASHBOARD_API_URL}/dashboard/active`);
       if (res.ok) setActivePipelines(await res.json());
     } catch { }
   }, []);

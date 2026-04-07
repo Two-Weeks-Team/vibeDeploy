@@ -1,3 +1,5 @@
+import { authenticatedFetch } from "./fetch-with-auth";
+
 export const AGENT_URL =
   process.env.NEXT_PUBLIC_AGENT_URL ?? "http://localhost:8080";
 
@@ -11,9 +13,8 @@ export async function startMeeting(input: string): Promise<{
 }> {
   const meetingId = crypto.randomUUID();
 
-  const response = await fetch(`${DASHBOARD_API_URL}/run`, {
+  const response = await authenticatedFetch(`${DASHBOARD_API_URL}/run`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       prompt: input,
       config: { configurable: { thread_id: meetingId } },
@@ -34,9 +35,8 @@ export async function resumeMeeting(
   meetingId: string,
   action: string = "proceed",
 ): Promise<Response> {
-  const response = await fetch(`${DASHBOARD_API_URL}/resume`, {
+  const response = await authenticatedFetch(`${DASHBOARD_API_URL}/resume`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ thread_id: meetingId, action }),
   });
 
@@ -71,7 +71,7 @@ export async function getMeetingResult(
   meetingId: string,
 ): Promise<MeetingResult | null> {
   try {
-    const response = await fetch(`${DASHBOARD_API_URL}/result/${meetingId}`);
+    const response = await authenticatedFetch(`${DASHBOARD_API_URL}/result/${meetingId}`);
     if (!response.ok) return null;
     return response.json();
   } catch {
@@ -84,9 +84,8 @@ export async function startBrainstorm(input: string): Promise<{
   streamUrl: string;
 }> {
   const sessionId = crypto.randomUUID();
-  const response = await fetch(`${DASHBOARD_API_URL}/brainstorm`, {
+  const response = await authenticatedFetch(`${DASHBOARD_API_URL}/brainstorm`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       prompt: input,
       config: { configurable: { thread_id: sessionId } },
@@ -123,7 +122,7 @@ export async function getBrainstormResult(
   sessionId: string,
 ): Promise<BrainstormResult | null> {
   try {
-    const response = await fetch(
+    const response = await authenticatedFetch(
       `${DASHBOARD_API_URL}/brainstorm/result/${sessionId}`,
     );
     if (!response.ok) return null;

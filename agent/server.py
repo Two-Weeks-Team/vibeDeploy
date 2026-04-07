@@ -27,7 +27,7 @@ from pathlib import Path
 import httpx
 import uvicorn
 from dotenv import load_dotenv
-from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from starlette.responses import JSONResponse, StreamingResponse
@@ -346,7 +346,7 @@ def _meeting_store_payload(meeting: dict) -> dict:
 
 
 def _ops_token() -> str:
-    for key in ("VIBEDEPLOY_OPS_TOKEN", "DASHBOARD_ADMIN_TOKEN", "DIGITALOCEAN_INFERENCE_KEY"):
+    for key in ("VIBEDEPLOY_OPS_TOKEN", "DASHBOARD_ADMIN_TOKEN"):
         value = os.getenv(key, "").strip()
         if value:
             return value
@@ -610,13 +610,30 @@ async def lifespan(app: FastAPI):
     _store = None
 
 
-app = FastAPI(title="vibeDeploy Agent (local)", lifespan=lifespan)
+from .auth import rate_limit_check, verify_api_key
+
+app = FastAPI(
+    title="vibeDeploy Agent (local)",
+    lifespan=lifespan,
+    dependencies=[Depends(verify_api_key), Depends(rate_limit_check)],
+)
+
+_ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv(
+        "VIBEDEPLOY_CORS_ORIGINS",
+        "https://vibedeploy-7tgzk.ondigitalocean.app,http://localhost:3000,http://localhost:9001",
+    ).split(",")
+    if origin.strip()
+]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=_ALLOWED_ORIGINS,
+    allow_methods=["GET", "POST", "PUT", "OPTIONS"],
+    allow_headers=["Content-Type", "X-API-Key", "X-Vibedeploy-Ops-Token"],
+    allow_credentials=False,
+    max_age=600,
 )
 
 _NODE_EVENTS = NODE_EVENTS
