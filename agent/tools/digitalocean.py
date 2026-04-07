@@ -251,13 +251,11 @@ def build_app_spec(
 
     envs = []
     # Use separate credentials for generated apps — NEVER share the host's own DB.
-    generated_db_url = os.getenv("GENERATED_APP_DATABASE_URL", db_url)
+    generated_db_url = os.getenv("GENERATED_APP_DATABASE_URL", "")
     if generated_db_url:
         envs.append({"key": "DATABASE_URL", "value": generated_db_url, "scope": "RUN_TIME", "type": "SECRET"})
         envs.append({"key": "POSTGRES_URL", "value": generated_db_url, "scope": "RUN_TIME", "type": "SECRET"})
-    generated_inference_key = os.getenv("GENERATED_APP_INFERENCE_KEY", "") or os.getenv(
-        "GRADIENT_MODEL_ACCESS_KEY", ""
-    ) or os.getenv("DIGITALOCEAN_INFERENCE_KEY", "")
+    generated_inference_key = os.getenv("GENERATED_APP_INFERENCE_KEY", "")
     if generated_inference_key:
         envs.append({"key": "GRADIENT_MODEL_ACCESS_KEY", "value": generated_inference_key, "scope": "RUN_TIME", "type": "SECRET"})
         envs.append(
