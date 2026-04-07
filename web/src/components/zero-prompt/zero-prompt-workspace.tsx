@@ -21,6 +21,7 @@ export function ZeroPromptWorkspace({ initialSession, autostart = false }: { ini
     isConnected,
     isLoading,
     hasLoadedDashboard,
+    error,
     startSession,
     queueBuild,
     passCard,
@@ -84,6 +85,12 @@ export function ZeroPromptWorkspace({ initialSession, autostart = false }: { ini
             ) : null}
           </div>
         </header>
+
+        {error && (
+          <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400">
+            {error}
+          </div>
+        )}
 
         <StatusBar session={session} isConnected={isConnected} />
 

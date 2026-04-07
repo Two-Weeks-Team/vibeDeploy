@@ -46,9 +46,13 @@ export default function ResultPage() {
   useEffect(() => {
     let mounted = true;
 
-    getMeetingResult(params.id).then((next) => {
-      if (mounted) setResult(next);
-    });
+    getMeetingResult(params.id)
+      .then((next) => {
+        if (mounted) setResult(next);
+      })
+      .catch(() => {
+        if (mounted) setResult(null);
+      });
 
     return () => {
       mounted = false;
