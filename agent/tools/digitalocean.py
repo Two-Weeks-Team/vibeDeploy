@@ -252,6 +252,13 @@ def build_app_spec(
     envs = []
     # Use separate credentials for generated apps — NEVER share the host's own DB.
     generated_db_url = os.getenv("GENERATED_APP_DATABASE_URL", "")
+    # Apply the same psycopg scheme conversion to generated app DB URL
+    if generated_db_url.startswith("postgresql+asyncpg://"):
+        generated_db_url = generated_db_url.replace("postgresql+asyncpg://", "postgresql+psycopg://", 1)
+    elif generated_db_url.startswith("postgres://"):
+        generated_db_url = generated_db_url.replace("postgres://", "postgresql+psycopg://", 1)
+    elif generated_db_url.startswith("postgresql://") and "+psycopg" not in generated_db_url:
+        generated_db_url = generated_db_url.replace("postgresql://", "postgresql+psycopg://", 1)
     if generated_db_url:
         envs.append({"key": "DATABASE_URL", "value": generated_db_url, "scope": "RUN_TIME", "type": "SECRET"})
         envs.append({"key": "POSTGRES_URL", "value": generated_db_url, "scope": "RUN_TIME", "type": "SECRET"})
