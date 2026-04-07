@@ -96,6 +96,13 @@ services:
         scope: RUN_TIME
         type: SECRET
         value: REPLACE_WITH_GOOGLE_API_KEY
+      - key: VIBEDEPLOY_API_KEY
+        scope: RUN_TIME
+        type: SECRET
+        value: REPLACE_WITH_API_KEY
+      - key: VIBEDEPLOY_CORS_ORIGINS
+        scope: RUN_TIME
+        value: ${APP_URL}
 
   - name: web
     environment_slug: node-js
@@ -119,3 +126,7 @@ services:
       - key: HOSTNAME
         scope: RUN_TIME
         value: "0.0.0.0"
+      - key: VIBEDEPLOY_API_KEY
+        scope: RUN_TIME
+        type: SECRET
+        value: REPLACE_WITH_API_KEY

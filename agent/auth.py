@@ -88,8 +88,13 @@ class _RateLimitBucket:
         self._requests.append(now)
         return True
 
+    def is_empty(self) -> bool:
+        return len(self._requests) == 0
 
-_rate_buckets: defaultdict[str, _RateLimitBucket] = defaultdict(_RateLimitBucket)
+
+_rate_buckets: dict[str, _RateLimitBucket] = {}
+_BUCKET_CLEANUP_INTERVAL = 300  # seconds
+_last_bucket_cleanup = 0.0
 
 _RATE_LIMITS: dict[str, tuple[int, int]] = {
     "write": (10, 60),
@@ -126,6 +131,16 @@ def _classify_rate_tier(path: str, method: str) -> str:
     return "read"
 
 
+def _cleanup_stale_buckets(now: float) -> None:
+    global _last_bucket_cleanup
+    if now - _last_bucket_cleanup < _BUCKET_CLEANUP_INTERVAL:
+        return
+    _last_bucket_cleanup = now
+    stale = [k for k, b in _rate_buckets.items() if b.is_empty()]
+    for k in stale:
+        _rate_buckets.pop(k, None)
+
+
 async def rate_limit_check(request: Request) -> None:
     path = request.url.path
 
@@ -138,6 +153,11 @@ async def rate_limit_check(request: Request) -> None:
     max_requests, window_seconds = _RATE_LIMITS[tier]
     bucket_key = f"{client_ip}:{tier}"
     now = time.monotonic()
+
+    _cleanup_stale_buckets(now)
+
+    if bucket_key not in _rate_buckets:
+        _rate_buckets[bucket_key] = _RateLimitBucket()
 
     if not _rate_buckets[bucket_key].hit(now, window_seconds, max_requests):
         logger.warning("Rate limit exceeded: %s %s from %s (tier=%s)", method, path, client_ip, tier)
