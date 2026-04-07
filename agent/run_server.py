@@ -24,8 +24,11 @@ if __name__ == "__main__":
     multiprocessing.freeze_support()
     uvicorn.run(
         "agent.server:app",
-        host="0.0.0.0",
-        port=8080,
+        host=os.environ.get("UVICORN_HOST", "0.0.0.0"),
+        port=int(os.environ.get("PORT", "8080")),
         workers=_read_worker_count(),
         timeout_keep_alive=300,
+        server_header=False,
+        proxy_headers=True,
+        forwarded_allow_ips=os.environ.get("FORWARDED_ALLOW_IPS", "*"),
     )

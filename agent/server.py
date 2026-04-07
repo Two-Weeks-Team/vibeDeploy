@@ -882,12 +882,7 @@ async def put_test_brainstorm(brainstorm_id: str, body: dict):
 @app.get("/health")
 @app.get("/")
 async def health():
-    return {
-        "status": "ok",
-        "provider": "do-app-platform-gateway",
-        "adk_url_configured": bool(_configured_adk_url()),
-        "adk_auth_mode": _configured_adk_auth_mode(),
-    }
+    return {"status": "ok"}
 
 
 @app.get("/api/cost-estimate")
@@ -966,9 +961,14 @@ async def dashboard_active():
     return list(_active_pipelines.values())
 
 
+_MAX_DASHBOARD_SSE = int(os.getenv("MAX_DASHBOARD_SSE", "50"))
+
+
 @app.get("/dashboard/events")
 @app.get("/events")
 async def dashboard_events():
+    if len(_dashboard_queues) >= _MAX_DASHBOARD_SSE:
+        raise HTTPException(status_code=503, detail="Too many SSE connections")
     queue: asyncio.Queue = asyncio.Queue(maxsize=256)
     _dashboard_queues.append(queue)
 
