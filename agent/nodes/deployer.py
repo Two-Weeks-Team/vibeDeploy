@@ -414,12 +414,110 @@ async def deployer(state: VibeDeployState, config=None) -> dict:
 
     await _emit_step_start("verified", "Verifying live URL", config=config, live_url=live_url)
     url_verification = _verify_live_url(live_url)
-    if url_verification.get("root_ok"):
-        logger.info("[DEPLOYER] Live URL verified: %s → %s", live_url, url_verification)
-        await _emit_step_complete("verified", "Live URL verified", config=config, live_url=live_url)
+    v_score = url_verification.get("verification_score", 0)
+    v_verdict = url_verification.get("verification_verdict", "failed")
+
+    if v_verdict == "verified":
+        logger.info(
+            "[DEPLOYER] Live URL verified (score=%d, verdict=%s): %s",
+            v_score, v_verdict, live_url,
+        )
+        await _emit_step_complete(
+            "verified",
+            f"Live URL verified (score={v_score}/100)",
+            config=config,
+            live_url=live_url,
+            verification_score=v_score,
+            verification_verdict=v_verdict,
+        )
+    elif v_verdict == "partial":
+        logger.warning(
+            "[DEPLOYER] Live URL partially verified (score=%d, verdict=%s): %s",
+            v_score, v_verdict, live_url,
+        )
+        await _emit_step_complete(
+            "verified",
+            f"Live URL partially verified (score={v_score}/100) — basic functionality works, some issues detected",
+            config=config,
+            live_url=live_url,
+            verification_score=v_score,
+            verification_verdict=v_verdict,
+        )
     else:
-        logger.warning("[DEPLOYER] Live URL verification failed: %s → %s", live_url, url_verification)
-        await _emit_step_error("verified", "Live URL verification failed", config=config, live_url=live_url)
+        # verdict == "failed" (score < 50) — attempt repair
+        logger.warning(
+            "[DEPLOYER] Live URL verification FAILED (score=%d, verdict=%s): %s — attempting repair",
+            v_score, v_verdict, live_url,
+        )
+        await _emit_step_error(
+            "verified",
+            f"Live URL verification failed (score={v_score}/100) — attempting repair",
+            config=config,
+            live_url=live_url,
+            verification_score=v_score,
+            verification_verdict=v_verdict,
+        )
+
+        # Build a diagnostic summary from the verification result for the repair LLM
+        diag_lines = [f"Verification score: {v_score}/100 (verdict: {v_verdict})"]
+        if not url_verification.get("root_ok"):
+            diag_lines.append("CRITICAL: Root page did not return 200 or returned <100 bytes")
+        if not url_verification.get("health_ok"):
+            diag_lines.append("CRITICAL: /health endpoint did not return 200")
+        cs = url_verification.get("content_signals", {})
+        if not cs.get("has_title"):
+            diag_lines.append("Missing: <title> tag in HTML")
+        if not cs.get("has_semantic_html"):
+            diag_lines.append("Missing: semantic HTML elements (h1, nav, main)")
+        if not cs.get("has_interactive_elements"):
+            diag_lines.append(f"Missing: interactive elements (only {cs.get('interactive_count', 0)} found, need >=3)")
+        if cs.get("broken_images"):
+            diag_lines.append(f"Broken images: {cs['broken_images'][:3]}")
+        failed_eps = [
+            k for k, v in url_verification.get("endpoint_results", {}).items()
+            if not v.get("ok")
+        ]
+        if failed_eps:
+            diag_lines.append(f"Failed API endpoints: {', '.join(failed_eps[:5])}")
+        failed_assets = [
+            k for k, v in url_verification.get("asset_checks", {}).items()
+            if not v.get("ok")
+        ]
+        if failed_assets:
+            diag_lines.append(f"Failed assets: {', '.join(failed_assets[:5])}")
+
+        diag_summary = "\n".join(diag_lines)
+        logger.info("[DEPLOYER] Verification diagnostics for repair:\n%s", diag_summary)
+
+        # Attempt one repair cycle using the verification diagnostics
+        error_logs = await get_deploy_error_logs(app_id) if app_id else ""
+        combined_errors = f"=== Live URL Verification Failures ===\n{diag_summary}"
+        if error_logs:
+            combined_errors += f"\n\n=== Deploy Error Logs ===\n{error_logs}"
+
+        fixed_files = await _repair_code_from_errors(all_files, combined_errors)
+        if fixed_files != all_files:
+            all_files = await _prepare_files_for_push(fixed_files)
+            push_result = await push_files(
+                {"full_name": github_full_name},
+                all_files,
+                commit_message="fix: repair from live URL verification failures",
+            )
+            if push_result.get("commit_sha") and app_id:
+                await asyncio.sleep(5)
+                redeploy_result = await redeploy_app(app_id)
+                if redeploy_result.get("status") != "error":
+                    repair_url = await wait_for_deployment(app_id)
+                    if repair_url:
+                        live_url = repair_url
+                        # Re-verify after repair
+                        url_verification = _verify_live_url(live_url)
+                        v_score = url_verification.get("verification_score", 0)
+                        v_verdict = url_verification.get("verification_verdict", "failed")
+                        logger.info(
+                            "[DEPLOYER] Post-repair verification: score=%d, verdict=%s",
+                            v_score, v_verdict,
+                        )
 
     homepage = live_url or github_repo_url
     if github_full_name:
@@ -450,6 +548,8 @@ async def deployer(state: VibeDeployState, config=None) -> dict:
             "frontend_files": frontend_file_count,
             "backend_files": backend_file_count,
             "url_verification": url_verification,
+            "verification_score": v_score,
+            "verification_verdict": v_verdict,
             **ci_meta,
         },
         "phase": "deployed",
@@ -1712,9 +1812,30 @@ def _build_repo_name(idea: dict) -> str:
 
 
 def _verify_live_url(live_url: str) -> dict:
-    base = live_url.rstrip("/")
-    result = {"root_ok": False, "health_ok": False, "root_bytes": 0, "endpoint_results": {}}
+    """E2E-level verification of a deployed URL.
 
+    Returns a dict containing:
+      - root_ok, health_ok, root_bytes (legacy fields)
+      - content_signals: detailed frontend quality signals
+      - endpoint_results: per-endpoint probe results
+      - asset_checks: CSS/JS asset accessibility results
+      - verification_score: 0-100 composite quality score
+      - verification_verdict: "verified" | "partial" | "failed"
+    """
+    base = live_url.rstrip("/")
+    result: dict = {
+        "root_ok": False,
+        "health_ok": False,
+        "root_bytes": 0,
+        "endpoint_results": {},
+        "asset_checks": {},
+        "verification_score": 0,
+        "verification_verdict": "failed",
+    }
+    score = 0
+    root_html = ""
+
+    # ── Phase 0: Wait for root + health with retries ──────────────────
     for _ in range(6):
         for path, key in [("/", "root"), ("/health", "health"), ("/api/health", "health")]:
             try:
@@ -1727,6 +1848,8 @@ def _verify_live_url(live_url: str) -> dict:
                     if key == "root":
                         result["root_ok"] = resp.status == 200 and len(body) > 100
                         result["root_bytes"] = max(result["root_bytes"], len(body))
+                        if resp.status == 200:
+                            root_html = body.decode("utf-8", errors="replace")
                     else:
                         result["health_ok"] = resp.status == 200
             except (error.HTTPError, error.URLError, OSError):
@@ -1735,36 +1858,241 @@ def _verify_live_url(live_url: str) -> dict:
             break
         time.sleep(10)
 
-    # Content quality verification
-    content_signals = {"has_title": False, "has_components": False, "has_styles": False, "content_length_ok": False}
-    if result["root_ok"] and result["root_bytes"] > 0:
-        try:
-            req = request.Request(
-                f"{base}/",
-                headers={"User-Agent": "vibeDeploy-verifier/1.0"},
+    # Score: root page loads (200, >100 bytes): +15
+    if result["root_ok"]:
+        score += 15
+        logger.info("[DEPLOYER][VERIFY] Root page OK (%d bytes) → +15", result["root_bytes"])
+    else:
+        logger.warning("[DEPLOYER][VERIFY] Root page FAILED (bytes=%d)", result["root_bytes"])
+
+    # Score: health endpoint: +10
+    if result["health_ok"]:
+        score += 10
+        logger.info("[DEPLOYER][VERIFY] Health endpoint OK → +10")
+    else:
+        logger.warning("[DEPLOYER][VERIFY] Health endpoint FAILED")
+
+    # ── Phase 1: Frontend rendering quality check ─────────────────────
+    content_signals: dict = {
+        "has_title": False,
+        "has_components": False,
+        "has_styles": False,
+        "content_length_ok": False,
+        "has_spa_framework": False,
+        "has_semantic_html": False,
+        "has_interactive_elements": False,
+        "has_meta_tags": False,
+        "broken_images": [],
+        "interactive_count": 0,
+        "semantic_elements": [],
+    }
+
+    if root_html:
+        html_lower = root_html.lower()
+
+        # Basic content signals
+        content_signals["content_length_ok"] = len(root_html) > 500
+        content_signals["has_title"] = bool(re.search(r"<title>[^<]{3,}</title>", root_html, re.IGNORECASE))
+        content_signals["has_components"] = root_html.count("<div") >= 3 or root_html.count("<section") >= 2
+        content_signals["has_styles"] = (
+            "tailwind" in html_lower or "globals.css" in html_lower or "<style" in html_lower
+            or bool(re.search(r'<link[^>]+\.css', root_html, re.IGNORECASE))
+        )
+
+        # Score: has title: +5
+        if content_signals["has_title"]:
+            score += 5
+            logger.info("[DEPLOYER][VERIFY] Title tag present → +5")
+        else:
+            logger.warning("[DEPLOYER][VERIFY] Title tag MISSING")
+
+        # Score: has styles: +5
+        if content_signals["has_styles"]:
+            score += 5
+            logger.info("[DEPLOYER][VERIFY] Styles present → +5")
+        else:
+            logger.warning("[DEPLOYER][VERIFY] Styles MISSING")
+
+        # SPA framework detection
+        content_signals["has_spa_framework"] = any(
+            marker in root_html
+            for marker in ("__NEXT_DATA__", "__NUXT__", "window.__remixContext", "id=\"__next\"", "id=\"app\"")
+        ) or bool(re.search(r'<script[^>]+src="[^"]*\.(bundle|chunk|app)\.[^"]*\.js"', root_html, re.IGNORECASE))
+
+        # Semantic HTML check: h1, nav/navigation, main/article
+        found_semantic = []
+        if re.search(r"<h1[\s>]", html_lower):
+            found_semantic.append("h1")
+        if re.search(r"<nav[\s>]", html_lower):
+            found_semantic.append("nav")
+        if re.search(r"<main[\s>]", html_lower):
+            found_semantic.append("main")
+        if re.search(r"<article[\s>]", html_lower):
+            found_semantic.append("article")
+        if re.search(r"<header[\s>]", html_lower):
+            found_semantic.append("header")
+        if re.search(r"<footer[\s>]", html_lower):
+            found_semantic.append("footer")
+        content_signals["semantic_elements"] = found_semantic
+        content_signals["has_semantic_html"] = len(found_semantic) >= 2
+
+        # Score: has semantic HTML (h1, nav, main): +10
+        if content_signals["has_semantic_html"]:
+            score += 10
+            logger.info("[DEPLOYER][VERIFY] Semantic HTML present (%s) → +10", ", ".join(found_semantic))
+        else:
+            logger.warning("[DEPLOYER][VERIFY] Semantic HTML insufficient (found: %s)", found_semantic)
+
+        # Interactive elements: buttons, forms, links
+        button_count = len(re.findall(r"<button[\s>]", html_lower))
+        form_count = len(re.findall(r"<form[\s>]", html_lower))
+        link_count = len(re.findall(r"<a\s+[^>]*href=", html_lower))
+        input_count = len(re.findall(r"<input[\s>]", html_lower))
+        interactive_total = button_count + form_count + link_count + input_count
+        content_signals["interactive_count"] = interactive_total
+        content_signals["has_interactive_elements"] = interactive_total >= 3
+
+        # Score: has interactive elements (buttons, forms, links >= 3): +10
+        if content_signals["has_interactive_elements"]:
+            score += 10
+            logger.info(
+                "[DEPLOYER][VERIFY] Interactive elements: %d (buttons=%d, forms=%d, links=%d, inputs=%d) → +10",
+                interactive_total, button_count, form_count, link_count, input_count,
             )
-            with request.urlopen(req, timeout=15) as resp:
-                html = resp.read().decode("utf-8", errors="replace")
-                content_signals["content_length_ok"] = len(html) > 500
-                content_signals["has_title"] = bool(re.search(r"<title>[^<]{3,}</title>", html, re.IGNORECASE))
-                content_signals["has_components"] = html.count("<div") >= 3 or html.count("<section") >= 2
-                content_signals["has_styles"] = "tailwind" in html.lower() or "globals.css" in html or "<style" in html
-        except (error.HTTPError, error.URLError, OSError):
-            pass
+        else:
+            logger.warning("[DEPLOYER][VERIFY] Interactive elements insufficient (%d found)", interactive_total)
+
+        # Meta tags check (og:title, description)
+        has_og_title = bool(re.search(r'<meta[^>]+property=["\']og:title["\']', root_html, re.IGNORECASE))
+        has_description = bool(
+            re.search(r'<meta[^>]+name=["\']description["\']', root_html, re.IGNORECASE)
+            or re.search(r'<meta[^>]+property=["\']og:description["\']', root_html, re.IGNORECASE)
+        )
+        content_signals["has_meta_tags"] = has_og_title or has_description
+
+        # Score: meta tags present: +5
+        if content_signals["has_meta_tags"]:
+            score += 5
+            logger.info("[DEPLOYER][VERIFY] Meta tags present (og:title=%s, description=%s) → +5", has_og_title, has_description)
+        else:
+            logger.warning("[DEPLOYER][VERIFY] Meta tags MISSING")
+
+        # Broken images check
+        img_srcs = re.findall(r'<img[^>]+src=["\']([^"\']*)["\']', root_html, re.IGNORECASE)
+        broken_imgs = [src for src in img_srcs if not src or src.strip() in ("", "#", "about:blank")]
+        content_signals["broken_images"] = broken_imgs
+
+        # Score: no broken images: +5
+        if not broken_imgs:
+            score += 5
+            logger.info("[DEPLOYER][VERIFY] No broken images → +5")
+        else:
+            logger.warning("[DEPLOYER][VERIFY] Broken images found: %s", broken_imgs[:5])
+
     result["content_signals"] = content_signals
 
+    # ── Phase 2: API response structure validation ────────────────────
     openapi_endpoints = _discover_endpoints_from_openapi(base)
+    all_endpoints_ok = True
+    all_responses_valid = True
+
     for ep in openapi_endpoints:
-        path = ep["path"]
-        method = ep["method"]
-        status_code = _probe_endpoint(base, path, method)
-        passed = status_code is not None and status_code < 500
-        result["endpoint_results"][f"{method} {path}"] = {
-            "status": status_code,
-            "ok": passed,
-        }
+        ep_path = ep["path"]
+        ep_method = ep["method"]
+        probe = _probe_endpoint_deep(base, ep_path, ep_method)
+        passed = probe["status"] is not None and probe["status"] < 500
+        result["endpoint_results"][f"{ep_method} {ep_path}"] = probe
+
         if not passed:
-            logger.warning("[DEPLOYER] Endpoint probe failed: %s %s → %s", method, path, status_code)
+            all_endpoints_ok = False
+            logger.warning(
+                "[DEPLOYER][VERIFY] Endpoint probe FAILED: %s %s → status=%s",
+                ep_method, ep_path, probe["status"],
+            )
+        if not probe.get("valid_response"):
+            all_responses_valid = False
+
+    # Score: API endpoints all respond without 5xx: +15
+    if openapi_endpoints:
+        if all_endpoints_ok:
+            score += 15
+            logger.info("[DEPLOYER][VERIFY] All %d API endpoints respond without 5xx → +15", len(openapi_endpoints))
+        else:
+            logger.warning("[DEPLOYER][VERIFY] Some API endpoints returned 5xx errors")
+
+        # Score: API responses have valid JSON with content: +10
+        if all_responses_valid:
+            score += 10
+            logger.info("[DEPLOYER][VERIFY] All API responses have valid JSON content → +10")
+        else:
+            logger.warning("[DEPLOYER][VERIFY] Some API responses have empty/invalid JSON")
+    else:
+        # No OpenAPI endpoints discovered — award the API points if health is OK
+        # (backend-only apps without OpenAPI still get partial credit)
+        if result["health_ok"]:
+            score += 15
+            logger.info("[DEPLOYER][VERIFY] No OpenAPI endpoints; health OK grants API credit → +15")
+
+    # ── Phase 3: Asset integrity check ────────────────────────────────
+    if root_html:
+        css_refs = re.findall(r'<link[^>]+href=["\']([^"\']+\.css[^"\']*)["\']', root_html, re.IGNORECASE)
+        js_refs = re.findall(r'<script[^>]+src=["\']([^"\']+\.js[^"\']*)["\']', root_html, re.IGNORECASE)
+        asset_refs = css_refs + js_refs
+
+        assets_ok = True
+        checked = 0
+        # Limit to 10 assets to keep within time budget
+        for asset_url in asset_refs[:10]:
+            full_url = asset_url
+            if asset_url.startswith("/"):
+                full_url = f"{base}{asset_url}"
+            elif not asset_url.startswith(("http://", "https://")):
+                full_url = f"{base}/{asset_url}"
+
+            # Skip external CDN assets (tailwindcss, google fonts, etc.) — they are not our problem
+            if not full_url.startswith(base):
+                continue
+
+            try:
+                asset_req = request.Request(full_url, method="HEAD", headers={"User-Agent": "vibeDeploy-verifier/1.0"})
+                with request.urlopen(asset_req, timeout=10) as resp:
+                    if resp.status != 200:
+                        assets_ok = False
+                        result["asset_checks"][asset_url] = {"status": resp.status, "ok": False}
+                        logger.warning("[DEPLOYER][VERIFY] Asset NOT OK: %s → %d", asset_url, resp.status)
+                    else:
+                        result["asset_checks"][asset_url] = {"status": 200, "ok": True}
+                        checked += 1
+            except error.HTTPError as e:
+                assets_ok = False
+                result["asset_checks"][asset_url] = {"status": e.code, "ok": False}
+                logger.warning("[DEPLOYER][VERIFY] Asset error: %s → %d", asset_url, e.code)
+            except (error.URLError, OSError) as e:
+                assets_ok = False
+                result["asset_checks"][asset_url] = {"status": None, "ok": False, "error": str(e)[:100]}
+                logger.warning("[DEPLOYER][VERIFY] Asset unreachable: %s → %s", asset_url, e)
+
+        # Score: assets load correctly: +10
+        if assets_ok:
+            score += 10
+            logger.info("[DEPLOYER][VERIFY] All %d checked assets load OK → +10", checked)
+        else:
+            logger.warning("[DEPLOYER][VERIFY] Some assets failed to load")
+
+    # ── Phase 4: Compute final score and verdict ──────────────────────
+    result["verification_score"] = score
+
+    if score >= 80:
+        result["verification_verdict"] = "verified"
+    elif score >= 50:
+        result["verification_verdict"] = "partial"
+    else:
+        result["verification_verdict"] = "failed"
+
+    logger.info(
+        "[DEPLOYER][VERIFY] Final score: %d/100 → verdict=%s",
+        score, result["verification_verdict"],
+    )
 
     return result
 
@@ -1791,7 +2119,29 @@ def _discover_endpoints_from_openapi(base_url: str) -> list[dict]:
 
 
 def _probe_endpoint(base_url: str, path: str, method: str) -> int | None:
+    """Legacy probe — returns only status code. Kept for backward compatibility."""
+    result = _probe_endpoint_deep(base_url, path, method)
+    return result["status"]
+
+
+def _probe_endpoint_deep(base_url: str, path: str, method: str) -> dict:
+    """Enhanced endpoint probe returning status, content-type, and response validity.
+
+    Returns a dict with:
+      - status: HTTP status code or None
+      - ok: True if status < 500
+      - content_type: response Content-Type header
+      - valid_response: True if response is valid JSON with meaningful content
+      - response_preview: first 200 chars of response body (for debugging)
+    """
     url = f"{base_url}{path}"
+    probe_result: dict = {
+        "status": None,
+        "ok": False,
+        "content_type": "",
+        "valid_response": False,
+        "response_preview": "",
+    }
     try:
         if method == "GET":
             req = request.Request(url, headers={"User-Agent": "vibeDeploy-verifier/1.0"})
@@ -1806,11 +2156,53 @@ def _probe_endpoint(base_url: str, path: str, method: str) -> int | None:
                 },
             )
         with request.urlopen(req, timeout=15) as resp:
-            return resp.status
+            body = resp.read()
+            probe_result["status"] = resp.status
+            probe_result["ok"] = resp.status < 500
+            probe_result["content_type"] = resp.headers.get("Content-Type", "")
+
+            body_text = body.decode("utf-8", errors="replace")
+            probe_result["response_preview"] = body_text[:200]
+
+            # Validate response has meaningful JSON content
+            if "application/json" in probe_result["content_type"]:
+                try:
+                    parsed = json.loads(body_text)
+                    # Check it is not an empty container or a generic error
+                    if isinstance(parsed, dict):
+                        # Empty dict or just a "detail" error is not valid content
+                        if len(parsed) == 0:
+                            probe_result["valid_response"] = False
+                        elif list(parsed.keys()) == ["detail"] and "not found" in str(parsed.get("detail", "")).lower():
+                            probe_result["valid_response"] = False
+                        else:
+                            probe_result["valid_response"] = True
+                    elif isinstance(parsed, list):
+                        # Empty list is not necessarily invalid (could be no data yet)
+                        # but a list with items is clearly valid
+                        probe_result["valid_response"] = len(parsed) > 0
+                    else:
+                        # Scalar JSON value — valid
+                        probe_result["valid_response"] = True
+                except (json.JSONDecodeError, ValueError):
+                    probe_result["valid_response"] = False
+            else:
+                # Non-JSON response — valid if status is OK and has content
+                probe_result["valid_response"] = resp.status < 400 and len(body) > 0
+
     except error.HTTPError as e:
-        return e.code
+        probe_result["status"] = e.code
+        probe_result["ok"] = e.code < 500
+        try:
+            err_body = e.read().decode("utf-8", errors="replace")[:200]
+            probe_result["response_preview"] = err_body
+        except Exception:
+            pass
     except (error.URLError, OSError):
-        return None
+        probe_result["status"] = None
+        probe_result["ok"] = False
+
+    return probe_result
 
 
 async def _check_deploy_health(live_url: str, timeout: int = 30) -> dict:
