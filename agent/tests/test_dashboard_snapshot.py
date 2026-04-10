@@ -314,6 +314,7 @@ async def test_dashboard_reconcile_endpoint_prunes_store_to_supplied_showcase_ap
 
     _reset_dashboard_caches(srv)
     monkeypatch.setenv("VIBEDEPLOY_OPS_TOKEN", "ops-secret")
+    monkeypatch.setenv("VIBEDEPLOY_API_KEY", "ops-secret")
     showcase_apps = [
         srv._showcase_app_from_inventory(
             "demopilot-168642",
@@ -452,7 +453,7 @@ async def test_dashboard_reconcile_endpoint_prunes_store_to_supplied_showcase_ap
 
     reconcile = await app_client.post(
         "/api/ops/dashboard/reconcile",
-        headers={"x-vibedeploy-ops-token": "ops-secret"},
+        headers={"x-vibedeploy-ops-token": "ops-secret", "X-API-Key": "ops-secret"},
         json={
             "showcase_apps": [
                 {
@@ -467,8 +468,9 @@ async def test_dashboard_reconcile_endpoint_prunes_store_to_supplied_showcase_ap
     assert reconcile.status_code == 200
     assert reconcile.json()["stored"] == 5
 
-    results = (await app_client.get("/dashboard/results")).json()
-    deployments = (await app_client.get("/dashboard/deployments")).json()
+    _auth = {"X-API-Key": "ops-secret"}
+    results = (await app_client.get("/dashboard/results", headers=_auth)).json()
+    deployments = (await app_client.get("/dashboard/deployments", headers=_auth)).json()
 
     assert len(results) == 5
     assert len(deployments) == 5

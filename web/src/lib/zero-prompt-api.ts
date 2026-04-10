@@ -1,4 +1,5 @@
 import { DASHBOARD_API_URL } from "./api";
+import { authenticatedFetch, appendApiKey } from "./fetch-with-auth";
 import type { ZPCard, ZPSession } from "@/types/zero-prompt";
 
 const LATEST_SESSION_ID = "latest";
@@ -27,9 +28,9 @@ function parseStartSessionResponse(raw: string): ZPSession {
 }
 
 export async function startSession(goal?: number): Promise<ZPSession> {
-  const response = await fetch(`${DASHBOARD_API_URL}/zero-prompt/start`, {
+  const response = await authenticatedFetch(`${DASHBOARD_API_URL}/zero-prompt/start`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+
     body: JSON.stringify({ goal }),
   });
   if (!response.ok) throw new Error("Failed to start session");
@@ -37,13 +38,13 @@ export async function startSession(goal?: number): Promise<ZPSession> {
 }
 
 export async function getDashboard(): Promise<ZPSession & { session_id: string | null }> {
-  const response = await fetch(`${DASHBOARD_API_URL}/zero-prompt/dashboard`);
+  const response = await authenticatedFetch(`${DASHBOARD_API_URL}/zero-prompt/dashboard`);
   if (!response.ok) throw new Error("Failed to get dashboard");
   return response.json();
 }
 
 export async function getSession(id: string): Promise<ZPSession> {
-  const response = await fetch(`${DASHBOARD_API_URL}/zero-prompt/${id}`);
+  const response = await authenticatedFetch(`${DASHBOARD_API_URL}/zero-prompt/${id}`);
   if (!response.ok) throw new Error("Failed to get session");
   return response.json();
 }
@@ -53,48 +54,48 @@ export async function getLatestSession(): Promise<ZPSession> {
 }
 
 export async function getDeployedCards(limit = 50): Promise<ZPCard[]> {
-  const response = await fetch(`${DASHBOARD_API_URL}/zero-prompt/deployed?limit=${limit}`);
+  const response = await authenticatedFetch(`${DASHBOARD_API_URL}/zero-prompt/deployed?limit=${limit}`);
   if (!response.ok) throw new Error("Failed to get deployed cards");
   const data = await response.json();
   return data.cards || [];
 }
 
 export async function queueBuild(sessionId: string, cardId: string): Promise<void> {
-  const response = await fetch(`${DASHBOARD_API_URL}/zero-prompt/${sessionId || LATEST_SESSION_ID}/actions`, {
+  const response = await authenticatedFetch(`${DASHBOARD_API_URL}/zero-prompt/${sessionId || LATEST_SESSION_ID}/actions`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+
     body: JSON.stringify({ action: "queue_build", card_id: cardId }),
   });
   if (!response.ok) throw new Error("Failed to queue build");
 }
 
 export async function passCard(sessionId: string, cardId: string): Promise<void> {
-  const response = await fetch(`${DASHBOARD_API_URL}/zero-prompt/${sessionId || LATEST_SESSION_ID}/actions`, {
+  const response = await authenticatedFetch(`${DASHBOARD_API_URL}/zero-prompt/${sessionId || LATEST_SESSION_ID}/actions`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+
     body: JSON.stringify({ action: "pass_card", card_id: cardId }),
   });
   if (!response.ok) throw new Error("Failed to pass card");
 }
 
 export async function deleteCard(sessionId: string, cardId: string): Promise<void> {
-  const response = await fetch(`${DASHBOARD_API_URL}/zero-prompt/${sessionId || LATEST_SESSION_ID}/actions`, {
+  const response = await authenticatedFetch(`${DASHBOARD_API_URL}/zero-prompt/${sessionId || LATEST_SESSION_ID}/actions`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+
     body: JSON.stringify({ action: "delete_card", card_id: cardId }),
   });
   if (!response.ok) throw new Error("Failed to delete card");
 }
 
 export async function deleteRejectedCards(sessionId: string): Promise<void> {
-  const response = await fetch(`${DASHBOARD_API_URL}/zero-prompt/${sessionId || LATEST_SESSION_ID}/actions`, {
+  const response = await authenticatedFetch(`${DASHBOARD_API_URL}/zero-prompt/${sessionId || LATEST_SESSION_ID}/actions`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+
     body: JSON.stringify({ action: "delete_rejected_cards" }),
   });
   if (!response.ok) throw new Error("Failed to delete rejected cards");
 }
 
 export function getBuildEventsUrl(sessionId: string, cardId: string): string {
-  return `${DASHBOARD_API_URL}/zero-prompt/${sessionId || LATEST_SESSION_ID}/build/${cardId}/events`;
+  return appendApiKey(`${DASHBOARD_API_URL}/zero-prompt/${sessionId || LATEST_SESSION_ID}/build/${cardId}/events`);
 }

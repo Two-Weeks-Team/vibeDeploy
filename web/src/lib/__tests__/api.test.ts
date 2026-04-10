@@ -39,7 +39,7 @@ describe("api.ts", () => {
 
       const result = await checkHealth();
       expect(result).toBe(true);
-      expect(global.fetch).toHaveBeenCalledWith(`${DASHBOARD_API_URL}/health`);
+      expect(global.fetch).toHaveBeenCalledWith(`${DASHBOARD_API_URL}/health`, expect.any(Object));
     });
 
     it("returns false on network error", async () => {
@@ -59,7 +59,7 @@ describe("api.ts", () => {
 
       const result = await getMeetingResult("test-id");
       expect(result).toBeNull();
-      expect(global.fetch).toHaveBeenCalledWith(`${DASHBOARD_API_URL}/result/test-id`);
+      expect(global.fetch).toHaveBeenCalledWith(`${DASHBOARD_API_URL}/result/test-id`, expect.any(Object));
     });
 
     it("returns data on success", async () => {

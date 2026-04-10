@@ -38,9 +38,10 @@ export function createSSEClient(options: SSEClientOptions): () => void {
 
   async function connect() {
     try {
+      const { authHeaders } = await import("./fetch-with-auth");
       const response = await fetch(options.url, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: authHeaders(),
         body: JSON.stringify(options.body),
         signal: controller.signal,
       });

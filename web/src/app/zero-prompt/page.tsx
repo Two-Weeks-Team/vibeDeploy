@@ -1,10 +1,11 @@
 import { DASHBOARD_API_URL } from "@/lib/api";
+import { authenticatedFetch } from "@/lib/fetch-with-auth";
 import { ZeroPromptWorkspace } from "@/components/zero-prompt/zero-prompt-workspace";
 import type { ZPSession } from "@/types/zero-prompt";
 
 async function getInitialSession(): Promise<ZPSession | null> {
   try {
-    const response = await fetch(`${DASHBOARD_API_URL}/zero-prompt/dashboard`, { cache: "no-store" });
+    const response = await authenticatedFetch(`${DASHBOARD_API_URL}/zero-prompt/dashboard`, { cache: "no-store" });
     if (!response.ok) return null;
     const data = await response.json();
     if (!data?.session_id) return null;

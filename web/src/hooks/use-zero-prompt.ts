@@ -372,11 +372,14 @@ export function useZeroPrompt(initialSession: ZPSession | null = null) {
 
     const connect = async () => {
       try {
-        const eventsUrl = eventSessionId
+        const { appendApiKey, authHeaders } = await import("@/lib/fetch-with-auth");
+        const baseUrl = eventSessionId
           ? `${DASHBOARD_API_URL}/zero-prompt/events?session_id=${encodeURIComponent(eventSessionId)}`
           : `${DASHBOARD_API_URL}/zero-prompt/events`;
+        const eventsUrl = appendApiKey(baseUrl);
         const res = await fetch(eventsUrl, {
           signal: controller.signal,
+          headers: authHeaders(),
         });
         if (!res.ok || !res.body) throw new Error(`SSE failed: ${res.status}`);
         setIsConnected(true);

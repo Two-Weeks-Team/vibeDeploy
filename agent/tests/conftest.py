@@ -7,7 +7,16 @@ import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
+from agent.auth import _rate_buckets
 from agent.db.store import ResultStore
+
+
+@pytest.fixture(autouse=True)
+def _clear_rate_limits():
+    """Clear rate limit buckets before each test to avoid cross-test pollution."""
+    _rate_buckets.clear()
+    yield
+    _rate_buckets.clear()
 
 
 @pytest_asyncio.fixture
