@@ -2067,6 +2067,52 @@ async def dashboard_auth_check_user(email: str):
     )
 
 
+@app.get("/dashboard/apps")
+async def dashboard_list_apps():
+    """List all live DigitalOcean apps with age and status."""
+    from .tools.digitalocean import list_apps
+
+    apps = await list_apps()
+    result = []
+    for app in apps:
+        spec = app.get("spec", {})
+        name = spec.get("name", "")
+        active = app.get("active_deployment", {})
+        result.append({
+            "id": app.get("id", ""),
+            "name": name,
+            "live_url": app.get("live_url", ""),
+            "region": app.get("region", {}).get("slug", ""),
+            "phase": active.get("phase", "UNKNOWN"),
+            "created_at": app.get("created_at", ""),
+            "updated_at": app.get("updated_at", ""),
+            "protected": name in {"vibedeploy"},
+        })
+    return result
+
+
+@app.delete("/dashboard/apps/{app_id}")
+async def dashboard_delete_app(app_id: str):
+    """Delete a specific generated app. Refuses to delete the production app."""
+    from .tools.digitalocean import delete_app, list_apps
+
+    apps = await list_apps()
+    target = None
+    for app in apps:
+        if app.get("id") == app_id:
+            target = app
+            break
+    if not target:
+        raise HTTPException(status_code=404, detail="app_not_found")
+
+    name = target.get("spec", {}).get("name", "")
+    if name in {"vibedeploy"}:
+        raise HTTPException(status_code=403, detail="cannot_delete_production_app")
+
+    result = await delete_app(app_id)
+    return result
+
+
 @app.post("/dashboard/cleanup-apps")
 async def dashboard_cleanup_apps():
     """Manually trigger TTL cleanup of expired generated apps."""
