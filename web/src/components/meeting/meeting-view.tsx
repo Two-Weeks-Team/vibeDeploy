@@ -152,26 +152,48 @@ export function MeetingView({ meetingId }: { meetingId: string }) {
   }, []);
 
   useEffect(() => {
-    const stop = createSSEClient({
-      url: `${DASHBOARD_API_URL}/run`,
-      body: {
-        prompt: "Run the council meeting and stream all events.",
-        config: { configurable: { thread_id: meetingId } },
-      },
-      onEvent: (event) => {
-        const tagged = { ...event, _uid: `mev-${++eventSeq.current}` };
-        setEvents((prev) => [...prev, tagged]);
-        handleEvent(event);
-      },
-      onComplete: () => {
-        setStreamCompleted(true);
-        setPhaseIndex(6);
-        setTimeout(() => router.push(`/result/${meetingId}`), 2000);
-      },
-      onError: (streamError) => setError(streamError.message),
-    });
+    let stopFn: (() => void) | undefined;
+    let cancelled = false;
 
-    return stop;
+    (async () => {
+      // Check if result already exists (page refresh case)
+      try {
+        const { getMeetingResult } = await import("@/lib/api");
+        const existing = await getMeetingResult(meetingId);
+        if (existing && !cancelled) {
+          router.push(`/result/${meetingId}`);
+          return;
+        }
+      } catch {
+        // Result not found — proceed with new stream
+      }
+
+      if (cancelled) return;
+
+      stopFn = createSSEClient({
+        url: `${DASHBOARD_API_URL}/run`,
+        body: {
+          prompt: "Run the council meeting and stream all events.",
+          config: { configurable: { thread_id: meetingId } },
+        },
+        onEvent: (event) => {
+          const tagged = { ...event, _uid: `mev-${++eventSeq.current}` };
+          setEvents((prev) => [...prev, tagged]);
+          handleEvent(event);
+        },
+        onComplete: () => {
+          setStreamCompleted(true);
+          setPhaseIndex(6);
+          setTimeout(() => router.push(`/result/${meetingId}`), 2000);
+        },
+        onError: (streamError) => setError(streamError.message),
+      });
+    })();
+
+    return () => {
+      cancelled = true;
+      stopFn?.();
+    };
   }, [handleEvent, meetingId, router]);
 
   useEffect(() => {
@@ -316,6 +338,7 @@ export function MeetingView({ meetingId }: { meetingId: string }) {
                             ]
                           : ["All dimensions cleared. Proceed to build + deploy."]
                     }
+                    onRevise={() => router.push("/")}
                   />
                 </motion.div>
               )}

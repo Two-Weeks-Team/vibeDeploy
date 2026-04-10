@@ -10,7 +10,16 @@ export default function GlobalError({ error, reset }: { error: Error & { digest?
     const isChunkError = message.includes("ChunkLoadError") || message.includes("Failed to load chunk");
     if (!retriedRef.current && isChunkError) {
       retriedRef.current = true;
-      window.location.reload();
+      try {
+        const reloadKey = "vibedeploy_chunk_reload_count";
+        const count = Number(sessionStorage.getItem(reloadKey) || "0");
+        if (count < 2) {
+          sessionStorage.setItem(reloadKey, String(count + 1));
+          window.location.reload();
+        }
+      } catch {
+        // sessionStorage unavailable (e.g., Safari private mode)
+      }
     }
   }, [error]);
 

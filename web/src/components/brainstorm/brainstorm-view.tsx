@@ -87,22 +87,56 @@ export function BrainstormView({ sessionId }: { sessionId: string }) {
   );
 
   useEffect(() => {
-    const stop = createSSEClient({
-      url: `${DASHBOARD_API_URL}/brainstorm`,
-      body: {
-        prompt: "Run brainstorm and stream all events.",
-        config: { configurable: { thread_id: sessionId } },
-      },
-      onEvent: handleEvent,
-      onComplete: () => {
+    let stopFn: (() => void) | undefined;
+    let cancelled = false;
+
+    // Check if result already exists (page refresh case)
+    getBrainstormResult(sessionId).then((existing) => {
+      if (cancelled) return;
+      if (existing) {
+        setResult(existing);
         setStreamCompleted(true);
-        getBrainstormResult(sessionId).then((res) => {
-          if (res) setResult(res);
-        });
-      },
-      onError: (err) => setError(err.message),
+        return;
+      }
+
+      stopFn = createSSEClient({
+        url: `${DASHBOARD_API_URL}/brainstorm`,
+        body: {
+          prompt: "Run brainstorm and stream all events.",
+          config: { configurable: { thread_id: sessionId } },
+        },
+        onEvent: handleEvent,
+        onComplete: () => {
+          setStreamCompleted(true);
+          getBrainstormResult(sessionId).then((res) => {
+            if (res) setResult(res);
+          });
+        },
+        onError: (err) => setError(err.message),
+      });
+    }).catch(() => {
+      if (cancelled) return;
+      stopFn = createSSEClient({
+        url: `${DASHBOARD_API_URL}/brainstorm`,
+        body: {
+          prompt: "Run brainstorm and stream all events.",
+          config: { configurable: { thread_id: sessionId } },
+        },
+        onEvent: handleEvent,
+        onComplete: () => {
+          setStreamCompleted(true);
+          getBrainstormResult(sessionId).then((res) => {
+            if (res) setResult(res);
+          });
+        },
+        onError: (err) => setError(err.message),
+      });
     });
-    return stop;
+
+    return () => {
+      cancelled = true;
+      stopFn?.();
+    };
   }, [handleEvent, sessionId]);
 
   const synthesis = result?.synthesis;

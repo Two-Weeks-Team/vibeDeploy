@@ -200,9 +200,11 @@ def build_meeting_result(state: dict) -> dict:
     if pipeline_succeeded:
         verdict = "GO"
 
-    score = scoring.get("final_score", 0)
-    if not score and isinstance(code_eval_result.get("match_rate"), (int, float)):
+    score = scoring.get("final_score")
+    if score is None and isinstance(code_eval_result.get("match_rate"), (int, float)):
         score = code_eval_result.get("match_rate", 0)
+    if score is None:
+        score = 0
 
     return {
         "score": score,
