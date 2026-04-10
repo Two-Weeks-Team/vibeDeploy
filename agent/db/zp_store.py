@@ -190,10 +190,10 @@ async def update_card(card_id: str, **fields: object) -> None:
     values = []
     for i, (k, v) in enumerate(fields.items(), 1):
         if k in _JSONB_COLUMNS:
-            sets.append(f"{k} = ${i}::jsonb")
+            sets.append(f'"{k}" = ${i}::jsonb')
             values.append(json.dumps(v) if not isinstance(v, str) else v)
         else:
-            sets.append(f"{k} = ${i}")
+            sets.append(f'"{k}" = ${i}')
             values.append(v)
     values.append(card_id)
     async with pool.acquire() as conn:

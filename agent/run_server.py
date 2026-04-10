@@ -30,5 +30,5 @@ if __name__ == "__main__":
         timeout_keep_alive=300,
         server_header=False,
         proxy_headers=True,
-        forwarded_allow_ips=os.environ.get("FORWARDED_ALLOW_IPS", "*"),
+        forwarded_allow_ips=os.environ.get("FORWARDED_ALLOW_IPS", "127.0.0.1"),
     )

@@ -69,7 +69,8 @@ async def get_pool() -> asyncpg.Pool:
 
 
 async def close_pool() -> None:
-    global _pool
+    global _pool, _pool_lock
     if _pool is not None:
         await _pool.close()
         _pool = None
+        _pool_lock = None
