@@ -4,8 +4,9 @@ import os
 import asyncpg
 
 _pool: asyncpg.Pool | None = None
-_DEFAULT_POOL_MIN_SIZE = 1
-_DEFAULT_POOL_MAX_SIZE = 1
+_pool_lock: asyncio.Lock | None = None
+_DEFAULT_POOL_MIN_SIZE = 2
+_DEFAULT_POOL_MAX_SIZE = 10
 _DEFAULT_POOL_RETRIES = 5
 _DEFAULT_POOL_RETRY_DELAY = 2.0
 
@@ -31,8 +32,14 @@ def _float_env(name: str, default: float, minimum: float = 0.0) -> float:
 
 
 async def get_pool() -> asyncpg.Pool:
-    global _pool
-    if _pool is None:
+    global _pool, _pool_lock
+    if _pool_lock is None:
+        _pool_lock = asyncio.Lock()
+    if _pool is not None:
+        return _pool
+    async with _pool_lock:
+        if _pool is not None:
+            return _pool
         database_url = os.environ.get("DATABASE_URL", "")
         if not database_url:
             raise RuntimeError("DATABASE_URL environment variable is required")
@@ -62,7 +69,8 @@ async def get_pool() -> asyncpg.Pool:
 
 
 async def close_pool() -> None:
-    global _pool
+    global _pool, _pool_lock
     if _pool is not None:
         await _pool.close()
         _pool = None
+        _pool_lock = None

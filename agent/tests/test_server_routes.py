@@ -15,9 +15,7 @@ async def test_health(app_client):
     assert resp.status_code == 200
     body = resp.json()
     assert body["status"] == "ok"
-    assert "provider" in body
-    assert "adk_url_configured" in body
-    assert "adk_auth_mode" in body
+    assert len(body) == 1  # Only status field — no internal config disclosure
 
 
 @pytest.mark.asyncio
