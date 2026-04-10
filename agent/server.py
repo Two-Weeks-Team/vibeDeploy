@@ -607,7 +607,19 @@ async def lifespan(app: FastAPI):
     else:
         db_path = os.environ.get("DB_PATH", str(_AGENT_DIR / "vibedeploy.db"))
         _store = ResultStore(db_path=db_path)
+
+    # Start TTL cleanup for deployed apps
+    _ttl_task = None
+    if os.environ.get("DIGITALOCEAN_API_TOKEN"):
+        from .tools.digitalocean import _ttl_cleanup_loop
+
+        _ttl_task = asyncio.create_task(_ttl_cleanup_loop())
+        logger.info("[TTL] App cleanup loop started (TTL=%sh)", os.environ.get("DEPLOY_APP_TTL_HOURS", "2"))
+
     yield
+
+    if _ttl_task:
+        _ttl_task.cancel()
     await _store.close()
     _store = None
 
@@ -2053,6 +2065,15 @@ async def dashboard_auth_check_user(email: str):
         domain=row["domain"],
         email=row["email"],
     )
+
+
+@app.post("/dashboard/cleanup-apps")
+async def dashboard_cleanup_apps():
+    """Manually trigger TTL cleanup of expired generated apps."""
+    from .tools.digitalocean import cleanup_expired_apps
+
+    result = await cleanup_expired_apps()
+    return result
 
 
 if __name__ == "__main__":

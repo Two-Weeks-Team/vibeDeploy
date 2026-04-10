@@ -1,11 +1,19 @@
 import asyncio
+import logging
 import os
 from collections.abc import Awaitable, Callable
+from datetime import datetime, timezone
 
 import httpx
 from gradient_adk.tracing import trace_tool
 
+logger = logging.getLogger(__name__)
+
 DO_API_BASE = "https://api.digitalocean.com/v2"
+
+# TTL for generated apps (default 2 hours). Override via DEPLOY_APP_TTL_HOURS env var.
+_DEFAULT_APP_TTL_HOURS = 2
+_PROTECTED_APP_NAMES = frozenset({"vibedeploy"})
 
 
 def _headers() -> dict:
@@ -87,6 +95,55 @@ async def wait_for_deployment(
 
     except Exception:
         return ""
+
+
+async def cleanup_expired_apps() -> dict:
+    """Delete generated apps older than the configured TTL. Protects vibedeploy."""
+    ttl_hours = max(1, int(os.getenv("DEPLOY_APP_TTL_HOURS", str(_DEFAULT_APP_TTL_HOURS))))
+    try:
+        apps = await list_apps()
+    except Exception:
+        return {"status": "error", "error": "failed to list apps"}
+
+    now = datetime.now(timezone.utc)
+    deleted = []
+    skipped = []
+
+    for app in apps:
+        name = app.get("spec", {}).get("name", "")
+        app_id = app.get("id", "")
+        if not app_id or name in _PROTECTED_APP_NAMES:
+            continue
+        created_str = app.get("created_at", "")
+        if not created_str:
+            continue
+        try:
+            created = datetime.fromisoformat(created_str.replace("Z", "+00:00"))
+        except (ValueError, TypeError):
+            continue
+        age_hours = (now - created).total_seconds() / 3600
+        if age_hours < ttl_hours:
+            skipped.append({"name": name, "age_hours": round(age_hours, 1)})
+            continue
+        logger.info("[TTL] Deleting expired app %s (age=%.1fh, ttl=%dh)", name, age_hours, ttl_hours)
+        result = await delete_app(app_id)
+        deleted.append({"name": name, "app_id": app_id, "age_hours": round(age_hours, 1), "result": result.get("status")})
+
+    return {"deleted": deleted, "skipped": skipped, "ttl_hours": ttl_hours}
+
+
+async def _ttl_cleanup_loop(interval_seconds: int = 3600) -> None:
+    """Background loop that periodically cleans expired apps."""
+    while True:
+        await asyncio.sleep(interval_seconds)
+        try:
+            if not os.getenv("DIGITALOCEAN_API_TOKEN"):
+                continue
+            result = await cleanup_expired_apps()
+            if result.get("deleted"):
+                logger.info("[TTL] Cleanup result: %d deleted", len(result["deleted"]))
+        except Exception:
+            logger.exception("[TTL] Cleanup loop error")
 
 
 @trace_tool("get_app_platform_status")
