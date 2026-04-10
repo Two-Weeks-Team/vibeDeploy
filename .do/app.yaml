@@ -34,16 +34,9 @@ ingress:
       match:
         path:
           prefix: /health
-    - component:
-        name: api
-      match:
-        path:
-          prefix: /zero-prompt
-    - component:
-        name: api
-      match:
-        path:
-          prefix: /dashboard
+    # /dashboard and /zero-prompt are Next.js pages (auth-protected).
+    # Their API sub-routes (/dashboard/stats, /zero-prompt/start, etc.)
+    # are accessed via /api/ prefix by the frontend (DASHBOARD_API_URL).
     # Everything else → frontend (Next.js handles its own routing)
     - component:
         name: web

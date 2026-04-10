@@ -6,6 +6,7 @@ import { DASHBOARD_API_URL } from "@/lib/api";
 const FIVE_MINUTES_MS = 5 * 60 * 1000;
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
+  trustHost: true,
   providers: [
     Google({
       clientId: process.env.GOOGLE_CLIENT_ID!,
@@ -40,11 +41,24 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     },
 
     async jwt({ token, user, trigger }) {
-      // On initial sign-in, extract domain and set approval
+      // On initial sign-in, extract domain and read approval from DB
       if (trigger === "signIn" && user?.email) {
-        const domain = user.email.split("@")[1] ?? "";
+        const domain = user.email.split("@").pop() ?? "";
         token.domain = domain;
-        token.approved = domain === "2weeks.co";
+        // Read actual approval status from DB instead of deriving from domain
+        try {
+          const res = await authenticatedFetch(
+            `${DASHBOARD_API_URL}/dashboard/auth/check-user?email=${encodeURIComponent(user.email)}`,
+          );
+          if (res.ok) {
+            const data = await res.json();
+            token.approved = Boolean(data.approved);
+          } else {
+            token.approved = domain === "2weeks.co";
+          }
+        } catch {
+          token.approved = domain === "2weeks.co";
+        }
         token.approvedCheckedAt = Date.now();
       }
 

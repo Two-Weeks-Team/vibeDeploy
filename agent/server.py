@@ -2070,7 +2070,7 @@ async def dashboard_auth_check_user(email: str):
 @app.get("/dashboard/apps")
 async def dashboard_list_apps():
     """List all live DigitalOcean apps with age and status."""
-    from .tools.digitalocean import list_apps
+    from .tools.digitalocean import _PROTECTED_APP_NAMES, list_apps
 
     apps = await list_apps()
     result = []
@@ -2086,7 +2086,7 @@ async def dashboard_list_apps():
             "phase": active.get("phase", "UNKNOWN"),
             "created_at": app.get("created_at", ""),
             "updated_at": app.get("updated_at", ""),
-            "protected": name in {"vibedeploy"},
+            "protected": name in _PROTECTED_APP_NAMES,
         })
     return result
 
@@ -2094,7 +2094,7 @@ async def dashboard_list_apps():
 @app.delete("/dashboard/apps/{app_id}")
 async def dashboard_delete_app(app_id: str):
     """Delete a specific generated app. Refuses to delete the production app."""
-    from .tools.digitalocean import delete_app, list_apps
+    from .tools.digitalocean import _PROTECTED_APP_NAMES, delete_app, list_apps
 
     apps = await list_apps()
     target = None
@@ -2106,7 +2106,7 @@ async def dashboard_delete_app(app_id: str):
         raise HTTPException(status_code=404, detail="app_not_found")
 
     name = target.get("spec", {}).get("name", "")
-    if name in {"vibedeploy"}:
+    if name in _PROTECTED_APP_NAMES:
         raise HTTPException(status_code=403, detail="cannot_delete_production_app")
 
     result = await delete_app(app_id)
