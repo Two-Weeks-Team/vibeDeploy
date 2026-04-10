@@ -73,19 +73,27 @@ export function ActionFeed({ actions }: ActionFeedProps) {
             />
           </div>
           <div className="flex gap-1 overflow-x-auto pb-1 sm:pb-0 hide-scrollbar">
-            <Badge 
+            <Badge
+              role="button"
+              tabIndex={0}
+              aria-pressed={typeFilter === null}
               variant={typeFilter === null ? "default" : "outline"}
               className="cursor-pointer text-[10px] whitespace-nowrap"
               onClick={() => setTypeFilter(null)}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setTypeFilter(null); } }}
             >
               All
             </Badge>
             {uniqueTypes.map(type => (
-              <Badge 
+              <Badge
                 key={type}
+                role="button"
+                tabIndex={0}
+                aria-pressed={typeFilter === type}
                 variant={typeFilter === type ? "default" : "outline"}
                 className="cursor-pointer text-[10px] whitespace-nowrap"
                 onClick={() => setTypeFilter(type === typeFilter ? null : type)}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setTypeFilter(type === typeFilter ? null : type); } }}
               >
                 {type}
               </Badge>

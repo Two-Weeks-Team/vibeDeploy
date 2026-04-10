@@ -152,7 +152,9 @@ export function ZeroPromptLanding({ youtubeUrl, onYoutubeUrlChange, startAction,
           <Card className="border-border/50 overflow-hidden">
             <CardContent className="pt-6 space-y-4">
               <div className="flex gap-2">
+                <label htmlFor="youtube-url-input" className="sr-only">YouTube video URL</label>
                 <Input
+                  id="youtube-url-input"
                   ref={inputRef}
                   value={youtubeUrl}
                   onChange={(e) => onYoutubeUrlChange(e.target.value)}
@@ -160,11 +162,12 @@ export function ZeroPromptLanding({ youtubeUrl, onYoutubeUrlChange, startAction,
                   className="font-mono text-sm"
                 />
                 <Button
-                  className="shrink-0 gap-2 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400"
-                  onClick={() => alert("This feature is restricted to admin users and authorized IPs only.")}
+                  disabled
+                  className="shrink-0 gap-2 opacity-50 cursor-not-allowed"
+                  title="Admin access required — use Zero-Prompt Start for the full pipeline"
                 >
                   <Lock className="w-4 h-4" />
-                  Start
+                  Admin Only
                 </Button>
               </div>
 

@@ -262,6 +262,7 @@ export default function DemoPage() {
       </AnimatePresence>
 
       <motion.div
+        aria-hidden="true"
         className="pointer-events-none fixed left-0 top-0 z-[120]"
         initial={false}
         animate={{

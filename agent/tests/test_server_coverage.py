@@ -14,7 +14,7 @@ async def test_health_has_provider_field(app_client):
     resp = await app_client.get("/health")
     assert resp.status_code == 200
     data = resp.json()
-    assert "provider" in data
+    assert data == {"status": "ok"}  # minimal disclosure
 
 
 @pytest.mark.asyncio

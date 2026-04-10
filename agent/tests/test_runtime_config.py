@@ -24,8 +24,8 @@ async def test_get_pool_uses_conservative_defaults(monkeypatch):
 
     assert result is pool
     assert created["database_url"] == "postgres://example"
-    assert created["kwargs"]["min_size"] == 1
-    assert created["kwargs"]["max_size"] == 1
+    assert created["kwargs"]["min_size"] == 2
+    assert created["kwargs"]["max_size"] == 10
     assert created["kwargs"]["command_timeout"] == 60
 
 

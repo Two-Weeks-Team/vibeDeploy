@@ -1468,7 +1468,8 @@ class TestBuildAppSpec:
         assert spec["services"][0]["github"]["repo"] == "myorg/myrepo"
 
     def test_with_database_url(self, monkeypatch):
-        monkeypatch.setenv("DATABASE_URL", "postgresql://user:pass@host:5432/db")
+        monkeypatch.setenv("GENERATED_APP_DATABASE_URL", "postgresql://user:pass@host:5432/db")
+        monkeypatch.delenv("GENERATED_APP_INFERENCE_KEY", raising=False)
         monkeypatch.delenv("GRADIENT_MODEL_ACCESS_KEY", raising=False)
         monkeypatch.delenv("DIGITALOCEAN_INFERENCE_KEY", raising=False)
         from agent.tools.digitalocean import build_app_spec
@@ -1480,7 +1481,8 @@ class TestBuildAppSpec:
 
     def test_with_inference_key(self, monkeypatch):
         monkeypatch.delenv("DATABASE_URL", raising=False)
-        monkeypatch.setenv("GRADIENT_MODEL_ACCESS_KEY", "test-inference-key")
+        monkeypatch.delenv("GENERATED_APP_DATABASE_URL", raising=False)
+        monkeypatch.setenv("GENERATED_APP_INFERENCE_KEY", "test-inference-key")
         monkeypatch.delenv("DIGITALOCEAN_INFERENCE_KEY", raising=False)
         from agent.tools.digitalocean import build_app_spec
 
@@ -1499,7 +1501,8 @@ class TestBuildAppSpec:
         assert len(spec["name"]) <= 32
 
     def test_asyncpg_url_converted_to_psycopg(self, monkeypatch):
-        monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://user:pass@host/db")
+        monkeypatch.setenv("GENERATED_APP_DATABASE_URL", "postgresql+asyncpg://user:pass@host/db")
+        monkeypatch.delenv("GENERATED_APP_INFERENCE_KEY", raising=False)
         monkeypatch.delenv("GRADIENT_MODEL_ACCESS_KEY", raising=False)
         monkeypatch.delenv("DIGITALOCEAN_INFERENCE_KEY", raising=False)
         from agent.tools.digitalocean import build_app_spec
@@ -1510,7 +1513,8 @@ class TestBuildAppSpec:
         assert "asyncpg" not in db_env["value"]
 
     def test_postgres_url_converted(self, monkeypatch):
-        monkeypatch.setenv("DATABASE_URL", "postgres://user:pass@host/db")
+        monkeypatch.setenv("GENERATED_APP_DATABASE_URL", "postgres://user:pass@host/db")
+        monkeypatch.delenv("GENERATED_APP_INFERENCE_KEY", raising=False)
         monkeypatch.delenv("GRADIENT_MODEL_ACCESS_KEY", raising=False)
         monkeypatch.delenv("DIGITALOCEAN_INFERENCE_KEY", raising=False)
         from agent.tools.digitalocean import build_app_spec
