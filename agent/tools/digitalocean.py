@@ -11,8 +11,8 @@ logger = logging.getLogger(__name__)
 
 DO_API_BASE = "https://api.digitalocean.com/v2"
 
-# TTL for generated apps (default 2 hours). Override via DEPLOY_APP_TTL_HOURS env var.
-_DEFAULT_APP_TTL_HOURS = 2
+# TTL for generated apps (default 72 hours / 3 days). Override via DEPLOY_APP_TTL_HOURS env var.
+_DEFAULT_APP_TTL_HOURS = 72
 _PROTECTED_APP_NAMES = frozenset({"vibedeploy"})
 
 
