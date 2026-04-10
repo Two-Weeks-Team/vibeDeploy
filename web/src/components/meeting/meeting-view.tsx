@@ -250,7 +250,7 @@ export function MeetingView({ meetingId }: { meetingId: string }) {
           ))}
         </aside>
 
-        <main>
+        <section aria-label="Meeting content">
           <AnimatePresence mode="wait">
             <motion.div
               key={phaseIndex}
@@ -381,7 +381,7 @@ export function MeetingView({ meetingId }: { meetingId: string }) {
               </Card>
             </motion.div>
           </AnimatePresence>
-        </main>
+        </section>
       </div>
     </div>
   );

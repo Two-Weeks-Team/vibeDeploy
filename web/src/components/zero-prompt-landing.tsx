@@ -160,7 +160,6 @@ export function ZeroPromptLanding({ youtubeUrl, onYoutubeUrlChange, startAction,
                   onChange={(e) => onYoutubeUrlChange(e.target.value)}
                   placeholder="https://www.youtube.com/watch?v=..."
                   className="font-mono text-sm"
-                  aria-label="YouTube video URL"
                 />
                 <Button
                   disabled
