@@ -5,6 +5,7 @@ import asyncpg
 
 _pool: asyncpg.Pool | None = None
 _pool_lock: asyncio.Lock | None = None
+_users_table_ensured: bool = False
 _DEFAULT_POOL_MIN_SIZE = 2
 _DEFAULT_POOL_MAX_SIZE = 10
 _DEFAULT_POOL_RETRIES = 5
@@ -31,8 +32,28 @@ def _float_env(name: str, default: float, minimum: float = 0.0) -> float:
         return default
 
 
+async def ensure_users_table(pool: asyncpg.Pool) -> None:
+    """Create the users table if it does not already exist (idempotent)."""
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+                email TEXT UNIQUE NOT NULL,
+                name TEXT,
+                image TEXT,
+                approved BOOLEAN NOT NULL DEFAULT FALSE,
+                domain TEXT NOT NULL,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                last_login_at TIMESTAMPTZ NOT NULL DEFAULT now()
+            );
+            CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+            """
+        )
+
+
 async def get_pool() -> asyncpg.Pool:
-    global _pool, _pool_lock
+    global _pool, _pool_lock, _users_table_ensured
     if _pool_lock is None:
         _pool_lock = asyncio.Lock()
     if _pool is not None:
@@ -65,6 +86,16 @@ async def get_pool() -> asyncpg.Pool:
                 await asyncio.sleep(retry_delay * (attempt + 1))
         if _pool is None and last_error is not None:
             raise last_error
+        if _pool is not None and not _users_table_ensured:
+            try:
+                await ensure_users_table(_pool)
+                _users_table_ensured = True
+            except Exception:
+                import logging
+
+                logging.getLogger(__name__).warning(
+                    "Could not create users table — DB may not be ready yet"
+                )
     return _pool
 
 

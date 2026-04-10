@@ -1970,6 +1970,91 @@ async def zero_prompt_build_status(session_id: str, card_id: str):
     }
 
 
+# ── Dashboard Auth ────────────────────────────────────────────────────
+
+
+class UpsertUserRequest(BaseModel):
+    email: str
+    name: str = ""
+    image: str = ""
+
+
+class UpsertUserResponse(BaseModel):
+    id: str
+    email: str
+    name: str
+    approved: bool
+    domain: str
+
+
+class CheckUserResponse(BaseModel):
+    approved: bool
+    domain: str
+    email: str
+
+
+@app.post("/dashboard/auth/upsert-user")
+async def dashboard_auth_upsert_user(body: UpsertUserRequest):
+    from .db.connection import get_pool
+
+    if not body.email or "@" not in body.email:
+        raise HTTPException(status_code=400, detail="invalid_email")
+
+    domain = body.email.rsplit("@", 1)[1].lower()
+    approved = domain == "2weeks.co"
+
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            INSERT INTO users (email, name, image, approved, domain)
+            VALUES ($1, $2, $3, $4, $5)
+            ON CONFLICT (email) DO UPDATE
+                SET name = EXCLUDED.name,
+                    image = EXCLUDED.image,
+                    last_login_at = now()
+            RETURNING id, email, name, approved, domain
+            """,
+            body.email,
+            body.name,
+            body.image,
+            approved,
+            domain,
+        )
+
+    return UpsertUserResponse(
+        id=row["id"],
+        email=row["email"],
+        name=row["name"],
+        approved=row["approved"],
+        domain=row["domain"],
+    )
+
+
+@app.get("/dashboard/auth/check-user")
+async def dashboard_auth_check_user(email: str):
+    from .db.connection import get_pool
+
+    if not email or "@" not in email:
+        raise HTTPException(status_code=400, detail="invalid_email")
+
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT approved, domain, email FROM users WHERE email = $1",
+            email,
+        )
+
+    if row is None:
+        raise HTTPException(status_code=404, detail="user_not_found")
+
+    return CheckUserResponse(
+        approved=row["approved"],
+        domain=row["domain"],
+        email=row["email"],
+    )
+
+
 if __name__ == "__main__":
     uvicorn.run(
         "agent.server:app",
