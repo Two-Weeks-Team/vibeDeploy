@@ -85,7 +85,7 @@ jobs:
   web-build:
     name: Web Build (next)
     runs-on: ubuntu-latest
-    needs: web-lint
+    needs: [web-lint, web-test]
     defaults:
       run:
         working-directory: web
@@ -121,7 +121,7 @@ jobs:
           pip install -r requirements.txt
       - run: pip install pytest pytest-cov mypy
       - run: pytest tests/ --cov=. --cov-report=term-missing --cov-fail-under=80
-      - run: mypy agent/ --ignore-missing-imports --no-strict
+      - run: mypy . --ignore-missing-imports --no-strict
         continue-on-error: true
 
   agent-security:
