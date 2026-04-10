@@ -4,7 +4,6 @@ import hmac
 import logging
 import os
 import time
-from collections import defaultdict
 
 from fastapi import HTTPException, Request, Security
 from fastapi.security import APIKeyHeader
@@ -136,7 +135,12 @@ def _cleanup_stale_buckets(now: float) -> None:
     if now - _last_bucket_cleanup < _BUCKET_CLEANUP_INTERVAL:
         return
     _last_bucket_cleanup = now
-    stale = [k for k, b in _rate_buckets.items() if b.is_empty()]
+    max_window = max(w for _, w in _RATE_LIMITS.values())
+    stale: list[str] = []
+    for k, b in _rate_buckets.items():
+        b._requests = [t for t in b._requests if t > now - max_window]
+        if b.is_empty():
+            stale.append(k)
     for k in stale:
         _rate_buckets.pop(k, None)
 
@@ -147,7 +151,11 @@ async def rate_limit_check(request: Request) -> None:
     if _is_public_path(path):
         return
 
-    client_ip = request.client.host if request.client else "unknown"
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        client_ip = forwarded.split(",")[0].strip()
+    else:
+        client_ip = request.client.host if request.client else "unknown"
     method = request.method
     tier = _classify_rate_tier(path, method)
     max_requests, window_seconds = _RATE_LIMITS[tier]

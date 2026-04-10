@@ -28,6 +28,8 @@ import httpx
 import uvicorn
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
+
+from .auth import rate_limit_check, verify_api_key
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from starlette.responses import JSONResponse, StreamingResponse
@@ -609,8 +611,6 @@ async def lifespan(app: FastAPI):
     await _store.close()
     _store = None
 
-
-from .auth import rate_limit_check, verify_api_key
 
 app = FastAPI(
     title="vibeDeploy Agent (local)",
