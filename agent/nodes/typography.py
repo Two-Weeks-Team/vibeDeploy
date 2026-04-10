@@ -64,8 +64,21 @@ FONT_PAIRINGS = [
 _DEFAULT_PAIRING_ID = "modern_saas"
 
 
-def select_font_pairing(typography_hint: str) -> dict:
+def select_font_pairing(typography_hint: str, design_system: dict | None = None) -> dict:
+    """Select font pairing — prefer LLM-generated fonts, fall back to keyword matching."""
     import re
+
+    # Use LLM-generated typography if available
+    if design_system:
+        generated = design_system.get("generated", {})
+        typo = generated.get("typography") if generated else None
+        if typo and typo.get("display_font"):
+            return {
+                "id": "llm_generated",
+                "display": typo["display_font"].replace(" ", "_"),
+                "body": (typo.get("body_font") or typo["display_font"]).replace(" ", "_"),
+                "keywords": [],
+            }
 
     hint_lower = typography_hint.lower()
     for pairing in FONT_PAIRINGS:

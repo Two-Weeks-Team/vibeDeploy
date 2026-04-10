@@ -22,15 +22,29 @@ REQUIRED_VARIANTS = [
 def generate_motion_tokens(design_system: dict) -> str:
     """Generate a valid TypeScript motion-tokens.ts string for a given design system.
 
-    Args:
-        design_system: dict with optional keys:
-            - visual_direction: one of "editorial", "dashboard", "creative", "default"
-
-    Returns:
-        A TypeScript string suitable for writing to motion-tokens.ts.
+    Uses LLM-generated motion config when available, falls back to presets.
     """
-    visual_dir = design_system.get("visual_direction", "dashboard")
-    intensity = MOTION_INTENSITY.get(visual_dir, MOTION_INTENSITY["default"])
+    # Prefer LLM-generated motion settings
+    generated = design_system.get("generated", {})
+    llm_motion = generated.get("motion") if generated else None
+
+    if llm_motion and llm_motion.get("intensity"):
+        intensity_map = {
+            "subtle": MOTION_INTENSITY.get("dashboard", MOTION_INTENSITY["default"]),
+            "moderate": MOTION_INTENSITY["default"],
+            "expressive": MOTION_INTENSITY.get("creative", MOTION_INTENSITY["default"]),
+        }
+        intensity = intensity_map.get(llm_motion["intensity"], MOTION_INTENSITY["default"])
+        # Override easing from LLM if provided
+        llm_easing = llm_motion.get("easing", "")
+        if llm_easing and "cubic-bezier" in llm_easing:
+            import re as _re
+            m = _re.search(r"cubic-bezier\(([^)]+)\)", llm_easing)
+            if m:
+                intensity = {**intensity, "ease": f"[{m.group(1)}]"}
+    else:
+        visual_dir = design_system.get("visual_direction", "dashboard")
+        intensity = MOTION_INTENSITY.get(visual_dir, MOTION_INTENSITY["default"])
 
     scale = intensity["duration_scale"]
     stagger = intensity["stagger"]

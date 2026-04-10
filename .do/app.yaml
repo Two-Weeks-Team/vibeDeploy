@@ -7,6 +7,12 @@ alerts:
 
 ingress:
   rules:
+    # NextAuth OAuth routes → web (must be before /api catch-all)
+    - component:
+        name: web
+      match:
+        path:
+          prefix: /api/auth
     # API endpoints → backend
     - component:
         name: api
@@ -130,3 +136,18 @@ services:
         scope: RUN_TIME
         type: SECRET
         value: REPLACE_WITH_API_KEY
+      - key: GOOGLE_CLIENT_ID
+        scope: RUN_TIME
+        type: SECRET
+        value: REPLACE_WITH_GOOGLE_CLIENT_ID
+      - key: GOOGLE_CLIENT_SECRET
+        scope: RUN_TIME
+        type: SECRET
+        value: REPLACE_WITH_GOOGLE_CLIENT_SECRET
+      - key: AUTH_SECRET
+        scope: RUN_TIME
+        type: SECRET
+        value: REPLACE_WITH_AUTH_SECRET
+      - key: AUTH_URL
+        scope: RUN_TIME
+        value: ${APP_URL}

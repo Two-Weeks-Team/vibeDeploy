@@ -607,7 +607,19 @@ async def lifespan(app: FastAPI):
     else:
         db_path = os.environ.get("DB_PATH", str(_AGENT_DIR / "vibedeploy.db"))
         _store = ResultStore(db_path=db_path)
+
+    # Start TTL cleanup for deployed apps
+    _ttl_task = None
+    if os.environ.get("DIGITALOCEAN_API_TOKEN"):
+        from .tools.digitalocean import _ttl_cleanup_loop
+
+        _ttl_task = asyncio.create_task(_ttl_cleanup_loop())
+        logger.info("[TTL] App cleanup loop started (TTL=%sh)", os.environ.get("DEPLOY_APP_TTL_HOURS", "72"))
+
     yield
+
+    if _ttl_task:
+        _ttl_task.cancel()
     await _store.close()
     _store = None
 
@@ -630,7 +642,7 @@ _ALLOWED_ORIGINS = [
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_ALLOWED_ORIGINS,
-    allow_methods=["GET", "POST", "PUT", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "X-API-Key", "X-Vibedeploy-Ops-Token"],
     allow_credentials=False,
     max_age=600,
@@ -1968,6 +1980,146 @@ async def zero_prompt_build_status(session_id: str, card_id: str):
         "event_count": len(card.build_events),
         "thread_id": card.thread_id,
     }
+
+
+# ── Dashboard Auth ────────────────────────────────────────────────────
+
+
+class UpsertUserRequest(BaseModel):
+    email: str
+    name: str = ""
+    image: str = ""
+
+
+class UpsertUserResponse(BaseModel):
+    id: str
+    email: str
+    name: str
+    approved: bool
+    domain: str
+
+
+class CheckUserResponse(BaseModel):
+    approved: bool
+    domain: str
+    email: str
+
+
+@app.post("/dashboard/auth/upsert-user")
+async def dashboard_auth_upsert_user(body: UpsertUserRequest):
+    from .db.connection import get_pool
+
+    if not body.email or "@" not in body.email:
+        raise HTTPException(status_code=400, detail="invalid_email")
+
+    domain = body.email.rsplit("@", 1)[1].lower()
+    approved = domain == "2weeks.co"
+
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            INSERT INTO users (email, name, image, approved, domain)
+            VALUES ($1, $2, $3, $4, $5)
+            ON CONFLICT (email) DO UPDATE
+                SET name = EXCLUDED.name,
+                    image = EXCLUDED.image,
+                    last_login_at = now()
+            RETURNING id, email, name, approved, domain
+            """,
+            body.email,
+            body.name,
+            body.image,
+            approved,
+            domain,
+        )
+
+    return UpsertUserResponse(
+        id=row["id"],
+        email=row["email"],
+        name=row["name"],
+        approved=row["approved"],
+        domain=row["domain"],
+    )
+
+
+@app.get("/dashboard/auth/check-user")
+async def dashboard_auth_check_user(email: str):
+    from .db.connection import get_pool
+
+    if not email or "@" not in email:
+        raise HTTPException(status_code=400, detail="invalid_email")
+
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT approved, domain, email FROM users WHERE email = $1",
+            email,
+        )
+
+    if row is None:
+        raise HTTPException(status_code=404, detail="user_not_found")
+
+    return CheckUserResponse(
+        approved=row["approved"],
+        domain=row["domain"],
+        email=row["email"],
+    )
+
+
+@app.get("/dashboard/apps")
+async def dashboard_list_apps():
+    """List all live DigitalOcean apps with age and status."""
+    from .tools.digitalocean import list_apps
+
+    apps = await list_apps()
+    result = []
+    for app in apps:
+        spec = app.get("spec", {})
+        name = spec.get("name", "")
+        active = app.get("active_deployment", {})
+        result.append({
+            "id": app.get("id", ""),
+            "name": name,
+            "live_url": app.get("live_url", ""),
+            "region": app.get("region", {}).get("slug", ""),
+            "phase": active.get("phase", "UNKNOWN"),
+            "created_at": app.get("created_at", ""),
+            "updated_at": app.get("updated_at", ""),
+            "protected": name in {"vibedeploy"},
+        })
+    return result
+
+
+@app.delete("/dashboard/apps/{app_id}")
+async def dashboard_delete_app(app_id: str):
+    """Delete a specific generated app. Refuses to delete the production app."""
+    from .tools.digitalocean import delete_app, list_apps
+
+    apps = await list_apps()
+    target = None
+    for app in apps:
+        if app.get("id") == app_id:
+            target = app
+            break
+    if not target:
+        raise HTTPException(status_code=404, detail="app_not_found")
+
+    name = target.get("spec", {}).get("name", "")
+    if name in {"vibedeploy"}:
+        raise HTTPException(status_code=403, detail="cannot_delete_production_app")
+
+    result = await delete_app(app_id)
+    return result
+
+
+@app.post("/dashboard/cleanup-apps")
+async def dashboard_cleanup_apps():
+    """Manually trigger TTL cleanup of expired generated apps."""
+    from .tools.digitalocean import cleanup_expired_apps
+
+    result = await cleanup_expired_apps()
+    return result
 
 
 if __name__ == "__main__":
