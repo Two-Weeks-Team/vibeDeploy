@@ -206,7 +206,7 @@ function applyEventToSession(prev: ZPSession | null, data: Record<string, unknow
     card_id: cardId,
     video_id: String(data.video_id || cardId),
     title: stringifyValue(data.title) || stringifyValue(data.video_id) || cardId,
-    score: Number(data.score ?? 0),
+    score: data.score != null ? Number(data.score) : undefined,
     status: (String(data.status || "analyzing") as CardStatus),
     reason: stringifyValue(data.reason),
     reason_code: stringifyValue(data.reason_code),
