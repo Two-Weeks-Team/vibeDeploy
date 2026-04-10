@@ -614,7 +614,7 @@ async def lifespan(app: FastAPI):
         from .tools.digitalocean import _ttl_cleanup_loop
 
         _ttl_task = asyncio.create_task(_ttl_cleanup_loop())
-        logger.info("[TTL] App cleanup loop started (TTL=%sh)", os.environ.get("DEPLOY_APP_TTL_HOURS", "2"))
+        logger.info("[TTL] App cleanup loop started (TTL=%sh)", os.environ.get("DEPLOY_APP_TTL_HOURS", "72"))
 
     yield
 
@@ -642,7 +642,7 @@ _ALLOWED_ORIGINS = [
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_ALLOWED_ORIGINS,
-    allow_methods=["GET", "POST", "PUT", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "X-API-Key", "X-Vibedeploy-Ops-Token"],
     allow_credentials=False,
     max_age=600,

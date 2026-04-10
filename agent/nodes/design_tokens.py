@@ -14,8 +14,8 @@ DOMAIN_PRESETS = {
 
 def _extract_hue(oklch_str: str) -> int:
     """Extract hue value from an oklch() string."""
-    match = re.search(r"oklch\([^)]*\s+(\d+)\s*\)", str(oklch_str))
-    return int(match.group(1)) if match else 250
+    match = re.search(r"oklch\([^)]*\s+([\d.]+)\s*\)", str(oklch_str))
+    return int(float(match.group(1))) if match else 250
 
 
 def _make_scale(hue: int, chroma_base: float = 0.15, steps: int = 12) -> list[str]:

@@ -38,9 +38,10 @@ def generate_motion_tokens(design_system: dict) -> str:
         # Override easing from LLM if provided
         llm_easing = llm_motion.get("easing", "")
         if llm_easing and "cubic-bezier" in llm_easing:
-            # Convert cubic-bezier(a,b,c,d) to [a,b,c,d] for framer-motion
-            nums = llm_easing.replace("cubic-bezier(", "").replace(")", "")
-            intensity = {**intensity, "ease": f"[{nums}]"}
+            import re as _re
+            m = _re.search(r"cubic-bezier\(([^)]+)\)", llm_easing)
+            if m:
+                intensity = {**intensity, "ease": f"[{m.group(1)}]"}
     else:
         visual_dir = design_system.get("visual_direction", "dashboard")
         intensity = MOTION_INTENSITY.get(visual_dir, MOTION_INTENSITY["default"])

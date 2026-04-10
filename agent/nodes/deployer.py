@@ -2080,6 +2080,7 @@ def _verify_live_url(live_url: str) -> dict:
             logger.warning("[DEPLOYER][VERIFY] Some assets failed to load")
 
     # ── Phase 4: Compute final score and verdict ──────────────────────
+    score = min(score, 100)
     result["verification_score"] = score
 
     if score >= 80:
