@@ -7,5 +7,5 @@ export function AuthSessionProvider({
 }: {
   children: React.ReactNode;
 }) {
-  return <SessionProvider refetchInterval={300}>{children}</SessionProvider>;
+  return <SessionProvider basePath="/auth/api" refetchInterval={300}>{children}</SessionProvider>;
 }
