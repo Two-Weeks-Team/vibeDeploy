@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>vibeDeploy - 비용 절감 작업 보고서</title>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --surface2: #1a1a26;
+    --border: #2a2a3a;
+    --text: #e4e4ef;
+    --text-muted: #8888a0;
+    --green: #22c55e;
+    --green-bg: rgba(34,197,94,0.08);
+    --red: #ef4444;
+    --red-bg: rgba(239,68,68,0.08);
+    --blue: #3b82f6;
+    --blue-bg: rgba(59,130,246,0.08);
+    --amber: #f59e0b;
+    --amber-bg: rgba(245,158,11,0.08);
+    --purple: #a855f7;
+    --purple-bg: rgba(168,85,247,0.08);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding: 2rem;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+  .header {
+    text-align: center;
+    padding: 3rem 0 2rem;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 2.5rem;
+  }
+  .header h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: 0.5rem;
+  }
+  .header .subtitle {
+    color: var(--text-muted);
+    font-size: 0.95rem;
+  }
+  .header .date {
+    display: inline-block;
+    margin-top: 1rem;
+    padding: 0.25rem 0.75rem;
+    background: var(--surface2);
+    border-radius: 999px;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+  }
+
+  /* Cost Hero */
+  .cost-hero {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 1.5rem;
+    margin-bottom: 2.5rem;
+  }
+  .cost-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    text-align: center;
+  }
+  .cost-card .label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    margin-bottom: 0.5rem;
+  }
+  .cost-card .value {
+    font-size: 2.2rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+  .cost-card .detail {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-top: 0.25rem;
+  }
+  .cost-card.savings .value { color: var(--green); }
+  .cost-card.before .value { color: var(--red); }
+  .cost-card.after .value { color: var(--blue); }
+
+  /* Sections */
+  .section {
+    margin-bottom: 2.5rem;
+  }
+  .section-title {
+    font-size: 1.15rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .section-title .icon {
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+  }
+
+  /* Cause Analysis */
+  .cause-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+  .cause-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.25rem;
+  }
+  .cause-card h4 {
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .cause-card p {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    line-height: 1.5;
+  }
+  .tag {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 500;
+  }
+  .tag-red { background: var(--red-bg); color: var(--red); }
+  .tag-green { background: var(--green-bg); color: var(--green); }
+  .tag-blue { background: var(--blue-bg); color: var(--blue); }
+  .tag-amber { background: var(--amber-bg); color: var(--amber); }
+  .tag-purple { background: var(--purple-bg); color: var(--purple); }
+
+  /* Cleanup Table */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--surface);
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  th {
+    text-align: left;
+    padding: 0.75rem 1rem;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    background: var(--surface2);
+    font-weight: 500;
+  }
+  td {
+    padding: 0.65rem 1rem;
+    font-size: 0.85rem;
+    border-top: 1px solid var(--border);
+  }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+  .status-deleted { color: var(--red); }
+  .status-kept { color: var(--green); }
+  .mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.8rem; }
+
+  /* Timeline */
+  .timeline {
+    position: relative;
+    padding-left: 2rem;
+  }
+  .timeline::before {
+    content: '';
+    position: absolute;
+    left: 7px;
+    top: 4px;
+    bottom: 4px;
+    width: 2px;
+    background: var(--border);
+  }
+  .timeline-item {
+    position: relative;
+    margin-bottom: 1.25rem;
+    padding: 1rem 1.25rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+  .timeline-item::before {
+    content: '';
+    position: absolute;
+    left: -1.65rem;
+    top: 1.25rem;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--blue);
+    border: 2px solid var(--bg);
+  }
+  .timeline-item.done::before { background: var(--green); }
+  .timeline-item .time {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    margin-bottom: 0.25rem;
+  }
+  .timeline-item h4 {
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin-bottom: 0.3rem;
+  }
+  .timeline-item p {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+  }
+
+  /* Solution Cards */
+  .solution-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+  }
+  .solution-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.25rem;
+  }
+  .solution-card h4 {
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 0.6rem;
+  }
+  .solution-card ul {
+    list-style: none;
+    padding: 0;
+  }
+  .solution-card li {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    padding: 0.2rem 0;
+    padding-left: 1rem;
+    position: relative;
+  }
+  .solution-card li::before {
+    content: '>';
+    position: absolute;
+    left: 0;
+    color: var(--green);
+    font-weight: 700;
+    font-family: monospace;
+  }
+
+  /* Final State */
+  .final-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+  }
+  .final-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.25rem;
+  }
+  .final-card h4 {
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .resource-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.4rem 0;
+    font-size: 0.82rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .resource-row:last-child { border-bottom: none; font-weight: 600; }
+  .resource-row .cost { font-family: monospace; }
+
+  /* Stats bar */
+  .stats-bar {
+    display: flex;
+    gap: 2rem;
+    justify-content: center;
+    padding: 1.5rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-top: 2rem;
+  }
+  .stat {
+    text-align: center;
+  }
+  .stat .num {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--blue);
+  }
+  .stat .lbl {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .footer {
+    text-align: center;
+    padding: 2rem 0 1rem;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    border-top: 1px solid var(--border);
+    margin-top: 2rem;
+  }
+
+  @media (max-width: 768px) {
+    body { padding: 1rem; }
+    .cost-hero, .solution-grid { grid-template-columns: 1fr; }
+    .cause-grid, .final-grid { grid-template-columns: 1fr; }
+    .stats-bar { flex-wrap: wrap; gap: 1rem; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>vibeDeploy 비용 절감 작업 보고서</h1>
+  <div class="subtitle">DigitalOcean 요금 부담 해결을 위한 인프라 정리, 접근제어, 자동화 구현</div>
+  <div class="date">2026년 4월 10일 ~ 11일</div>
+</div>
+
+<!-- Cost Hero -->
+<div class="cost-hero">
+  <div class="cost-card before">
+    <div class="label">변경 전 월 예상 비용</div>
+    <div class="value">~$116</div>
+    <div class="detail">앱 10개 + DB 2개</div>
+  </div>
+  <div class="cost-card savings">
+    <div class="label">월 절감액</div>
+    <div class="value">-$85</div>
+    <div class="detail">73% 절감</div>
+  </div>
+  <div class="cost-card after">
+    <div class="label">변경 후 월 예상 비용</div>
+    <div class="value">~$31</div>
+    <div class="detail">앱 1개 + DB 1개</div>
+  </div>
+</div>
+
+<!-- Problem Analysis -->
+<div class="section">
+  <div class="section-title">
+    <span class="icon" style="background:var(--red-bg);color:var(--red);">!</span>
+    비용 과다 발생 원인
+  </div>
+  <div class="cause-grid">
+    <div class="cause-card">
+      <h4><span class="tag tag-red">Critical</span> 인증 시스템 부재</h4>
+      <p>대시보드에 사용자 인증이 전혀 없어 URL을 아는 누구나 LLM 파이프라인(건당 $0.50~$147)을 실행할 수 있는 상태. API Key만으로 보호되며, 미설정 시 완전 개방.</p>
+    </div>
+    <div class="cause-card">
+      <h4><span class="tag tag-red">Critical</span> 배포 앱 방치</h4>
+      <p>파이프라인이 DigitalOcean에 앱을 배포하지만 삭제 로직 없음. <code>build-web-app-*</code> 9개가 방치되어 월 ~$66 과금 중. 삭제는 앱 제한 도달 시에만 1개씩.</p>
+    </div>
+    <div class="cause-card">
+      <h4><span class="tag tag-amber">Medium</span> 미사용 데이터베이스</h4>
+      <p><code>genai-triggerfish</code> OpenSearch DB가 코드베이스에서 참조 0건이면서 월 ~$19 과금. Knowledge Base는 별도 DO KBaaS API를 사용하며 이 DB와 무관.</p>
+    </div>
+    <div class="cause-card">
+      <h4><span class="tag tag-amber">Medium</span> 앱 이름 오류</h4>
+      <p>배포 시 <code>blueprint.app_name</code>(LLM 생성 이름)을 무시하고 사용자 입력을 그대로 사용. "Build Web App" 입력 시 <code>build-web-app-590240</code> 같은 제네릭 이름으로 배포.</p>
+    </div>
+  </div>
+</div>
+
+<!-- Deleted Resources -->
+<div class="section">
+  <div class="section-title">
+    <span class="icon" style="background:var(--green-bg);color:var(--green);">-</span>
+    삭제된 리소스
+  </div>
+  <table>
+    <thead>
+      <tr><th>리소스</th><th>유형</th><th>생성일</th><th>월 비용</th><th>상태</th></tr>
+    </thead>
+    <tbody>
+      <tr><td class="mono">build-web-app-499416</td><td>App (basic)</td><td>2026-04-06</td><td>~$3</td><td class="status-deleted">삭제</td></tr>
+      <tr><td class="mono">build-web-app-499755</td><td>App (basic)</td><td>2026-04-06</td><td>~$3</td><td class="status-deleted">삭제</td></tr>
+      <tr><td class="mono">build-web-app-539990</td><td>App (basic)</td><td>2026-04-07</td><td>~$3</td><td class="status-deleted">삭제</td></tr>
+      <tr><td class="mono">build-web-app-547261</td><td>App (basic)</td><td>2026-04-07</td><td>~$3</td><td class="status-deleted">삭제</td></tr>
+      <tr><td class="mono">build-web-app-572872</td><td>App (basic)</td><td>2026-03-27</td><td>~$8</td><td class="status-deleted">삭제</td></tr>
+      <tr><td class="mono">build-web-app-572978</td><td>App (basic)</td><td>2026-03-27</td><td>~$8</td><td class="status-deleted">삭제</td></tr>
+      <tr><td class="mono">build-web-app-590240</td><td>App (basic)</td><td>2026-04-07</td><td>~$3</td><td class="status-deleted">삭제</td></tr>
+      <tr><td class="mono">build-web-app-852620</td><td>App (basic)</td><td>2026-03-18</td><td>~$10</td><td class="status-deleted">삭제</td></tr>
+      <tr><td class="mono">build-web-app-929495</td><td>App (basic)</td><td>2026-03-19</td><td>~$10</td><td class="status-deleted">삭제</td></tr>
+      <tr><td class="mono">genai-triggerfish</td><td>OpenSearch DB</td><td>2026-03-06</td><td>~$19</td><td class="status-deleted">삭제</td></tr>
+      <tr><td class="mono">vibedeploy</td><td>App (professional)</td><td>2026-03-06</td><td>~$16</td><td class="status-kept">유지</td></tr>
+      <tr><td class="mono">db-postgresql-nyc3</td><td>PostgreSQL DB</td><td>2026-03-06</td><td>~$15</td><td class="status-kept">유지</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- Solutions -->
+<div class="section">
+  <div class="section-title">
+    <span class="icon" style="background:var(--blue-bg);color:var(--blue);">+</span>
+    구현된 해결책
+  </div>
+  <div class="solution-grid">
+    <div class="solution-card">
+      <h4><span class="tag tag-blue">접근제어</span></h4>
+      <ul>
+        <li>Google OAuth (NextAuth.js v5)</li>
+        <li>@2weeks.co 자동승인</li>
+        <li>외부 사용자 접근 차단</li>
+        <li>JWT 세션 + 5분 갱신</li>
+        <li>미들웨어 라우트 보호</li>
+        <li>로그인/승인대기/에러 UI</li>
+      </ul>
+    </div>
+    <div class="solution-card">
+      <h4><span class="tag tag-green">자동 정리</span></h4>
+      <ul>
+        <li>TTL 72시간 자동 삭제</li>
+        <li>매시간 백그라운드 정리</li>
+        <li>프로덕션 앱 보호 목록</li>
+        <li>수동 정리 API 엔드포인트</li>
+        <li>앱 목록 조회/삭제 API</li>
+        <li>blueprint.app_name 사용</li>
+      </ul>
+    </div>
+    <div class="solution-card">
+      <h4><span class="tag tag-purple">품질 강화</span></h4>
+      <ul>
+        <li>E2E 검증 100점 스코어</li>
+        <li>실패 시 LLM 자동 복구</li>
+        <li>동적 디자인 시스템</li>
+        <li>앱별 고유 색상/폰트/모션</li>
+        <li>3명 전문가 리뷰 통과</li>
+        <li>배포 후 라이브 검증</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- Timeline -->
+<div class="section">
+  <div class="section-title">
+    <span class="icon" style="background:var(--purple-bg);color:var(--purple);">~</span>
+    작업 타임라인
+  </div>
+  <div class="timeline">
+    <div class="timeline-item done">
+      <div class="time">4/10 오후</div>
+      <h4>기존 PR 10개 리뷰 + 수정 + 병합</h4>
+      <p>Phase 1~5 PR에서 17건의 이슈 수정 후 순서대로 병합. Dependabot 5개 바로 병합.</p>
+    </div>
+    <div class="timeline-item done">
+      <div class="time">4/10 오후</div>
+      <h4>비용 분석 + 리소스 정리</h4>
+      <p>doctl로 DO 앱 9개 + OpenSearch DB 삭제. GCP 리소스 확인 (과금 없음).</p>
+    </div>
+    <div class="timeline-item done">
+      <div class="time">4/10 오후 ~ 밤</div>
+      <h4>Google OAuth 인증 시스템 구현</h4>
+      <p>NextAuth.js v5, 미들웨어, 로그인 UI, 백엔드 auth 엔드포인트. PR #226 생성.</p>
+    </div>
+    <div class="timeline-item done">
+      <div class="time">4/10 밤</div>
+      <h4>TTL 자동 정리 + 앱 관리 API</h4>
+      <p>72시간 TTL, 매시간 정리 루프, 대시보드 앱 목록/삭제/정리 엔드포인트.</p>
+    </div>
+    <div class="timeline-item done">
+      <div class="time">4/10 밤</div>
+      <h4>E2E 검증 + 동적 디자인 시스템</h4>
+      <p>100점 스코어링, LLM 자동 복구. 고정 프리셋 → LLM 생성 고유 디자인.</p>
+    </div>
+    <div class="timeline-item done">
+      <div class="time">4/10 심야</div>
+      <h4>전문가 3명 리뷰 + 수정 + PR 병합</h4>
+      <p>Security, Code Review, Frontend 전문가가 7건 이슈 발견 → 수정 → PR #226 머지.</p>
+    </div>
+    <div class="timeline-item done">
+      <div class="time">4/11 새벽</div>
+      <h4>배포 검증 + Ingress 수정 + 최종 하드닝</h4>
+      <p>라이브 검증에서 ingress 라우팅 문제 발견 → 수정. 추가 개선사항 6건 적용. 3명 만장일치 APPROVE.</p>
+    </div>
+  </div>
+</div>
+
+<!-- Final State -->
+<div class="section">
+  <div class="section-title">
+    <span class="icon" style="background:var(--green-bg);color:var(--green);">O</span>
+    현재 상태
+  </div>
+  <div class="final-grid">
+    <div class="final-card">
+      <h4>DigitalOcean 리소스</h4>
+      <div class="resource-row"><span>vibedeploy (프로덕션 앱)</span><span class="cost">~$16/월</span></div>
+      <div class="resource-row"><span>PostgreSQL DB</span><span class="cost">~$15/월</span></div>
+      <div class="resource-row"><span>합계</span><span class="cost" style="color:var(--green)">~$31/월</span></div>
+    </div>
+    <div class="final-card">
+      <h4>배포 상태</h4>
+      <div class="resource-row"><span>앱 상태</span><span class="tag tag-green">ACTIVE</span></div>
+      <div class="resource-row"><span>URL</span><span class="mono" style="font-size:0.75rem">vibedeploy-7tgzk.ondigitalocean.app</span></div>
+      <div class="resource-row"><span>인증</span><span class="tag tag-blue">Google OAuth</span></div>
+      <div class="resource-row"><span>TTL 정리</span><span class="tag tag-green">72h 자동</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- Stats -->
+<div class="stats-bar">
+  <div class="stat"><div class="num">30</div><div class="lbl">커밋</div></div>
+  <div class="stat"><div class="num">11</div><div class="lbl">PR 병합</div></div>
+  <div class="stat"><div class="num">57</div><div class="lbl">파일 변경</div></div>
+  <div class="stat"><div class="num">+3,878</div><div class="lbl">코드 추가</div></div>
+  <div class="stat"><div class="num">9</div><div class="lbl">전문가 리뷰</div></div>
+  <div class="stat"><div class="num">73%</div><div class="lbl">비용 절감</div></div>
+</div>
+
+<div class="footer">
+  vibeDeploy Work Report &mdash; Generated 2026-04-11 &mdash; 3/3 Expert Agents Approved
+</div>
+
+</body>
+</html>

@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="ko" class="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>vibeDeploy — Production Hardening Report</title>
+<style>
+:root{--bg:#0d1117;--card:#161b22;--border:#30363d;--fg:#e6edf3;--muted:#8b949e;--accent:#58a6ff;--green:#3fb950;--red:#f85149;--orange:#d29922;--purple:#bc8cff;--cyan:#39d353}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;background:var(--bg);color:var(--fg);line-height:1.6;font-size:15px}
+.container{max-width:1280px;margin:0 auto;padding:2rem 1.5rem}
+h1{font-size:2.2rem;font-weight:800;background:linear-gradient(135deg,#3fb950,#58a6ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:.25rem}
+h2{font-size:1.4rem;font-weight:700;color:var(--accent);margin:2.5rem 0 1rem;border-bottom:1px solid var(--border);padding-bottom:.5rem}
+h3{font-size:1.05rem;font-weight:600;color:var(--fg);margin:1.25rem 0 .5rem}
+h4{font-size:.95rem;font-weight:600;color:var(--muted);margin:1rem 0 .4rem}
+p,li{color:var(--fg);font-size:.9rem}
+ul{padding-left:1.2rem}li{margin:.2rem 0}
+.sub{color:var(--muted);font-size:1rem;margin-bottom:1.5rem}
+code{font-family:'SF Mono',Consolas,monospace;font-size:.83em;background:rgba(88,166,255,.1);padding:.1em .3em;border-radius:4px;color:var(--accent)}
+pre{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;font-size:.82rem;line-height:1.5;margin:.75rem 0}
+pre code{background:none;padding:0;color:var(--fg)}
+table{width:100%;border-collapse:collapse;margin:.75rem 0;font-size:.87rem}
+th,td{padding:.5rem .6rem;text-align:left;border-bottom:1px solid var(--border)}
+th{color:var(--muted);font-weight:600;font-size:.78rem;text-transform:uppercase;letter-spacing:.03em;background:var(--card)}
+.badge{display:inline-block;padding:.12rem .45rem;border-radius:5px;font-size:.73rem;font-weight:600}
+.b-red{background:rgba(248,81,73,.15);color:var(--red)}.b-green{background:rgba(63,185,80,.15);color:var(--green)}.b-orange{background:rgba(210,153,34,.15);color:var(--orange)}.b-blue{background:rgba(88,166,255,.15);color:var(--accent)}.b-purple{background:rgba(188,140,255,.15);color:var(--purple)}
+.card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1rem 1.25rem;margin:.5rem 0}
+.card .t{font-weight:600;font-size:.93rem;margin-bottom:.25rem}.card .d{font-size:.84rem;color:var(--muted)}.card .f{font-family:'SF Mono',Consolas,monospace;font-size:.78rem;color:var(--purple);margin-top:.2rem}
+.card .fix{font-size:.84rem;color:var(--cyan);margin-top:.3rem}.card .fix::before{content:'→ ';font-weight:600}
+.sev{flex-shrink:0;width:72px;text-align:center;padding:.2rem .4rem;border-radius:5px;font-size:.72rem;font-weight:700;text-transform:uppercase}
+.sev.crit{background:rgba(248,81,73,.15);color:var(--red);border:1px solid rgba(248,81,73,.3)}
+.sev.high{background:rgba(210,153,34,.15);color:var(--orange);border:1px solid rgba(210,153,34,.3)}
+.sev.med{background:rgba(88,166,255,.15);color:var(--accent);border:1px solid rgba(88,166,255,.3)}
+.row{display:flex;gap:.75rem;align-items:flex-start}.row .card{flex:1}
+.note{background:rgba(88,166,255,.07);border:1px solid rgba(88,166,255,.2);border-radius:8px;padding:.8rem 1rem;margin:.75rem 0;font-size:.88rem}
+.note.warn{background:rgba(210,153,34,.07);border-color:rgba(210,153,34,.2)}
+.note.danger{background:rgba(248,81,73,.07);border-color:rgba(248,81,73,.2)}
+.note.ok{background:rgba(63,185,80,.07);border-color:rgba(63,185,80,.2)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:.75rem;margin:1rem 0}
+.stat{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:.75rem;text-align:center}
+.stat .n{font-size:1.6rem;font-weight:800;color:var(--accent)}.stat .l{font-size:.75rem;color:var(--muted)}
+.toc{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1.25rem;margin:1.5rem 0;columns:2;column-gap:2rem}
+.toc ul{list-style:none;padding:0}.toc li{padding:.2rem 0;break-inside:avoid}.toc a{color:var(--accent);text-decoration:none;font-size:.87rem}.toc a:hover{text-decoration:underline}
+details{margin:.5rem 0}details summary{cursor:pointer;font-weight:600;font-size:.92rem;color:var(--fg);padding:.4rem 0}details summary:hover{color:var(--accent)}
+hr{border:none;border-top:1px solid var(--border);margin:2.5rem 0}
+@media(max-width:768px){.toc{columns:1}.row{flex-direction:column}.stats{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>vibeDeploy — Production Hardening Report</h1>
+<p class="sub">🏆 1등 수상작의 프로덕션 완성 — 5개 전문가 에이전트 종합 분석</p>
+
+<div class="stats">
+  <div class="stat"><div class="n">5</div><div class="l">Expert Agents</div></div>
+  <div class="stat"><div class="n">41</div><div class="l">Frontend Files Audited</div></div>
+  <div class="stat"><div class="n">23</div><div class="l">Backend Modules Audited</div></div>
+  <div class="stat"><div class="n">18</div><div class="l">Security Findings</div></div>
+  <div class="stat"><div class="n">32</div><div class="l">Untested Modules</div></div>
+  <div class="stat"><div class="n">9</div><div class="l">Files to Create/Modify (Auth)</div></div>
+</div>
+
+<div class="toc">
+<h3>📋 목차</h3>
+<ul>
+  <li><a href="#auth">1. Auth 시스템 구현</a></li>
+  <li><a href="#critical-bugs">2. Critical Bugs (데이터 손실/흐름 중단)</a></li>
+  <li><a href="#security">3. Security Hardening</a></li>
+  <li><a href="#backend-bugs">4. Backend 버그 및 검증</a></li>
+  <li><a href="#frontend-bugs">5. Frontend 버그 및 UX</a></li>
+  <li><a href="#a11y">6. Accessibility (접근성)</a></li>
+  <li><a href="#tests">7. Test Coverage Plan</a></li>
+  <li><a href="#ci">8. CI/CD 강화</a></li>
+  <li><a href="#production">9. Production Infrastructure</a></li>
+  <li><a href="#files">10. 변경 파일 전체 목록</a></li>
+</ul>
+</div>
+
+<!-- ═══════════════ 1. AUTH ═══════════════ -->
+<h2 id="auth">1. Auth 시스템 구현</h2>
+
+<div class="note ok"><strong>설계 결정:</strong> API Key 인증 (<code>X-API-Key</code> 헤더) — JWT 대비 단일 테넌트에 최적. 기존 <code>_ops_token()</code> 패턴 확장.</div>
+
+<h3>신규 파일: <code>agent/auth.py</code></h3>
+<ul>
+  <li><strong>API Key 검증</strong> — <code>verify_api_key</code> FastAPI dependency, <code>hmac.compare_digest</code> 사용</li>
+  <li><strong>공개 경로</strong> — <code>/health</code>, <code>/</code>, <code>/cost-estimate</code>, <code>/models</code>는 인증 불필요</li>
+  <li><strong>Rate Limiter</strong> — 인메모리 sliding window: write 10/min, read 120/min, SSE 20/min (IP별)</li>
+  <li><strong>Dev mode</strong> — <code>VIBEDEPLOY_API_KEY</code> 미설정 시 인증 비활성화 (무중단 전환)</li>
+</ul>
+
+<h3>변경 파일</h3>
+<table>
+  <tr><th>File</th><th>Change</th></tr>
+  <tr><td><code>agent/auth.py</code></td><td><span class="badge b-green">NEW</span> API Key 검증 + Rate Limiter</td></tr>
+  <tr><td><code>agent/server.py</code></td><td>CORS 수정 + <code>Depends(verify_api_key, rate_limit_check)</code> 앱 레벨 주입</td></tr>
+  <tr><td><code>web/src/lib/fetch-with-auth.ts</code></td><td><span class="badge b-green">NEW</span> 인증 헤더 래퍼</td></tr>
+  <tr><td><code>web/src/lib/api.ts</code></td><td><code>fetch</code> → <code>authenticatedFetch</code></td></tr>
+  <tr><td><code>web/src/lib/zero-prompt-api.ts</code></td><td><code>fetch</code> → <code>authenticatedFetch</code></td></tr>
+  <tr><td><code>web/src/lib/dashboard-api.ts</code></td><td><code>fetch</code> → <code>authenticatedFetch</code></td></tr>
+  <tr><td><code>web/src/lib/sse-client.ts</code></td><td><code>authHeaders()</code> 적용</td></tr>
+  <tr><td><code>.do/app.yaml</code></td><td><code>VIBEDEPLOY_API_KEY</code>, <code>VIBEDEPLOY_CORS_ORIGINS</code> 추가</td></tr>
+  <tr><td><code>agent/.env.example</code></td><td>새 환경변수 문서화</td></tr>
+</table>
+
+<h3>CORS 수정</h3>
+<pre><code># Before (server.py:615-620)
+allow_origins=["*"]
+
+# After
+_ALLOWED_ORIGINS = os.getenv(
+    "VIBEDEPLOY_CORS_ORIGINS",
+    "https://vibedeploy-7tgzk.ondigitalocean.app,http://localhost:3000"
+).split(",")
+
+allow_origins=_ALLOWED_ORIGINS
+allow_methods=["GET", "POST", "PUT", "OPTIONS"]
+allow_headers=["Content-Type", "X-API-Key"]</code></pre>
+
+<h3>SSE 인증 해결</h3>
+<p>브라우저 <code>EventSource</code>는 커스텀 헤더 미지원 → SSE 엔드포인트에서 <code>?api_key=</code> query param 폴백 허용 (서버사이드 렌더링이라 키 미노출)</p>
+
+<!-- ═══════════════ 2. CRITICAL BUGS ═══════════════ -->
+<h2 id="critical-bugs">2. Critical Bugs — 데이터 손실 / 흐름 중단</h2>
+
+<div class="card">
+  <div class="t">🔴 MemorySaver OOM — 파이프라인마다 메모리 무한 증가</div>
+  <div class="d">LangGraph <code>MemorySaver()</code>가 모든 파이프라인 상태를 RAM에 유지. 생성 코드, 문서 등이 포함되어 부하 시 OOM 크래시.</div>
+  <div class="f">agent/graph.py:202, 334</div>
+  <div class="fix">PostgreSQL 기반 체크포인터로 교체 또는 TTL 기반 메모리 정리 추가</div>
+</div>
+
+<div class="card">
+  <div class="t">🔴 use-zero-prompt.ts: score 0이 falsy로 처리됨</div>
+  <div class="d"><code>nextPatch.score || current.score</code> — score 0이 falsy로 취급되어 이전 점수가 유지됨. <code>??</code> 연산자 사용 필요.</div>
+  <div class="f">web/src/hooks/use-zero-prompt.ts:248-264</div>
+  <div class="fix"><code>||</code> → <code>??</code> (nullish coalescing) 전환. 동일 패턴 전체 파일 검색 필요.</div>
+</div>
+
+<div class="card">
+  <div class="t">🔴 meeting-view: 페이지 새로고침 시 새 미팅 재시작</div>
+  <div class="d">SSE POST가 mount 시 즉시 실행되어 새로고침하면 새 Council meeting이 시작됨. 기존 완료 여부 체크 없음.</div>
+  <div class="f">web/src/components/meeting/meeting-view.tsx:155-175</div>
+  <div class="fix">마운트 시 <code>GET /result/{id}</code>로 기존 결과 확인 후 없으면만 POST</div>
+</div>
+
+<div class="card">
+  <div class="t">🔴 result/[id]: .catch() 누락 — 영구 로딩 상태</div>
+  <div class="d"><code>getMeetingResult(id).then(...)</code>에 <code>.catch()</code> 없음. API 실패 시 result가 undefined로 남아 로딩 스켈레톤이 영원히 표시.</div>
+  <div class="f">web/src/app/result/[id]/page.tsx:49-51</div>
+  <div class="fix"><code>.catch(() => setResult(null))</code> 추가</div>
+</div>
+
+<div class="card">
+  <div class="t">🔴 error.tsx: ChunkLoadError 무한 리로드 루프</div>
+  <div class="d"><code>retriedRef</code>가 리로드 후 초기화되어 영구적 ChunkLoadError 시 무한 리로드.</div>
+  <div class="f">web/src/app/error.tsx:11-14</div>
+  <div class="fix">sessionStorage에 리로드 카운터 저장, 3회 초과 시 에러 UI 표시</div>
+</div>
+
+<div class="card">
+  <div class="t">🔴 DB pool 경쟁 조건 — 중복 풀 생성/누수</div>
+  <div class="d"><code>get_pool()</code>에 <code>asyncio.Lock</code> 없음. 동시 요청 시 두 풀 생성, 하나는 누수.</div>
+  <div class="f">agent/db/connection.py:33-61</div>
+  <div class="fix"><code>asyncio.Lock()</code>으로 풀 초기화 보호</div>
+</div>
+
+<div class="card">
+  <div class="t">🔴 cost.py: 모델명 불일치로 비용 추정 항상 0</div>
+  <div class="d"><code>estimate_pipeline_cost</code>의 모델명이 <code>PRICING_PER_MILLION</code> 키와 불일치. <code>.get(model, (0.0, 0.0))</code>이 항상 (0,0) 반환.</div>
+  <div class="f">agent/cost.py:91-104</div>
+  <div class="fix">모델명을 canonical registry와 동기화</div>
+</div>
+
+<div class="card">
+  <div class="t">🟡 낙관적 UI 업데이트 롤백 없음</div>
+  <div class="d"><code>handleQueueBuild</code>, <code>handlePassCard</code> 등이 API 실패 시 UI 롤백 없이 <code>console.error</code>만 호출.</div>
+  <div class="f">web/src/hooks/use-zero-prompt.ts:490-543</div>
+  <div class="fix">실패 시 이전 상태 복원 또는 에러 토스트 표시</div>
+</div>
+
+<!-- ═══════════════ 3. SECURITY ═══════════════ -->
+<h2 id="security">3. Security Hardening (18건)</h2>
+
+<table>
+  <tr><th>#</th><th>Sev</th><th>Finding</th><th>File:Line</th><th>Fix</th></tr>
+  <tr><td>S-01</td><td><span class="badge b-red">CRIT</span></td><td>CORS wildcard <code>["*"]</code></td><td>server.py:617</td><td>환경변수 기반 origin 제한</td></tr>
+  <tr><td>S-02</td><td><span class="badge b-red">CRIT</span></td><td>Rate limiting 없음</td><td>server.py 전체</td><td>auth.py rate limiter 적용</td></tr>
+  <tr><td>S-06</td><td><span class="badge b-orange">HIGH</span></td><td>SQL column injection 가능</td><td>zp_store.py:170-188</td><td><code>_ALLOWED_CARD_COLUMNS</code> allowlist 추가</td></tr>
+  <tr><td>S-08</td><td><span class="badge b-orange">HIGH</span></td><td>ZP mutation 엔드포인트 인증 없음</td><td>server.py:1452-1501</td><td>Auth dependency 적용</td></tr>
+  <tr><td>S-09</td><td><span class="badge b-orange">HIGH</span></td><td>Ops token이 inference key로 폴백</td><td>server.py:348-353</td><td>DIGITALOCEAN_INFERENCE_KEY 폴백 제거</td></tr>
+  <tr><td>S-14</td><td><span class="badge b-orange">HIGH</span></td><td>생성 앱에 호스트 DB 자격증명 공유</td><td>digitalocean.py:252-261</td><td><code>GENERATED_APP_DATABASE_URL</code> 분리</td></tr>
+  <tr><td>S-05</td><td><span class="badge b-orange">HIGH</span></td><td>SSE 연결 제한 없음</td><td>server.py:955</td><td>최대 50/100/10 연결 제한</td></tr>
+  <tr><td>S-07</td><td><span class="badge b-orange">HIGH</span></td><td>CI 보안 게이트 <code>|| true</code></td><td>ci.yml:107,121,133</td><td><code>|| true</code> 제거</td></tr>
+  <tr><td>S-03</td><td><span class="badge b-blue">MED</span></td><td>Health endpoint 내부 설정 노출</td><td>server.py:865-873</td><td><code>{"status":"ok"}</code>만 반환</td></tr>
+  <tr><td>S-10</td><td><span class="badge b-blue">MED</span></td><td>Test API에 인증 없음</td><td>server.py:847-862</td><td>Ops token 필수화</td></tr>
+  <tr><td>S-11</td><td><span class="badge b-blue">MED</span></td><td>Pydantic 입력 검증 부족</td><td>server.py:661-670</td><td>Field validators 추가 (URL, length, action allowlist)</td></tr>
+  <tr><td>S-12</td><td><span class="badge b-blue">MED</span></td><td>Subprocess 리소스 제한 없음</td><td>local_runtime_validator.py:71</td><td>CPU/MEM/NPROC limits 추가</td></tr>
+  <tr><td>S-13</td><td><span class="badge b-blue">MED</span></td><td>Docker 보안 옵션 없음</td><td>build_validator.py:140</td><td><code>pids_limit</code>, <code>no-new-privileges</code> 추가</td></tr>
+  <tr><td>S-16</td><td><span class="badge b-blue">MED</span></td><td>의존성 버전 상한 없음</td><td>requirements.txt</td><td><code>&lt;1.0.0</code> 상한 추가 + pip-audit CI</td></tr>
+  <tr><td>S-17</td><td><span class="badge b-blue">MED</span></td><td>Path traversal 가드 불일치</td><td>build_validator.py:87-96</td><td><code>is_relative_to()</code> 통일</td></tr>
+</table>
+
+<details>
+<summary>S-14 상세: 생성 앱에 호스트 DB 공유 (가장 위험)</summary>
+<div class="card">
+  <div class="d"><code>build_app_spec()</code>가 vibeDeploy 자체의 <code>DATABASE_URL</code>과 <code>GRADIENT_MODEL_ACCESS_KEY</code>를 생성된 앱 환경변수로 복사. 생성 앱이 침해되면 vibeDeploy DB에 접근 가능.</div>
+  <div class="f">agent/tools/digitalocean.py:252-261</div>
+  <div class="fix"><code>GENERATED_APP_DATABASE_URL</code>, <code>GENERATED_APP_INFERENCE_KEY</code> 별도 환경변수 사용</div>
+</div>
+</details>
+
+<details>
+<summary>S-06 상세: SQL Column Injection</summary>
+<div class="card">
+  <div class="d"><code>update_card(**fields)</code>의 fields dict 키가 SQL SET 절에 직접 삽입. 현재 caller는 하드코딩 키만 사용하지만, 새 caller가 사용자 입력 전달 시 injection 가능.</div>
+  <div class="f">agent/db/zp_store.py:170-188</div>
+  <div class="fix"><code>_ALLOWED_CARD_COLUMNS = frozenset({...})</code> allowlist로 검증</div>
+</div>
+</details>
+
+<!-- ═══════════════ 4. BACKEND BUGS ═══════════════ -->
+<h2 id="backend-bugs">4. Backend 버그 및 검증 (23개 모듈 감사)</h2>
+
+<h3>모듈별 주요 발견</h3>
+<table>
+  <tr><th>Module</th><th>Bugs</th><th>Top Issue</th></tr>
+  <tr><td><code>server.py</code></td><td>5</td><td><code>_store</code> None 역참조, <code>_resume_exploration</code> AttributeError, CancelledError 미구분</td></tr>
+  <tr><td><code>llm.py</code></td><td>3</td><td>세마포어 경쟁 조건, 키 없이 ChatOpenAI 생성, 세마포어 타임아웃 없음</td></tr>
+  <tr><td><code>pipeline_runtime.py</code></td><td>3</td><td><code>final_state.update()</code>가 nested dict 덮어쓰기, 그래프 스트리밍 타임아웃 없음</td></tr>
+  <tr><td><code>orchestrator.py</code></td><td>5</td><td>8개 <code>except Exception: pass</code> 블록, 카드 중복, 세션 업데이트 실패 무시</td></tr>
+  <tr><td><code>discovery.py</code></td><td>3</td><td>YouTube 할당량 고갈 회로 차단기 없음, 캐시 무한 증가, 요청당 새 HTTP 클라이언트</td></tr>
+  <tr><td><code>verdict.py</code></td><td>2</td><td><code>int("about 3 days")</code> ValueError, NO_GO score 0이 에러와 구분 불가</td></tr>
+  <tr><td><code>competitive_analysis.py</code></td><td>2</td><td>검색 실패 시 기본값이 "low saturation" → 잘못된 GO 판정 가능</td></tr>
+  <tr><td><code>insight_extractor.py</code></td><td>3</td><td>하드코딩 Gemini 모델명, 3000자 mid-word 절단, asyncio.to_thread 쓰레드풀 고갈</td></tr>
+  <tr><td><code>paper_search.py</code></td><td>3</td><td>XML entity expansion 취약점, arXiv Lock이 전체 HTTP 요청 동안 유지</td></tr>
+  <tr><td><code>db/store.py</code></td><td>2</td><td>SQLite 트랜잭션 없는 replace_meetings, LineageStore 인메모리 전용</td></tr>
+  <tr><td><code>db/zp_store.py</code></td><td>3</td><td>SQL column injection, 마이그레이션 에러 무시, JSON 파싱 에러 미처리</td></tr>
+  <tr><td><code>gradient/a2a.py</code></td><td>2</td><td>무한 증가 메시지 로그, 메시지 전달 보장 없음</td></tr>
+  <tr><td><code>gradient/mcp_client.py</code></td><td>3</td><td>HTTP 클라이언트 미종료, 재시도 없음, 응답 스키마 미검증</td></tr>
+  <tr><td><code>providers/registry.py</code></td><td>2</td><td><code>threading.Lock</code>이 async 코드에서 이벤트 루프 차단</td></tr>
+</table>
+
+<!-- ═══════════════ 5. FRONTEND BUGS ═══════════════ -->
+<h2 id="frontend-bugs">5. Frontend 버그 및 UX (41개 파일 감사)</h2>
+
+<h3>흐름 중단 버그</h3>
+<table>
+  <tr><th>File</th><th>Bug</th><th>Impact</th></tr>
+  <tr><td><code>zero-prompt-landing.tsx:164</code></td><td><code>alert()</code> 호출</td><td>프로덕션에 개발 플레이스홀더 잔류</td></tr>
+  <tr><td><code>meeting-view.tsx:155</code></td><td>새로고침 시 새 미팅 시작</td><td>기존 데이터 손실</td></tr>
+  <tr><td><code>brainstorm-view.tsx:90</code></td><td>동일 새로고침 버그</td><td>기존 데이터 손실</td></tr>
+  <tr><td><code>result/[id]/page.tsx:49</code></td><td><code>.catch()</code> 누락</td><td>영구 로딩 상태</td></tr>
+  <tr><td><code>use-zero-prompt.ts:248</code></td><td><code>||</code> vs <code>??</code> score=0 문제</td><td>점수 데이터 손상</td></tr>
+  <tr><td><code>zero-prompt-workspace.tsx:98</code></td><td><code>onReExplore</code>가 <code>deleteCard</code> 호출</td><td>재탐색이 아닌 삭제 동작</td></tr>
+  <tr><td><code>decision-gate.tsx:60</code></td><td><code>onRevise</code> 미전달</td><td>"Revise Idea" 버튼 무동작</td></tr>
+  <tr><td><code>kanban-board.tsx:58</code></td><td>autoClose 타이머가 SSE 업데이트마다 리셋</td><td>모달이 자동 닫히지 않음</td></tr>
+  <tr><td><code>idea-card.tsx:136</code></td><td>unknown analysis_step → indexOf -1</td><td>모든 단계가 "future"로 표시</td></tr>
+</table>
+
+<h3>에러 핸들링 누락</h3>
+<table>
+  <tr><th>File</th><th>Issue</th></tr>
+  <tr><td><code>use-dashboard.ts</code></td><td>모든 API 에러 <code>.catch(() => null)</code>로 무시</td></tr>
+  <tr><td><code>use-pipeline-monitor.ts</code></td><td>빈 <code>catch {}</code> 블록</td></tr>
+  <tr><td><code>use-build-monitor.ts</code></td><td>EventSource <code>onerror</code> 핸들러 없음, 재연결 없음</td></tr>
+  <tr><td><code>sse-client.ts</code></td><td>재연결 없음, 타임아웃 없음, SSE 스펙 불완전 구현 (<code>\r\n</code> 미처리)</td></tr>
+  <tr><td><code>zero-prompt-workspace.tsx</code></td><td>error 상태 destructure하지만 UI에 표시 안 함</td></tr>
+</table>
+
+<!-- ═══════════════ 6. A11Y ═══════════════ -->
+<h2 id="a11y">6. Accessibility (접근성) — 전체 앱</h2>
+
+<h3>Critical A11Y Gaps</h3>
+<table>
+  <tr><th>Category</th><th>Issue</th><th>Files</th></tr>
+  <tr><td><span class="badge b-red">Charts</span></td><td>Recharts SVG가 스크린 리더에 완전히 불투명. 데이터 테이블 대체 없음.</td><td>dashboard-charts.tsx, vibe-score.tsx, pipeline-graph.tsx</td></tr>
+  <tr><td><span class="badge b-red">Filter Badges</span></td><td><code>role="button"</code>, <code>aria-pressed</code>, 키보드 핸들러 없음</td><td>action-feed.tsx, history-list.tsx, dashboard</td></tr>
+  <tr><td><span class="badge b-orange">Animations</span></td><td><code>prefers-reduced-motion</code> 미적용 (confetti, pulse, stagger)</td><td>meeting-view, result, council-member, demo</td></tr>
+  <tr><td><span class="badge b-orange">Labels</span></td><td>YouTube URL input에 <code>&lt;label&gt;</code> 없음 (placeholder만)</td><td>zero-prompt-landing.tsx:155</td></tr>
+  <tr><td><span class="badge b-orange">ScrollArea</span></td><td>모든 ScrollArea에 <code>aria-label</code> 없음</td><td>cross-exam, doc-viewer, history-list 등</td></tr>
+  <tr><td><span class="badge b-blue">Kanban</span></td><td>보드에 <code>role="group"</code>, 컬럼에 <code>aria-label</code> 없음</td><td>kanban-board.tsx:72, kanban-column.tsx:30</td></tr>
+  <tr><td><span class="badge b-blue">Score Color</span></td><td>색상만으로 점수 수준 전달 (텍스트 라벨 "High/Medium/Low" 필요)</td><td>idea-card.tsx:48-50</td></tr>
+  <tr><td><span class="badge b-blue">Demo Cursor</span></td><td><code>aria-hidden="true"</code> 없음</td><td>demo/page.tsx:264-279</td></tr>
+</table>
+
+<!-- ═══════════════ 7. TESTS ═══════════════ -->
+<h2 id="tests">7. Test Coverage Plan</h2>
+
+<h3>현재 상태</h3>
+<div class="stats">
+  <div class="stat"><div class="n">80</div><div class="l">Agent Test Files</div></div>
+  <div class="stat"><div class="n">2</div><div class="l">Frontend Test Files</div></div>
+  <div class="stat"><div class="n">80%</div><div class="l">Agent Coverage Gate</div></div>
+  <div class="stat"><div class="n">0%</div><div class="l">Frontend Coverage Gate</div></div>
+  <div class="stat"><div class="n">32</div><div class="l">Untested Source Modules</div></div>
+</div>
+
+<h3>P0: 즉시 필요 (프로덕션 차단)</h3>
+<table>
+  <tr><th>Test File to Create</th><th>Tests</th><th>Reason</th></tr>
+  <tr><td><code>web/src/lib/__tests__/zero-prompt-api.test.ts</code></td><td>5</td><td>Zero-prompt 핵심 데이터 레이어, 현재 0% 커버리지</td></tr>
+  <tr><td><code>web/src/lib/__tests__/sse-client.test.ts</code></td><td>5</td><td>SSE가 주요 데이터 전송 수단, 0% 커버리지</td></tr>
+  <tr><td><code>web/src/hooks/__tests__/use-zero-prompt.test.ts</code></td><td>6</td><td>ZP UX 핵심 훅, score=0 버그 커버</td></tr>
+  <tr><td><code>web/src/hooks/__tests__/use-build-monitor.test.ts</code></td><td>5</td><td>빌드 모니터링 이벤트 파싱</td></tr>
+  <tr><td><code>web/src/hooks/__tests__/use-demo-zero-prompt.test.ts</code></td><td>5</td><td>데모 타임라인 정확성 검증</td></tr>
+  <tr><td><code>agent/tests/test_decision_gate.py</code></td><td>6</td><td>파이프라인 전체 흐름 제어 로직, 현재 0% 커버리지</td></tr>
+  <tr><td><code>agent/tests/test_event_bus.py</code></td><td>4</td><td>이벤트 전달 정확성, QueueFull 핸들링</td></tr>
+</table>
+
+<h3>P1: 핵심 기능</h3>
+<table>
+  <tr><th>Test File</th><th>Tests</th><th>Module</th></tr>
+  <tr><td><code>web/src/components/zero-prompt/__tests__/kanban-board.test.tsx</code></td><td>5</td><td>컬럼 분배, 모달, 빌드 콜백</td></tr>
+  <tr><td><code>web/src/components/zero-prompt/__tests__/idea-card.test.tsx</code></td><td>5</td><td>카드 상태별 렌더링, 키보드 상호작용</td></tr>
+  <tr><td><code>web/src/components/meeting/__tests__/meeting-view.test.tsx</code></td><td>5</td><td>SSE 이벤트 처리, 단계 진행, verdict</td></tr>
+  <tr><td><code>web/src/lib/__tests__/dashboard-api.test.ts</code></td><td>5</td><td>대시보드 API 호출</td></tr>
+  <tr><td><code>agent/tests/test_card_enrichment.py</code></td><td>4</td><td>Gemini 카드 enrichment + 규칙 기반 폴백</td></tr>
+  <tr><td><code>agent/tests/test_pipeline_runtime.py</code></td><td>5</td><td>SSE 이벤트 변환, 부분 실패 복구</td></tr>
+  <tr><td><code>agent/tests/test_connection_pool.py</code></td><td>4</td><td>동시 풀 초기화 경쟁 조건</td></tr>
+</table>
+
+<h3>Agent 미테스트 모듈 (HIGH 우선순위)</h3>
+<ul>
+  <li><code>nodes/decision_gate.py</code> — GO/CONDITIONAL/fix_storm 분기 제어</li>
+  <li><code>nodes/fix_storm.py</code> — 멀티라운드 아이디어 수정</li>
+  <li><code>nodes/deploy_gate.py</code> — 배포 준비 상태 확인</li>
+  <li><code>nodes/local_runtime_validator.py</code> — 로컬 런타임 검증</li>
+  <li><code>zero_prompt/card_enrichment.py</code> — Gemini 카드 enrichment</li>
+  <li><code>zero_prompt/grounding_discovery.py</code> — Gemini 기반 비디오 발견</li>
+  <li><code>pipeline_runtime.py</code> — 파이프라인 실행 코어</li>
+  <li><code>db/queries.py</code> — SQL 쿼리 함수</li>
+</ul>
+
+<!-- ═══════════════ 8. CI ═══════════════ -->
+<h2 id="ci">8. CI/CD 강화</h2>
+
+<h3>즉시 수정</h3>
+<table>
+  <tr><th>Change</th><th>File</th><th>Detail</th></tr>
+  <tr><td><span class="badge b-red">ADD</span> <code>web-test</code> job</td><td>ci.yml</td><td><code>npx vitest run --coverage</code></td></tr>
+  <tr><td><span class="badge b-red">FIX</span> bandit <code>|| true</code> 제거</td><td>ci.yml:121</td><td><code>--severity-level high</code>으로 단계적 도입</td></tr>
+  <tr><td><span class="badge b-orange">FIX</span> npm audit <code>|| true</code> 제거</td><td>ci.yml:133</td><td><code>--audit-level=high</code>으로 단계적 도입</td></tr>
+  <tr><td><span class="badge b-orange">FIX</span> mypy <code>|| true</code> 제거</td><td>ci.yml:107</td><td><code>continue-on-error: true</code>로 전환 (비차단 경고)</td></tr>
+</table>
+
+<h3>권장 추가 Jobs</h3>
+<table>
+  <tr><th>Job</th><th>Tool</th><th>Purpose</th></tr>
+  <tr><td><code>agent-dep-audit</code></td><td>pip-audit</td><td>Python 의존성 취약점 스캔</td></tr>
+  <tr><td><code>web-coverage</code></td><td>vitest --coverage</td><td>프론트엔드 커버리지 게이트 (50% 시작)</td></tr>
+  <tr><td><code>e2e</code></td><td>Playwright</td><td>/ → /demo → /zero-prompt 네비게이션</td></tr>
+  <tr><td><code>bundle-size</code></td><td>@next/bundle-analyzer</td><td>번들 사이즈 리그레션 감지</td></tr>
+</table>
+
+<!-- ═══════════════ 9. PRODUCTION ═══════════════ -->
+<h2 id="production">9. Production Infrastructure</h2>
+
+<h3>서버 하드닝</h3>
+<ul>
+  <li><code>run_server.py</code>: <code>server_header=False</code>, <code>proxy_headers=True</code> 추가 — 서버 핑거프린팅 방지</li>
+  <li><code>connection.py</code>: DB pool <code>min_size=5, max_size=20</code>으로 증가 (현재 1/1)</li>
+  <li><code>discovery.py</code>: YouTube API 할당량 회로 차단기 추가 (10,000 units/day)</li>
+  <li><code>event_bus.py</code>: 클라이언트 미등록 시 큐 정리 타이머 추가</li>
+  <li><code>a2a.py</code>: <code>_MESSAGE_LOG</code>에 최대 크기 제한 (collections.deque)</li>
+  <li><code>mcp_client.py</code>: <code>__aexit__</code> 추가로 HTTP 클라이언트 정리</li>
+</ul>
+
+<h3>Uvicorn 설정</h3>
+<pre><code>uvicorn.run(
+    "agent.server:app",
+    host=os.environ.get("UVICORN_HOST", "0.0.0.0"),
+    port=int(os.environ.get("PORT", "8080")),
+    workers=_read_worker_count(),
+    timeout_keep_alive=300,
+    server_header=False,      # 추가
+    proxy_headers=True,       # 추가
+    forwarded_allow_ips="*",  # 추가 (DO App Platform)
+)</code></pre>
+
+<!-- ═══════════════ 10. FILES ═══════════════ -->
+<h2 id="files">10. 변경 파일 전체 목록</h2>
+
+<h3>신규 생성</h3>
+<table>
+  <tr><th>File</th><th>Purpose</th></tr>
+  <tr><td><code>agent/auth.py</code></td><td>API Key 인증 + Rate Limiter</td></tr>
+  <tr><td><code>web/src/lib/fetch-with-auth.ts</code></td><td>인증 fetch 래퍼</td></tr>
+  <tr><td><code>web/src/lib/__tests__/zero-prompt-api.test.ts</code></td><td>ZP API 테스트 (5건)</td></tr>
+  <tr><td><code>web/src/lib/__tests__/sse-client.test.ts</code></td><td>SSE 클라이언트 테스트 (5건)</td></tr>
+  <tr><td><code>web/src/hooks/__tests__/use-zero-prompt.test.ts</code></td><td>ZP 훅 테스트 (6건)</td></tr>
+  <tr><td><code>web/src/hooks/__tests__/use-build-monitor.test.ts</code></td><td>빌드 모니터 테스트 (5건)</td></tr>
+  <tr><td><code>web/src/hooks/__tests__/use-demo-zero-prompt.test.ts</code></td><td>데모 훅 테스트 (5건)</td></tr>
+  <tr><td><code>web/src/components/zero-prompt/__tests__/kanban-board.test.tsx</code></td><td>칸반 보드 테스트 (5건)</td></tr>
+  <tr><td><code>agent/tests/test_decision_gate.py</code></td><td>결정 게이트 테스트 (6건)</td></tr>
+  <tr><td><code>agent/tests/test_event_bus.py</code></td><td>이벤트 버스 테스트 (4건)</td></tr>
+</table>
+
+<h3>수정 필요</h3>
+<table>
+  <tr><th>File</th><th>Changes</th></tr>
+  <tr><td><code>agent/server.py</code></td><td>CORS 수정, Auth deps 추가, Health 응답 축소, SSE 연결 제한</td></tr>
+  <tr><td><code>agent/db/zp_store.py</code></td><td>SQL column allowlist, 마이그레이션 에러 로깅, JSON 파싱 보호</td></tr>
+  <tr><td><code>agent/db/connection.py</code></td><td>asyncio.Lock 추가, pool size 증가</td></tr>
+  <tr><td><code>agent/cost.py</code></td><td>모델명 동기화</td></tr>
+  <tr><td><code>agent/tools/digitalocean.py</code></td><td>생성 앱 자격증명 분리</td></tr>
+  <tr><td><code>agent/run_server.py</code></td><td>server_header, proxy_headers 추가</td></tr>
+  <tr><td><code>agent/guardrails.py</code></td><td>Unicode 정규화 추가</td></tr>
+  <tr><td><code>.github/workflows/ci.yml</code></td><td>web-test job 추가, || true 제거, pip-audit 추가</td></tr>
+  <tr><td><code>.do/app.yaml</code></td><td>VIBEDEPLOY_API_KEY, CORS_ORIGINS, GENERATED_APP_* env vars</td></tr>
+  <tr><td><code>web/src/lib/api.ts</code></td><td>authenticatedFetch 적용</td></tr>
+  <tr><td><code>web/src/lib/zero-prompt-api.ts</code></td><td>authenticatedFetch 적용</td></tr>
+  <tr><td><code>web/src/lib/dashboard-api.ts</code></td><td>authenticatedFetch 적용</td></tr>
+  <tr><td><code>web/src/lib/sse-client.ts</code></td><td>authHeaders 적용, \r\n 파싱 수정</td></tr>
+  <tr><td><code>web/src/hooks/use-zero-prompt.ts</code></td><td>|| → ?? 수정, 에러 롤백</td></tr>
+  <tr><td><code>web/src/app/error.tsx</code></td><td>리로드 루프 방지</td></tr>
+  <tr><td><code>web/src/app/result/[id]/page.tsx</code></td><td>.catch() 추가</td></tr>
+  <tr><td><code>web/src/components/meeting/meeting-view.tsx</code></td><td>기존 결과 확인 후 POST</td></tr>
+</table>
+
+<hr>
+
+<div class="note ok">
+<strong>실행 순서 권장:</strong><br>
+<strong>Phase 1 (Auth + Security):</strong> auth.py 생성 → server.py CORS/auth 적용 → frontend fetch 래퍼 → 배포<br>
+<strong>Phase 2 (Critical Bugs):</strong> score || → ??, .catch() 추가, meeting 새로고침 버그, error.tsx 루프<br>
+<strong>Phase 3 (Tests):</strong> P0 테스트 7개 파일 생성 → CI web-test job → || true 제거<br>
+<strong>Phase 4 (Infra):</strong> DB pool, MemorySaver, SSE 연결 제한, 서버 하드닝<br>
+<strong>Phase 5 (A11Y + Polish):</strong> ARIA labels, prefers-reduced-motion, chart 대체 텍스트
+</div>
+
+<p style="text-align:center;color:var(--muted);margin-top:2.5rem;font-size:.82rem;">
+  5 Expert Agents: Auth Architect · Backend Auditor · Security Engineer · Quality Engineer · Frontend Auditor<br>
+  Total analysis: ~493K tokens across 146 source files | 2026-04-07 | vibeDeploy commit: ec8b84b
+</p>
+
+</div>
+</body>
+</html>

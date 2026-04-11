@@ -7,6 +7,7 @@ const FIVE_MINUTES_MS = 5 * 60 * 1000;
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   trustHost: true,
+  basePath: "/auth/api",
   providers: [
     Google({
       clientId: process.env.GOOGLE_CLIENT_ID!,

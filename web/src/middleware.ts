@@ -5,7 +5,6 @@ const publicPaths = ["/", "/demo"];
 function isPublicPath(pathname: string): boolean {
   if (publicPaths.includes(pathname)) return true;
   if (pathname.startsWith("/auth/")) return true;
-  if (pathname.startsWith("/api/auth/")) return true;
   if (pathname.startsWith("/_next/")) return true;
   if (pathname === "/favicon.ico") return true;
   // Static assets (files with extensions like .js, .css, .png)

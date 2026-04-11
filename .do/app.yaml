@@ -7,12 +7,7 @@ alerts:
 
 ingress:
   rules:
-    # NextAuth OAuth routes → web (must be before /api catch-all)
-    - component:
-        name: web
-      match:
-        path:
-          prefix: /api/auth
+    # NextAuth routes now at /auth/api/* (handled by web catch-all)
     # API endpoints → backend
     - component:
         name: api

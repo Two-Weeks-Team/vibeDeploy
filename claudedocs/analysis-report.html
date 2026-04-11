@@ -1,0 +1,875 @@
+<!DOCTYPE html>
+<html lang="ko" class="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>vibeDeploy — Comprehensive Analysis &amp; Improvement Report</title>
+<style>
+  :root {
+    --bg: #0d1117; --card: #161b22; --border: #30363d;
+    --fg: #e6edf3; --muted: #8b949e; --accent: #58a6ff;
+    --green: #3fb950; --red: #f85149; --orange: #d29922;
+    --purple: #bc8cff; --cyan: #39d353;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif; background:var(--bg); color:var(--fg); line-height:1.6; }
+  .container { max-width:1200px; margin:0 auto; padding:2rem 1.5rem; }
+  h1 { font-size:2.5rem; font-weight:800; background:linear-gradient(135deg,#58a6ff,#bc8cff); -webkit-background-clip:text; -webkit-text-fill-color:transparent; margin-bottom:.5rem; }
+  h2 { font-size:1.5rem; font-weight:700; color:var(--accent); margin:2.5rem 0 1rem; border-bottom:1px solid var(--border); padding-bottom:.5rem; }
+  h3 { font-size:1.15rem; font-weight:600; color:var(--fg); margin:1.5rem 0 .75rem; }
+  p, li { color:var(--fg); font-size:.95rem; }
+  .subtitle { color:var(--muted); font-size:1.1rem; margin-bottom:2rem; }
+  .meta { display:flex; gap:1rem; flex-wrap:wrap; margin-bottom:2rem; }
+  .meta-badge { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:.5rem 1rem; font-size:.85rem; color:var(--muted); }
+  .meta-badge strong { color:var(--fg); }
+
+  /* Score cards */
+  .score-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:1rem; margin:1.5rem 0; }
+  .score-card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:1.25rem; text-align:center; }
+  .score-card .label { font-size:.8rem; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; }
+  .score-card .score { font-size:2.5rem; font-weight:800; margin:.25rem 0; }
+  .score-card .max { font-size:.85rem; color:var(--muted); }
+  .score-card.critical .score { color:var(--red); }
+  .score-card.warning .score { color:var(--orange); }
+  .score-card.good .score { color:var(--green); }
+  .score-card.great .score { color:var(--accent); }
+
+  /* Issue cards */
+  .issue-list { display:flex; flex-direction:column; gap:.75rem; margin:1rem 0; }
+  .issue { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:1rem 1.25rem; display:flex; gap:1rem; align-items:flex-start; }
+  .issue .severity { flex-shrink:0; width:80px; text-align:center; padding:.25rem .5rem; border-radius:6px; font-size:.75rem; font-weight:700; text-transform:uppercase; }
+  .issue .severity.critical { background:rgba(248,81,73,.15); color:var(--red); border:1px solid rgba(248,81,73,.3); }
+  .issue .severity.high { background:rgba(210,153,34,.15); color:var(--orange); border:1px solid rgba(210,153,34,.3); }
+  .issue .severity.medium { background:rgba(88,166,255,.15); color:var(--accent); border:1px solid rgba(88,166,255,.3); }
+  .issue .severity.low { background:rgba(139,148,158,.15); color:var(--muted); border:1px solid rgba(139,148,158,.3); }
+  .issue .content { flex:1; }
+  .issue .title { font-weight:600; font-size:.95rem; margin-bottom:.25rem; }
+  .issue .desc { font-size:.85rem; color:var(--muted); }
+  .issue .file { font-family:'SF Mono',Consolas,monospace; font-size:.8rem; color:var(--purple); margin-top:.25rem; }
+  .issue .fix { font-size:.85rem; color:var(--cyan); margin-top:.35rem; }
+  .issue .fix::before { content:'→ Fix: '; font-weight:600; }
+
+  /* Strength cards */
+  .strength-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:1rem; margin:1rem 0; }
+  .strength { background:var(--card); border:1px solid rgba(63,185,80,.2); border-radius:10px; padding:1rem 1.25rem; }
+  .strength .icon { font-size:1.5rem; margin-bottom:.5rem; }
+  .strength .stitle { font-weight:600; margin-bottom:.25rem; }
+  .strength .sdesc { font-size:.85rem; color:var(--muted); }
+
+  /* Roadmap */
+  .roadmap { position:relative; padding-left:2rem; margin:1.5rem 0; }
+  .roadmap::before { content:''; position:absolute; left:.75rem; top:0; bottom:0; width:2px; background:var(--border); }
+  .roadmap-item { position:relative; margin-bottom:1.5rem; background:var(--card); border:1px solid var(--border); border-radius:10px; padding:1rem 1.25rem; }
+  .roadmap-item::before { content:''; position:absolute; left:-1.65rem; top:1.25rem; width:12px; height:12px; border-radius:50%; border:2px solid var(--accent); background:var(--bg); }
+  .roadmap-item.done::before { background:var(--green); border-color:var(--green); }
+  .roadmap-item .phase { font-size:.75rem; color:var(--accent); text-transform:uppercase; font-weight:700; letter-spacing:.05em; }
+  .roadmap-item .rtitle { font-weight:600; margin:.25rem 0; }
+  .roadmap-item .rdesc { font-size:.85rem; color:var(--muted); }
+
+  /* Stats */
+  .stats-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:1rem; margin:1rem 0; }
+  .stat { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:1rem; text-align:center; }
+  .stat .num { font-size:1.8rem; font-weight:800; color:var(--accent); }
+  .stat .slabel { font-size:.8rem; color:var(--muted); }
+
+  /* Tables */
+  table { width:100%; border-collapse:collapse; margin:1rem 0; font-size:.9rem; }
+  th, td { padding:.6rem .75rem; text-align:left; border-bottom:1px solid var(--border); }
+  th { color:var(--muted); font-weight:600; font-size:.8rem; text-transform:uppercase; letter-spacing:.03em; background:var(--card); }
+  td { color:var(--fg); }
+  tr:hover td { background:rgba(88,166,255,.05); }
+
+  /* Status badges */
+  .badge { display:inline-block; padding:.15rem .5rem; border-radius:6px; font-size:.75rem; font-weight:600; }
+  .badge-red { background:rgba(248,81,73,.15); color:var(--red); }
+  .badge-green { background:rgba(63,185,80,.15); color:var(--green); }
+  .badge-orange { background:rgba(210,153,34,.15); color:var(--orange); }
+  .badge-blue { background:rgba(88,166,255,.15); color:var(--accent); }
+  .badge-purple { background:rgba(188,140,255,.15); color:var(--purple); }
+
+  code { font-family:'SF Mono',Consolas,monospace; font-size:.85em; background:rgba(88,166,255,.1); padding:.1em .3em; border-radius:4px; color:var(--accent); }
+  .note { background:rgba(88,166,255,.08); border:1px solid rgba(88,166,255,.2); border-radius:8px; padding:1rem; margin:1rem 0; font-size:.9rem; }
+  .note.warn { background:rgba(210,153,34,.08); border-color:rgba(210,153,34,.2); }
+  .note.danger { background:rgba(248,81,73,.08); border-color:rgba(248,81,73,.2); }
+  .toc { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:1.5rem; margin:2rem 0; }
+  .toc ul { list-style:none; padding-left:0; }
+  .toc li { padding:.3rem 0; }
+  .toc a { color:var(--accent); text-decoration:none; font-size:.9rem; }
+  .toc a:hover { text-decoration:underline; }
+  .divider { border:none; border-top:1px solid var(--border); margin:3rem 0; }
+
+  @media (max-width:768px) {
+    h1 { font-size:1.8rem; }
+    .score-grid { grid-template-columns:repeat(2,1fr); }
+    .issue { flex-direction:column; }
+    .issue .severity { width:auto; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<!-- ═══════════════════════ HEADER ═══════════════════════ -->
+<h1>vibeDeploy — 종합 분석 &amp; 개선 보고서</h1>
+<p class="subtitle">Zero-Prompt AI App Factory on DigitalOcean — 해커톤 1등 수상작 완성도 점검</p>
+
+<div class="meta">
+  <span class="meta-badge"><strong>분석 일자:</strong> 2026-04-07</span>
+  <span class="meta-badge"><strong>심사 기간:</strong> 2026-04-07 ~ 04-14</span>
+  <span class="meta-badge"><strong>수상:</strong> 🏆 1st Place ($8,000 + $600 DO credits)</span>
+  <span class="meta-badge"><strong>참가자:</strong> 2,632명 중 1위</span>
+  <span class="meta-badge"><strong>분석 에이전트:</strong> Frontend Architect, Backend Architect, Security Engineer, Quality Engineer, Code Explorer, Deep Researcher</span>
+</div>
+
+<div class="note danger">
+  <strong>⚠️ 긴급:</strong> 심사 기간이 오늘(4/7) 시작됩니다. <strong>4개의 생성된 데모 앱이 모두 다운</strong>되어 있어 즉시 조치가 필요합니다.
+</div>
+
+<!-- ═══════════════════════ TOC ═══════════════════════ -->
+<div class="toc">
+  <h3>📋 목차</h3>
+  <ul>
+    <li><a href="#exec">1. Executive Summary &amp; 심사 기준 점수</a></li>
+    <li><a href="#critical">2. CRITICAL — 즉시 수정 필요</a></li>
+    <li><a href="#high">3. HIGH — 권장 개선사항</a></li>
+    <li><a href="#medium">4. MEDIUM — 품질 향상</a></li>
+    <li><a href="#strengths">5. 강점 분석 — 1등의 이유</a></li>
+    <li><a href="#frontend">6. 프론트엔드 UX/Design 상세</a></li>
+    <li><a href="#backend">7. 백엔드 아키텍처 상세</a></li>
+    <li><a href="#security">8. 보안 감사</a></li>
+    <li><a href="#cicd">9. CI/CD &amp; 품질 게이트</a></li>
+    <li><a href="#guest">10. 게스트/뷰어 모드 제안</a></li>
+    <li><a href="#roadmap">11. 개선 로드맵 (우선순위별)</a></li>
+    <li><a href="#codebase">12. 코드베이스 통계</a></li>
+  </ul>
+</div>
+
+<!-- ═══════════════════════ 1. EXEC SUMMARY ═══════════════════════ -->
+<h2 id="exec">1. Executive Summary &amp; 심사 기준 점수</h2>
+
+<p>vibeDeploy는 이미 DigitalOcean Gradient AI Hackathon에서 <strong>2,632팀 중 1위</strong>를 달성한 프로젝트입니다. 아래는 심사 4개 기준(동일 비중)에 대한 현재 상태 평가입니다.</p>
+
+<div class="score-grid">
+  <div class="score-card great">
+    <div class="label">Technological Implementation</div>
+    <div class="score">9.2</div>
+    <div class="max">/ 10</div>
+  </div>
+  <div class="score-card good">
+    <div class="label">Design (UX)</div>
+    <div class="score">8.0</div>
+    <div class="max">/ 10</div>
+  </div>
+  <div class="score-card great">
+    <div class="label">Potential Impact</div>
+    <div class="score">9.0</div>
+    <div class="max">/ 10</div>
+  </div>
+  <div class="score-card great">
+    <div class="label">Quality of Idea</div>
+    <div class="score">9.5</div>
+    <div class="max">/ 10</div>
+  </div>
+</div>
+
+<div class="note">
+  <strong>총점 추정: 35.7 / 40</strong> — 이미 1등이지만, 아래 개선사항을 반영하면 <strong>37~38점</strong> 수준으로 격차를 더 벌릴 수 있습니다. 특히 Design(UX) 부분에서 가장 큰 개선 여지가 있습니다.
+</div>
+
+<!-- ═══════════════════════ COMPETITION INTEL ═══════════════════════ -->
+<h2 id="competition">경쟁 분석 — 2,632명 중 1위의 근거</h2>
+
+<div class="stats-row">
+  <div class="stat"><div class="num">2,632</div><div class="slabel">총 참가자</div></div>
+  <div class="stat"><div class="num">177</div><div class="slabel">제출 프로젝트</div></div>
+  <div class="stat"><div class="num">6</div><div class="slabel">수상 프로젝트</div></div>
+  <div class="stat"><div class="num">13</div><div class="slabel">vibeDeploy DO 기능</div></div>
+  <div class="stat"><div class="num">8</div><div class="slabel">2위(GradientGuard) DO 기능</div></div>
+</div>
+
+<h3>수상 프로젝트 비교</h3>
+<table>
+  <tr><th>Prize</th><th>Project</th><th>Core Concept</th><th>DO Features</th></tr>
+  <tr><td><span class="badge badge-green">1st Place ($8K)</span></td><td><strong>vibeDeploy</strong></td><td>Zero-Prompt autonomous app factory</td><td>13</td></tr>
+  <tr><td><span class="badge badge-blue">2nd Place ($4K)</span></td><td>GradientGuard</td><td>DORA compliance intelligence for EU fintechs</td><td>8</td></tr>
+  <tr><td><span class="badge badge-purple">Best AI Persona ($2K)</span></td><td>Aperture AI</td><td>Smart event photo curation with agent persona</td><td>—</td></tr>
+</table>
+
+<h3>심사관 인사이트 (Devpost 인터뷰 기반)</h3>
+<div class="note">
+  <ul>
+    <li><strong>"find a way to incorporate [sponsor tools] because we're likely interested in seeing them used"</strong> — DO 기능 13개 통합이 최고 점수를 받은 핵심 이유</li>
+    <li><strong>"A finished product, something I would want to use"</strong> — 4개 실제 배포 앱이 결정적 차별점</li>
+    <li><strong>"Over-indexed on one criteria at the detriment of the rest"</strong> 경고 — vibeDeploy는 4개 기준 모두 균형 잡힘</li>
+    <li><strong>"Show real functionality, not slides"</strong> — Live Kanban 데모가 높은 평가를 받음</li>
+  </ul>
+</div>
+
+<!-- ═══════════════════════ CODEBASE STATS ═══════════════════════ -->
+<h2 id="codebase">12. 코드베이스 통계</h2>
+
+<div class="stats-row">
+  <div class="stat"><div class="num">45,609</div><div class="slabel">Backend Lines (Python)</div></div>
+  <div class="stat"><div class="num">10,559</div><div class="slabel">Frontend Lines (TS/TSX)</div></div>
+  <div class="stat"><div class="num">118</div><div class="slabel">Backend Source Files</div></div>
+  <div class="stat"><div class="num">74</div><div class="slabel">Frontend Source Files</div></div>
+  <div class="stat"><div class="num">80</div><div class="slabel">Backend Test Files</div></div>
+  <div class="stat"><div class="num">2</div><div class="slabel">Frontend Test Files</div></div>
+  <div class="stat"><div class="num">9</div><div class="slabel">CI Jobs</div></div>
+  <div class="stat"><div class="num">13</div><div class="slabel">DO Capabilities Used</div></div>
+</div>
+
+<!-- ═══════════════════════ 2. CRITICAL ═══════════════════════ -->
+<h2 id="critical">2. CRITICAL — 즉시 수정 필요 🚨</h2>
+
+<div class="issue-list">
+  <div class="issue">
+    <div class="severity critical">CRITICAL</div>
+    <div class="content">
+      <div class="title">생성된 데모 앱 4개 모두 다운 (ECONNREFUSED)</div>
+      <div class="desc">심사 기간(4/7~14)에 README에 나열된 4개 생성 앱 URL이 모두 접속 불가합니다. DO App Platform 인스턴스가 중지/만료되었을 가능성이 높습니다.</div>
+      <div class="file">README.md:80~87 — "These public links returned HTTP 200" 문구도 현재 사실과 불일치</div>
+      <div class="fix">doctl로 앱 상태 확인 후 재배포하거나, README에서 Dead 앱 제거하고 live /zero-prompt 페이지의 7개 배포 앱으로 교체</div>
+    </div>
+  </div>
+
+  <div class="issue">
+    <div class="severity critical">CRITICAL</div>
+    <div class="content">
+      <div class="title">데모 비디오 링크 미등록</div>
+      <div class="desc">README에 <code>"Demo video link: add the final public YouTube or Vimeo URL before submission."</code> 플레이스홀더가 그대로 남아 있습니다. 심사 필수 요건입니다.</div>
+      <div class="file">README.md:13</div>
+      <div class="fix">데모 영상 업로드 후 링크 교체. /demo 페이지의 8x 자동 재생 워크스루 녹화 권장</div>
+    </div>
+  </div>
+
+  <div class="issue">
+    <div class="severity critical">CRITICAL</div>
+    <div class="content">
+      <div class="title">랜딩 페이지 YouTube "Start" 버튼이 alert() 표시</div>
+      <div class="desc">"Or start from a YouTube video" 섹션의 Start 버튼 클릭 시 <code>alert("This feature is restricted to admin users and authorized IPs only.")</code>가 호출됩니다. 심사관이 이 버튼을 누르면 매우 부정적 인상을 줍니다.</div>
+      <div class="file">web/src/components/zero-prompt-landing.tsx:164</div>
+      <div class="fix">(A) 기능을 활성화하거나, (B) 버튼을 disabled 상태로 전환하고 "Admin Only" 뱃지 + 툴팁으로 안내, (C) 게스트는 /demo로 리디렉트하는 UX 제공</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ 3. HIGH ═══════════════════════ -->
+<h2 id="high">3. HIGH — 권장 개선사항 ⚡</h2>
+
+<div class="issue-list">
+  <div class="issue">
+    <div class="severity high">HIGH</div>
+    <div class="content">
+      <div class="title">프론트엔드 테스트 커버리지 극히 낮음 (2/74 파일, ~2.7%)</div>
+      <div class="desc">74개 소스 파일 중 테스트가 있는 것은 2개(api.test.ts, use-pipeline-monitor.test.ts)뿐입니다. 핵심 컴포넌트(KanbanBoard, ZeroPromptWorkspace, DemoPage)에 대한 테스트가 없습니다.</div>
+      <div class="file">web/src/ — 9 tests total</div>
+      <div class="fix">최소 ZeroPromptWorkspace, KanbanBoard, demo-data에 대한 단위 테스트 추가. CI에 web test job 추가 (현재 CI에 vitest 미포함)</div>
+    </div>
+  </div>
+
+  <div class="issue">
+    <div class="severity high">HIGH</div>
+    <div class="content">
+      <div class="title">CI에 web test (vitest) 미포함</div>
+      <div class="desc">.github/workflows/ci.yml에 eslint, build, typecheck는 있지만 <code>npm test (vitest run)</code> 실행 job이 없습니다. 프론트엔드 테스트가 CI에서 검증되지 않습니다.</div>
+      <div class="file">.github/workflows/ci.yml</div>
+      <div class="fix">web-test job 추가: <code>npm test</code> 실행 (needs: web-lint)</div>
+    </div>
+  </div>
+
+  <div class="issue">
+    <div class="severity high">HIGH</div>
+    <div class="content">
+      <div class="title">ADK URL 미설정 — Gradient ADK 연동 미완성</div>
+      <div class="desc">Health check에서 <code>"adk_url_configured": false</code> 반환. ADK가 가장 핵심적인 DO 기능인데 실제 연결이 안 되어 있으면 심사에서 감점 가능.</div>
+      <div class="file">.do/app.yaml:88~94 — VIBEDEPLOY_ADK_URL = REPLACE_WITH_ADK_URL</div>
+      <div class="fix">ADK를 배포하고 URL을 App Platform env에 설정. 또는 health 엔드포인트에서 이 필드 미노출</div>
+    </div>
+  </div>
+
+  <div class="issue">
+    <div class="severity high">HIGH</div>
+    <div class="content">
+      <div class="title">게스트 접근 시 /zero-prompt 페이지가 완료된 세션만 표시</div>
+      <div class="desc">현재 /zero-prompt는 서버에서 최종 세션 데이터를 가져와 보여줍니다. 세션이 "completed" 상태면 탐색/빌드 과정을 볼 수 없고, 새 세션 시작 버튼도 명시적이지 않습니다.</div>
+      <div class="fix">첫 방문자용 안내 배너 추가: "이 페이지는 마지막 Zero-Prompt 세션 결과를 보여줍니다. 전체 워크플로우를 보려면 [Demo 보기] 버튼"</div>
+    </div>
+  </div>
+
+  <div class="issue">
+    <div class="severity high">HIGH</div>
+    <div class="content">
+      <div class="title">API 공개 엔드포인트에 Rate Limiting 없음</div>
+      <div class="desc">server.py에 CORS는 설정되어 있으나, /api/zero-prompt/start 등 비용이 발생하는 LLM 호출 엔드포인트에 rate limiting이 없습니다.</div>
+      <div class="file">agent/server.py</div>
+      <div class="fix">SlowAPI 또는 간단한 token bucket 미들웨어 추가. 최소한 IP당 분당 10회 제한</div>
+    </div>
+  </div>
+
+  <div class="issue">
+    <div class="severity high">HIGH</div>
+    <div class="content">
+      <div class="title">bandit 보안 스캔과 mypy 타입 체크가 || true로 무시됨</div>
+      <div class="desc">CI에서 bandit과 mypy 결과를 <code>|| true</code>로 무시하고 있어 실질적 보안/타입 게이트가 없습니다.</div>
+      <div class="file">.github/workflows/ci.yml:107, 122</div>
+      <div class="fix">bandit은 실제 이슈가 없으면 || true 제거. mypy는 점진적 strict 적용</div>
+    </div>
+  </div>
+
+  <div class="issue">
+    <div class="severity high">HIGH</div>
+    <div class="content">
+      <div class="title">Premium DO Inference 모델 401 오류 — 실제 런타임 열화</div>
+      <div class="desc">E2E 검증 문서에 따르면 gpt-5.4, claude-sonnet-4-6 등 premium 모델이 401을 반환하고 openai-gpt-oss-120b (무료)로 fallback됩니다. 실제 품질이 제출 시와 다를 수 있습니다.</div>
+      <div class="file">docs/E2E_VERIFICATION.md:45</div>
+      <div class="fix">DO Inference 구독 티어 확인 및 갱신, 또는 fallback 모델 품질이 충분한지 검증</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ 4. MEDIUM ═══════════════════════ -->
+<h2 id="medium">4. MEDIUM — 품질 향상 개선사항</h2>
+
+<div class="issue-list">
+  <div class="issue">
+    <div class="severity medium">MEDIUM</div>
+    <div class="content">
+      <div class="title">E2E 테스트 없음 — Playwright 미구성</div>
+      <div class="desc">E2E_VERIFICATION.md에 수동 검증 결과가 있지만, 자동화된 Playwright/Cypress E2E 테스트가 CI에 없습니다.</div>
+      <div class="fix">최소 랜딩 → /demo → /zero-prompt 네비게이션 E2E 테스트 추가</div>
+    </div>
+  </div>
+
+  <div class="issue">
+    <div class="severity medium">MEDIUM</div>
+    <div class="content">
+      <div class="title">접근성(a11y) 기본 요소 미흡</div>
+      <div class="desc">skip-to-content 링크 없음, Kanban 보드에 ARIA 속성 부족, 키보드 네비게이션 미테스트, 색상 대비(muted-foreground on dark) 검증 필요.</div>
+      <div class="file">web/src/app/layout.tsx, web/src/components/zero-prompt/kanban-board.tsx</div>
+      <div class="fix">skip-nav 추가, aria-label/role 속성 보강, Lighthouse a11y 점수 확인</div>
+    </div>
+  </div>
+
+  <div class="issue">
+    <div class="severity medium">MEDIUM</div>
+    <div class="content">
+      <div class="title">OG 이미지 / 소셜 미리보기 미설정</div>
+      <div class="desc">layout.tsx의 metadata에 OpenGraph 이미지가 없습니다. Devpost나 소셜 미디어에서 공유 시 미리보기 이미지가 표시되지 않습니다.</div>
+      <div class="file">web/src/app/layout.tsx:16~29</div>
+      <div class="fix">screenshots 폴더의 이미지를 og-image로 추가: <code>openGraph: { images: ['/og-image.png'] }</code></div>
+    </div>
+  </div>
+
+  <div class="issue">
+    <div class="severity medium">MEDIUM</div>
+    <div class="content">
+      <div class="title">Dashboard가 CSR전용 — 초기 로딩 시 빈 화면</div>
+      <div class="desc">DashboardPage는 "use client"로 전체 CSR입니다. 초기 로딩 동안 skeleton은 있지만, 서버 연결 실패 시 빈 화면 + "No recent activity"만 표시됩니다. 심사관이 offline에서 볼 수 있는 폴백이 필요합니다.</div>
+      <div class="file">web/src/app/dashboard/page.tsx</div>
+      <div class="fix">API 미연결 시 안내 메시지 추가: "Backend agent is not running. View demo data instead? [Go to Demo]"</div>
+    </div>
+  </div>
+
+  <div class="issue">
+    <div class="severity medium">MEDIUM</div>
+    <div class="content">
+      <div class="title">CORS 설정이 wildcard(*) 가능성</div>
+      <div class="desc">server.py의 CORS 미들웨어를 확인하여 운영 환경에서 origin 제한이 적절한지 검증 필요.</div>
+      <div class="file">agent/server.py — CORSMiddleware 설정 확인</div>
+      <div class="fix">운영에서는 ALLOWED_ORIGINS를 App Platform URL로 제한</div>
+    </div>
+  </div>
+
+  <div class="issue">
+    <div class="severity medium">MEDIUM</div>
+    <div class="content">
+      <div class="title">디자인이 shadcn 기본값에 가까움</div>
+      <div class="desc">글로벌 CSS는 shadcn default theme을 사용 중. 독창적 브랜딩(그라데이션, 커스텀 색상, 로고 등)이 부족하여 "generic AI demo" 느낌을 줄 수 있습니다.</div>
+      <div class="file">web/src/app/globals.css</div>
+      <div class="fix">vibeDeploy 브랜드 색상(blue-purple gradient)을 CSS 변수로 확장, 카드 디자인에 micro-animation 추가</div>
+    </div>
+  </div>
+
+  <div class="issue">
+    <div class="severity medium">MEDIUM</div>
+    <div class="content">
+      <div class="title">모바일 반응형 개선 필요</div>
+      <div class="desc">Kanban 보드가 모바일에서 수평 스크롤 필요. 심사관이 모바일에서 확인할 수도 있습니다.</div>
+      <div class="fix">모바일에서는 수직 스택 또는 스와이프 가능한 카드 뷰로 전환</div>
+    </div>
+  </div>
+
+  <div class="issue">
+    <div class="severity low">LOW</div>
+    <div class="content">
+      <div class="title">npm audit 결과도 || true로 무시됨</div>
+      <div class="file">.github/workflows/ci.yml:134</div>
+      <div class="fix">moderate 이상 취약점이 0개인지 확인 후 || true 제거 검토</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ 5. STRENGTHS ═══════════════════════ -->
+<h2 id="strengths">5. 강점 분석 — 1등의 이유 🏆</h2>
+
+<div class="strength-grid">
+  <div class="strength">
+    <div class="icon">🎯</div>
+    <div class="stitle">Zero-Prompt 혁신 컨셉</div>
+    <div class="sdesc">사용자 입력 없이 YouTube에서 아이디어 발견 → 평가 → 코드 생성 → 배포까지 원클릭 자동화. 기존 AI 코딩 도구가 커버하지 않는 "아이디어 발견" 단계를 포함한 완전한 파이프라인.</div>
+  </div>
+  <div class="strength">
+    <div class="icon">🏗️</div>
+    <div class="stitle">13개 DigitalOcean Capability 통합</div>
+    <div class="sdesc">Gradient ADK, Knowledge Bases, Evaluations, Guardrails, Tracing, Multi-Agent Routing, A2A Handoff, Serverless Inference, App Platform, Spaces, Image Gen, Agent Versioning, MCP — 해커톤 중 가장 광범위한 DO 기능 활용.</div>
+  </div>
+  <div class="strength">
+    <div class="icon">⚡</div>
+    <div class="stitle">Contract-First 코드 생성</div>
+    <div class="sdesc">OpenAPI spec → TypeScript types → Pydantic models → per-file 코드 생성 + AST 검증. 프론트/백엔드 불일치를 구조적으로 방지하는 독창적 접근.</div>
+  </div>
+  <div class="strength">
+    <div class="icon">📊</div>
+    <div class="stitle">실시간 스트리밍 UX</div>
+    <div class="sdesc">SSE 기반 26개 이벤트 타입으로 파이프라인 진행 상황을 실시간 시각화. Kanban 보드에 카드가 라이브로 이동하며, 빌드/배포 상태를 투명하게 노출.</div>
+  </div>
+  <div class="strength">
+    <div class="icon">🎪</div>
+    <div class="stitle">8x 속도 데모 모드</div>
+    <div class="sdesc">/demo 페이지에서 애니메이션 커서가 자동으로 입력/클릭하며 전체 파이프라인을 ~40초 안에 보여주는 심사관 친화적 데모. 백엔드 없이도 동작.</div>
+  </div>
+  <div class="strength">
+    <div class="icon">🛡️</div>
+    <div class="stitle">견고한 백엔드 & 테스트</div>
+    <div class="sdesc">80개 테스트 파일, pytest-cov 80% 커버리지, ruff lint, bandit 보안 스캔, mypy 타입체크. 45,000+ 라인의 실제 작동 코드.</div>
+  </div>
+  <div class="strength">
+    <div class="icon">🧠</div>
+    <div class="stitle">Multi-Model 아키텍처</div>
+    <div class="sdesc">9가지 역할에 9개 다른 모델 매핑 (Gemini, Claude, GPT). Provider Adapter Registry로 모델 전환이 유연. 단일 모델 의존성 없음.</div>
+  </div>
+  <div class="strength">
+    <div class="icon">🌐</div>
+    <div class="stitle">실제 동작하는 생성 앱들</div>
+    <div class="sdesc">/zero-prompt 페이지에 7개의 실제 배포된 앱과 34개 거절 아이디어가 표시됨. 목업이 아닌 실제 파이프라인 결과물.</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ 6. FRONTEND ═══════════════════════ -->
+<h2 id="frontend">6. 프론트엔드 UX/Design 상세 분석</h2>
+
+<h3>라우트 구조 &amp; 완성도</h3>
+<table>
+  <tr><th>Route</th><th>Type</th><th>Status</th><th>Notes</th></tr>
+  <tr><td><code>/</code></td><td>Static</td><td><span class="badge badge-green">OK</span></td><td>랜딩 페이지 — vibeDeploy 소개, CTA 2개 (Zero-Prompt Start, Watch Demo)</td></tr>
+  <tr><td><code>/demo</code></td><td>Static</td><td><span class="badge badge-green">OK</span></td><td>자동 재생 데모 — 8x 속도, 애니메이션 커서. 백엔드 불필요.</td></tr>
+  <tr><td><code>/zero-prompt</code></td><td>Dynamic</td><td><span class="badge badge-orange">부분적</span></td><td>실제 파이프라인 연결. 완료된 세션 결과 표시됨. 새 세션 시작 UI 미흡.</td></tr>
+  <tr><td><code>/dashboard</code></td><td>Static (CSR)</td><td><span class="badge badge-orange">부분적</span></td><td>5 탭(Overview, Live, Deployed, History, Analytics). API 미연결 시 빈 화면.</td></tr>
+  <tr><td><code>/meeting/[id]</code></td><td>Dynamic</td><td><span class="badge badge-green">OK</span></td><td>개별 평가 세션 — Vibe Council 진행 뷰</td></tr>
+  <tr><td><code>/result/[id]</code></td><td>Dynamic</td><td><span class="badge badge-green">OK</span></td><td>평가 결과 — 점수, verdict, 코드, 배포 정보</td></tr>
+  <tr><td><code>/brainstorm/[id]</code></td><td>Dynamic</td><td><span class="badge badge-green">OK</span></td><td>브레인스토밍 결과 — 인사이트, 아이디어</td></tr>
+</table>
+
+<h3>디자인 시스템</h3>
+<ul>
+  <li><strong>UI Library:</strong> shadcn/ui (Radix + CVA) — 탄탄하나 기본값에 가까움</li>
+  <li><strong>Typography:</strong> Geist Sans + Geist Mono — 깔끔한 선택</li>
+  <li><strong>Color:</strong> OKLCH 기반 다크 테마 — 접근성 측면에서 우수</li>
+  <li><strong>Animation:</strong> Framer Motion — fadeUp, stagger, spring 전환. 데모 커서가 특히 인상적</li>
+  <li><strong>Charts:</strong> Recharts — Dashboard에서 사용</li>
+  <li><strong>DnD:</strong> @dnd-kit — Kanban 보드 드래그앤드롭</li>
+</ul>
+
+<h3>Frontend Architect 심층 발견사항</h3>
+<div class="issue-list">
+  <div class="issue">
+    <div class="severity high">HIGH</div>
+    <div class="content">
+      <div class="title">데모 모드가 가짜 URL로 연결됨</div>
+      <div class="desc">데모 카드의 "View App" 링크가 <code>https://{card_id}.ondigitalocean.app</code>으로 생성되지만 실제 존재하지 않는 URL. 심사관이 클릭하면 404/에러.</div>
+      <div class="file">web/src/components/zero-prompt/idea-card.tsx:23</div>
+      <div class="fix">데모 카드에 실제 배포된 앱 URL 연결하거나, "Demo Mode - Links disabled" 표시</div>
+    </div>
+  </div>
+  <div class="issue">
+    <div class="severity high">HIGH</div>
+    <div class="content">
+      <div class="title">"Revise Idea" 버튼이 작동하지 않음</div>
+      <div class="desc">decision-gate.tsx:60의 onRevise 핸들러가 meeting-view.tsx:306에서 전달되지 않음. 버튼 클릭해도 아무 반응 없음.</div>
+      <div class="file">web/src/components/meeting/decision-gate.tsx:60</div>
+    </div>
+  </div>
+  <div class="issue">
+    <div class="severity high">HIGH</div>
+    <div class="content">
+      <div class="title">loading.tsx 파일 없음 — 라우트 전환 시 로딩 표시 없음</div>
+      <div class="desc">Next.js Suspense boundary가 없어 서버 컴포넌트 간 전환 시 아무 피드백 없음.</div>
+    </div>
+  </div>
+  <div class="issue">
+    <div class="severity medium">MEDIUM</div>
+    <div class="content">
+      <div class="title">@dnd-kit 미사용 — 데드 의존성</div>
+      <div class="desc">package.json에 @dnd-kit/core, @dnd-kit/sortable, @dnd-kit/utilities가 있지만 소스 코드에서 import되지 않음. 번들 사이즈 증가.</div>
+      <div class="fix">package.json에서 @dnd-kit 관련 3개 패키지 제거</div>
+    </div>
+  </div>
+  <div class="issue">
+    <div class="severity medium">MEDIUM</div>
+    <div class="content">
+      <div class="title">결과 페이지의 CONDITIONAL/NO-GO 이유가 하드코딩</div>
+      <div class="desc">result/[id]/page.tsx:88-103에서 AI Council 분석 결과가 아닌 프론트엔드에 하드코딩된 문자열을 표시. AI 분석 내러티브와 불일치.</div>
+    </div>
+  </div>
+</div>
+
+<h3>개선 제안</h3>
+<ul>
+  <li>랜딩 페이지에 <strong>"See a real app we built" CTA</strong> 추가 — 실제 배포 앱 링크가 가장 강력한 증거</li>
+  <li><strong>첫 방문자 가이드 투어</strong> — driver.js 같은 라이브러리로 3단계 오버레이</li>
+  <li><strong>Gallery/Showcase 페이지</strong> — 이전에 배포된 앱들의 스크린샷 그리드</li>
+  <li><strong>prefers-reduced-motion</strong> 미디어 쿼리 — 모든 애니메이션에 적용</li>
+  <li><strong>OG Image + Favicon</strong> 커스텀 — 소셜 공유 시 미리보기 이미지</li>
+  <li>vibeDeploy <strong>로고/아이콘</strong> 추가 — 현재 텍스트만 있음</li>
+</ul>
+
+<!-- ═══════════════════════ 7. BACKEND ═══════════════════════ -->
+<h2 id="backend">7. 백엔드 아키텍처 상세 분석</h2>
+
+<h3>핵심 아키텍처</h3>
+<table>
+  <tr><th>Component</th><th>File</th><th>Lines</th><th>Role</th></tr>
+  <tr><td>FastAPI Gateway</td><td><code>agent/server.py</code></td><td>70,907</td><td>API 엔드포인트, SSE, 대시보드 API</td></tr>
+  <tr><td>Pipeline Runtime</td><td><code>agent/pipeline_runtime.py</code></td><td>35,826</td><td>LangGraph 파이프라인 실행</td></tr>
+  <tr><td>LLM Router</td><td><code>agent/llm.py</code></td><td>17,457</td><td>Multi-model provider routing</td></tr>
+  <tr><td>Graph Builder</td><td><code>agent/graph.py</code></td><td>12,678</td><td>평가/빌드 그래프 토폴로지</td></tr>
+  <tr><td>Gradient ADK Entry</td><td><code>agent/main.py</code></td><td>23</td><td>@entrypoint 래퍼</td></tr>
+</table>
+
+<h3>파이프라인 노드 (agent/nodes/)</h3>
+<p>39개 노드 파일이 있어 파이프라인이 매우 세분화되어 있습니다:</p>
+<ul>
+  <li><strong>Discovery:</strong> YouTube discovery, transcript, insight extraction, paper search, competitive analysis</li>
+  <li><strong>Council:</strong> Architect, Scout, Guardian, Catalyst, Advocate + cross examination + strategist verdict</li>
+  <li><strong>Build:</strong> OpenAPI contract → type generation → pydantic models → per-file codegen → AST validation</li>
+  <li><strong>Deploy:</strong> Git push → CI test → app spec → build → deploy → verify live</li>
+</ul>
+
+<h3>Guardrails</h3>
+<p>guardrails.py에 4단계 보안 체크: prompt validation, prompt injection blocking, content moderation, jailbreak detection, PII redaction. 실제 동작하는 보호 레이어.</p>
+
+<h3>백엔드 에이전트 심층 평가</h3>
+<div class="note">
+  <strong>Backend Architect 결론:</strong> "This is a genuinely impressive, non-trivial system. It is not a demo or a collection of stubs." — <strong>37 pipeline nodes, 78 test files (17,237 lines), 실제 multi-provider LLM 통합, 실제 DO 배포.</strong>
+</div>
+
+<h3>Flow Trace 결과 (Code Explorer)</h3>
+<table>
+  <tr><th>Flow</th><th>Status</th><th>Notes</th></tr>
+  <tr><td>Zero-Prompt Discovery → Kanban</td><td><span class="badge badge-green">COMPLETE</span></td><td>YouTube API → Transcript → Gemini Insight → Papers → Verdict → SSE → Kanban UI</td></tr>
+  <tr><td>Build Pipeline (GO → Deploy)</td><td><span class="badge badge-orange">PARTIAL</span></td><td>실제 LangGraph 그래프 호출됨. GITHUB_TOKEN + DO_TOKEN 없으면 local fallback (live URL 없음)</td></tr>
+  <tr><td>Dashboard / Monitor</td><td><span class="badge badge-green">COMPLETE</span></td><td>5초 간격 폴링 + SSE 실시간 스트림. 30초 heartbeat.</td></tr>
+  <tr><td>Demo Page</td><td><span class="badge badge-green">COMPLETE</span></td><td>100% 클라이언트 사이드. 백엔드 불필요. 13개 mock 카드 + 타임라인.</td></tr>
+  <tr><td>DB Persistence</td><td><span class="badge badge-green">COMPLETE</span></td><td>PostgreSQL(운영) / SQLite(로컬). 서버 재시작 시 세션 복원됨.</td></tr>
+</table>
+
+<h3>주목할 기술적 성과</h3>
+<ul>
+  <li><strong>LLM Retry Logic:</strong> 지수 백오프(10s→60s max), rate-limit 감지, cross-model fallback, 세마포어 동시성 제어</li>
+  <li><strong>Verdict Algorithm:</strong> 6축 다차원 점수(proposal clarity 25%, execution feasibility 20%, market viability 25%, MVP differentiation 20%, evidence strength 10%) + anti-commodity 감지</li>
+  <li><strong>Paper Search:</strong> OpenAlex + arXiv API 실제 통합 + LRU 캐시 + arXiv 3초 쓰로틀링</li>
+  <li><strong>Code Generation:</strong> 8회 재시도, 온도 어닐링 스케줄(0.1→0.05→0.02), AST 검증, 금지 패턴 감지</li>
+</ul>
+
+<h3>개선 제안</h3>
+<ul>
+  <li><code>server.py</code>가 1,963줄로 큼 — 라우터별 분리 권장</li>
+  <li>LineageStore가 in-memory only (store.py:19-62) — 서버 재시작 시 배포 계보 유실</li>
+  <li>DB pool min/max 둘 다 1 기본값 (connection.py:39-40) — 동시 파이프라인 실행 시 병목</li>
+  <li>insight_extractor에 하드코딩된 Gemini 모델(gemini-2.0-flash-lite) vs card_enrichment(gemini-2.5-flash) — 불일치</li>
+</ul>
+
+<!-- ═══════════════════════ 8. SECURITY ═══════════════════════ -->
+<h2 id="security">8. 보안 감사 (20개 발견사항: 2 CRITICAL, 4 HIGH, 11 MEDIUM, 3 LOW)</h2>
+
+<div class="issue-list">
+  <div class="issue">
+    <div class="severity critical">CRITICAL</div>
+    <div class="content">
+      <div class="title">S-01: CORS wildcard — allow_origins=["*"]</div>
+      <div class="desc">server.py:617에서 모든 origin 허용. 악성 웹사이트에서 크로스 오리진 요청으로 API 호출, 데이터 유출, 파이프라인 트리거 가능.</div>
+      <div class="file">agent/server.py:615-620</div>
+      <div class="fix">allow_origins를 ["https://vibedeploy-7tgzk.ondigitalocean.app", "http://localhost:3000"]으로 제한</div>
+    </div>
+  </div>
+
+  <div class="issue">
+    <div class="severity critical">CRITICAL</div>
+    <div class="content">
+      <div class="title">S-02: 모든 공개 엔드포인트에 인증 없음</div>
+      <div class="desc">POST /run, /brainstorm, /zero-prompt/start, /resume 등 비용 발생 엔드포인트에 인증이 전혀 없음. 누구나 LLM 호출, GitHub 레포 생성, DO App 배포를 트리거 가능. 유일한 보호 엔드포인트는 /api/ops/dashboard/reconcile (ops token 필요).</div>
+      <div class="file">agent/server.py (전체)</div>
+      <div class="fix">최소 Bearer token 헤더 인증을 POST 엔드포인트에 추가. 해커톤 데모에서는 rate limiting으로 대체 가능</div>
+    </div>
+  </div>
+
+  <div class="issue">
+    <div class="severity high">HIGH</div>
+    <div class="content">
+      <div class="title">S-04: Rate Limiting 없음</div>
+      <div class="desc">HTTP 레벨 쓰로틀링이 없음. LLM 내부에 세마포어 기반 동시성 제한(llm.py:190-194)은 있지만 HTTP 요청 자체는 무제한.</div>
+      <div class="fix">slowapi 미들웨어: /run 5req/min, /brainstorm 5req/min, read 엔드포인트 100req/min</div>
+    </div>
+  </div>
+
+  <div class="issue">
+    <div class="severity high">HIGH</div>
+    <div class="content">
+      <div class="title">S-08: 사용자 입력이 LLM 프롬프트에 직접 주입</div>
+      <div class="desc">input_processor → council agents → code_generator 체인에서 사용자 입력이 LLM 시스템 프롬프트 내에 삽입됨. 생성된 코드가 실제 배포되므로, 성공적 prompt injection이 악성 앱 배포로 이어질 수 있음.</div>
+      <div class="file">agent/nodes/input_processor.py:80, agent/council/*.py</div>
+      <div class="fix">입력/지시 분리 강화, 생성 코드에 대한 보안 스캔(Semgrep/Bandit) 추가</div>
+    </div>
+  </div>
+
+  <div class="issue">
+    <div class="severity high">HIGH</div>
+    <div class="content">
+      <div class="title">S-09: 생성된 코드가 보안 리뷰 없이 배포됨</div>
+      <div class="desc">LLM이 생성한 코드 → GitHub push → DO 배포. is_safe_file_path()가 .env, .github, Dockerfile을 차단하지만, 생성 코드 자체의 악성 패턴(reverse shell, 데이터 유출 등) 검사 없음.</div>
+      <div class="file">agent/nodes/deployer.py, agent/tools/github.py</div>
+    </div>
+  </div>
+
+  <div class="issue">
+    <div class="severity high">HIGH</div>
+    <div class="content">
+      <div class="title">S-03: Ops 토큰이 Inference Key로 폴백</div>
+      <div class="desc">_ops_token() 함수가 VIBEDEPLOY_OPS_TOKEN → DASHBOARD_ADMIN_TOKEN → DIGITALOCEAN_INFERENCE_KEY 순으로 폴백. 최소 권한 원칙 위반.</div>
+      <div class="file">agent/server.py:348-353</div>
+    </div>
+  </div>
+
+  <div class="issue">
+    <div class="severity medium">MEDIUM</div>
+    <div class="content">
+      <div class="title">S-05/S-16/S-19: Guardrails bypass, SSRF, Test API in prod</div>
+      <div class="desc">Guardrails가 유니코드/인코딩 우회 가능(S-05). youtube_url/reference_urls로 내부 네트워크 접근 가능(S-16). 테스트 API 엔드포인트가 프로덕션 코드에 존재(S-19).</div>
+      <div class="file">guardrails.py, server.py:661-670, server.py:847-862</div>
+    </div>
+  </div>
+
+  <div class="issue">
+    <div class="severity medium">MEDIUM</div>
+    <div class="content">
+      <div class="title">S-23: SSE 연결 제한 없음</div>
+      <div class="desc">/dashboard/events, /zero-prompt/events의 동시 연결 수에 상한 없음. 메모리 고갈 공격 가능.</div>
+      <div class="fix">최대 동시 SSE 연결 100개 제한, 초과 시 429 반환</div>
+    </div>
+  </div>
+
+  <div class="issue">
+    <div class="severity low">LOW</div>
+    <div class="content">
+      <div class="title">양호한 보안 패턴들</div>
+      <div class="desc">✅ hmac.compare_digest 사용 (timing-safe) ✅ 경로 순회 방지 3곳 구현 ✅ PII 자동 감지/치환 ✅ .gitignore 적절 설정 ✅ test API는 env var 게이트</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ 9. CI/CD ═══════════════════════ -->
+<h2 id="cicd">9. CI/CD &amp; 품질 게이트</h2>
+
+<h3>현재 CI 파이프라인 (9 jobs)</h3>
+<table>
+  <tr><th>Job</th><th>Tool</th><th>Status</th><th>Notes</th></tr>
+  <tr><td>agent-lint</td><td>ruff</td><td><span class="badge badge-green">Pass</span></td><td>Check + format</td></tr>
+  <tr><td>agent-test</td><td>pytest</td><td><span class="badge badge-green">Pass</span></td><td>1285 tests, 1 skipped</td></tr>
+  <tr><td>agent-coverage</td><td>pytest-cov</td><td><span class="badge badge-green">Pass</span></td><td>≥80% coverage required</td></tr>
+  <tr><td>agent-security</td><td>bandit</td><td><span class="badge badge-orange">Soft</span></td><td><code>|| true</code> — 결과 무시됨</td></tr>
+  <tr><td>web-lint</td><td>eslint</td><td><span class="badge badge-green">Pass</span></td><td>ESLint 9</td></tr>
+  <tr><td>web-build</td><td>next build</td><td><span class="badge badge-green">Pass</span></td><td>7 routes compiled</td></tr>
+  <tr><td>web-typecheck</td><td>tsc --noEmit</td><td><span class="badge badge-green">Pass</span></td><td>TypeScript strict</td></tr>
+  <tr><td>web-audit</td><td>npm audit</td><td><span class="badge badge-orange">Soft</span></td><td><code>|| true</code> — 결과 무시됨</td></tr>
+  <tr><td>—</td><td>vitest</td><td><span class="badge badge-red">Missing</span></td><td>web test job이 CI에 없음</td></tr>
+</table>
+
+<h3>로컬 검증 결과 (2026-04-07)</h3>
+<table>
+  <tr><th>Check</th><th>Result</th></tr>
+  <tr><td>Web Build</td><td><span class="badge badge-green">✓ Pass</span> — 7 routes in 4.0s</td></tr>
+  <tr><td>Web Tests</td><td><span class="badge badge-green">✓ Pass</span> — 9 tests in 699ms</td></tr>
+  <tr><td>Live Health</td><td><span class="badge badge-green">✓ 200</span> — {"status":"ok"}</td></tr>
+  <tr><td>Demo Apps</td><td><span class="badge badge-red">✗ All 4 DOWN</span> — ECONNREFUSED</td></tr>
+</table>
+
+<h3>추가 권장 CI Jobs</h3>
+<ul>
+  <li><strong>web-test:</strong> <code>npm test</code> — vitest 실행</li>
+  <li><strong>lighthouse:</strong> Performance, A11y, SEO 점수 — 최소 90점 게이트</li>
+  <li><strong>bundle-size:</strong> Next.js build 결과에서 번들 크기 체크</li>
+  <li><strong>e2e:</strong> Playwright 기본 네비게이션 테스트</li>
+</ul>
+
+<!-- ═══════════════════════ 10. GUEST MODE ═══════════════════════ -->
+<h2 id="guest">10. 게스트/뷰어 모드 제안</h2>
+
+<div class="note">
+  <strong>핵심 원칙:</strong> 심사관은 API 키 없이 브라우저만으로 프로젝트를 평가합니다. 모든 주요 기능이 읽기 전용이라도 경험 가능해야 합니다.
+</div>
+
+<h3>현재 상태</h3>
+<table>
+  <tr><th>Path</th><th>Guest Access</th><th>Backend Required</th><th>Assessment</th></tr>
+  <tr><td><code>/</code></td><td>✅ Full</td><td>No</td><td>랜딩 페이지 — 정상 작동</td></tr>
+  <tr><td><code>/demo</code></td><td>✅ Full</td><td>No</td><td>자동 재생 데모 — 백엔드 불필요 (mock data)</td></tr>
+  <tr><td><code>/zero-prompt</code></td><td>⚠️ Partial</td><td>Yes (read)</td><td>완료된 세션 읽기 가능, 새 세션 시작은 backend 필요</td></tr>
+  <tr><td><code>/dashboard</code></td><td>⚠️ Partial</td><td>Yes</td><td>API 미연결 시 "No data" 표시</td></tr>
+  <tr><td><code>/meeting/[id]</code></td><td>❌</td><td>Yes</td><td>세션 ID 필요</td></tr>
+  <tr><td><code>YouTube Start</code></td><td>❌ Blocked</td><td>—</td><td>alert("restricted") 표시</td></tr>
+</table>
+
+<h3>개선 방안 (3단계)</h3>
+
+<h3>Phase 1: 즉시 적용 (코드 변경 최소)</h3>
+<ul>
+  <li>랜딩 페이지의 "Start" 버튼을 <strong>disabled 상태</strong>로 전환 + "Requires backend" 툴팁</li>
+  <li><code>/zero-prompt</code> 상단에 <strong>안내 배너</strong>: "이전 세션 결과를 보고 있습니다. 전체 워크플로우는 [Demo 보기]를 클릭하세요"</li>
+  <li><code>/dashboard</code>에 <strong>offline fallback</strong>: API 실패 시 "Agent offline — [Demo 보기]" 안내</li>
+</ul>
+
+<h3>Phase 2: Demo 데이터 확장</h3>
+<ul>
+  <li>/dashboard를 demo 데이터로도 렌더링 가능하게 — <code>/dashboard?demo=true</code></li>
+  <li>/meeting/demo-1, /result/demo-1 경로에 샘플 데이터 표시</li>
+  <li>전체 앱에 <strong>"Guest Mode" 뱃지</strong> — 우상단에 "Viewing Demo Data" 표시</li>
+</ul>
+
+<h3>Phase 3: Interactive Viewer</h3>
+<ul>
+  <li>실제 /zero-prompt 페이지에서 <strong>"Watch Replay"</strong> 기능 — 과거 세션을 시간 순서대로 재생</li>
+  <li>생성된 코드를 <strong>인라인 코드 에디터</strong>로 표시 (monaco-editor)</li>
+</ul>
+
+<!-- ═══════════════════════ 11. ROADMAP ═══════════════════════ -->
+<h2 id="roadmap">11. 개선 로드맵 (우선순위별)</h2>
+
+<div class="roadmap">
+  <div class="roadmap-item">
+    <div class="phase">🚨 P0 — 즉시 (심사 전)</div>
+    <div class="rtitle">1. 데모 앱 복구 또는 README 업데이트</div>
+    <div class="rdesc"><code>doctl apps list</code>로 4개 앱 상태 확인. 살릴 수 있으면 재배포, 아니면 README에서 dead 링크 제거하고 /zero-prompt의 live 앱으로 대체.</div>
+  </div>
+  <div class="roadmap-item">
+    <div class="phase">🚨 P0 — 즉시 (심사 전)</div>
+    <div class="rtitle">2. 데모 비디오 링크 등록</div>
+    <div class="rdesc">README.md:13의 플레이스홀더를 실제 YouTube/Vimeo URL로 교체.</div>
+  </div>
+  <div class="roadmap-item">
+    <div class="phase">🚨 P0 — 즉시</div>
+    <div class="rtitle">3. YouTube "Start" 버튼 UX 수정</div>
+    <div class="rdesc">alert() 제거 → disabled 상태 + 툴팁 or /demo 리디렉트. zero-prompt-landing.tsx:164</div>
+  </div>
+
+  <div class="roadmap-item">
+    <div class="phase">⚡ P1 — 1일 이내</div>
+    <div class="rtitle">4. Guest/Viewer 모드 안내 추가</div>
+    <div class="rdesc">/zero-prompt, /dashboard에 "이전 결과 보기 / Demo 보기" 안내 배너. API 미연결 시 fallback.</div>
+  </div>
+  <div class="roadmap-item">
+    <div class="phase">⚡ P1 — 1일 이내</div>
+    <div class="rtitle">5. CI에 web-test job 추가</div>
+    <div class="rdesc">.github/workflows/ci.yml에 vitest run 포함.</div>
+  </div>
+  <div class="roadmap-item">
+    <div class="phase">⚡ P1 — 1일 이내</div>
+    <div class="rtitle">6. ADK URL 설정 또는 health 노출 제거</div>
+    <div class="rdesc">ADK 배포 후 env 설정, 또는 health 응답에서 adk_url_configured 필드 제거.</div>
+  </div>
+
+  <div class="roadmap-item">
+    <div class="phase">🔧 P2 — 2~3일</div>
+    <div class="rtitle">7. Rate Limiting 추가</div>
+    <div class="rdesc">SlowAPI 미들웨어로 LLM 호출 엔드포인트 보호.</div>
+  </div>
+  <div class="roadmap-item">
+    <div class="phase">🔧 P2 — 2~3일</div>
+    <div class="rtitle">8. 프론트엔드 테스트 보강</div>
+    <div class="rdesc">KanbanBoard, ZeroPromptWorkspace, DemoPage 컴포넌트 테스트 추가.</div>
+  </div>
+  <div class="roadmap-item">
+    <div class="phase">🔧 P2 — 2~3일</div>
+    <div class="rtitle">9. OG Image & Favicon 커스텀</div>
+    <div class="rdesc">vibeDeploy 브랜드 이미지 추가, layout.tsx metadata 보강.</div>
+  </div>
+  <div class="roadmap-item">
+    <div class="phase">🔧 P2 — 2~3일</div>
+    <div class="rtitle">10. 접근성 개선</div>
+    <div class="rdesc">skip-nav, ARIA labels, keyboard navigation, contrast check.</div>
+  </div>
+
+  <div class="roadmap-item">
+    <div class="phase">🎨 P3 — 1주</div>
+    <div class="rtitle">11. Dashboard Demo Data 모드</div>
+    <div class="rdesc">/dashboard?demo=true로 mock 데이터 렌더링. 심사관이 전체 대시보드 경험 가능.</div>
+  </div>
+  <div class="roadmap-item">
+    <div class="phase">🎨 P3 — 1주</div>
+    <div class="rtitle">12. E2E 테스트 추가</div>
+    <div class="rdesc">Playwright로 / → /demo → /zero-prompt 네비게이션 테스트.</div>
+  </div>
+  <div class="roadmap-item">
+    <div class="phase">🎨 P3 — 1주</div>
+    <div class="rtitle">13. 디자인 차별화</div>
+    <div class="rdesc">커스텀 브랜드 컬러, 카드 micro-animation, 배포 성공 confetti 효과.</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════ OVERALL SUMMARY ═══════════════════════ -->
+<hr class="divider">
+
+<h2>종합 평가</h2>
+
+<div class="note">
+  <p><strong>vibeDeploy는 이미 2,632팀 중 1위를 달성한 우수한 프로젝트입니다.</strong></p>
+  <p>핵심 컨셉(Zero-Prompt → Discovery → Kanban → Deploy)과 기술 구현(13 DO capabilities, contract-first codegen, multi-model architecture, 80+ tests)은 매우 인상적입니다.</p>
+  <p>위에 나열된 개선사항 중 <strong>CRITICAL 3개는 즉시 수정</strong>이 필요하며(데모 앱 다운, 비디오 링크 미등록, alert() 버튼), HIGH 항목들은 심사 기간 내에 우선 적용하면 완성도를 크게 높일 수 있습니다.</p>
+  <p><strong>가장 큰 차별화 기회는 "Guest Experience"입니다.</strong> 심사관이 코드 리뷰 없이 브라우저만으로 전체 경험을 이해할 수 있도록 /demo 강화 + /zero-prompt 안내 + /dashboard fallback을 구현하면, Design(UX) 점수를 8.0 → 9.0+ 로 끌어올릴 수 있습니다.</p>
+</div>
+
+<h3>6개 에이전트 통합 발견사항</h3>
+<table>
+  <tr><th>Category</th><th>Frontend</th><th>Backend</th><th>Security</th><th>Quality</th><th>Total</th></tr>
+  <tr><td><span class="badge badge-red">CRITICAL</span></td><td>6</td><td>0</td><td>2</td><td>4</td><td style="font-weight:700;">12</td></tr>
+  <tr><td><span class="badge badge-orange">HIGH</span></td><td>11</td><td>4</td><td>4</td><td>5</td><td style="font-weight:700;">24</td></tr>
+  <tr><td><span class="badge badge-blue">MEDIUM</span></td><td>13</td><td>12</td><td>11</td><td>8</td><td style="font-weight:700;">44</td></tr>
+  <tr><td style="color:var(--muted);">LOW</td><td>7</td><td>6</td><td>3</td><td>5</td><td>21</td></tr>
+  <tr style="font-weight:700;border-top:2px solid var(--border);"><td>Total</td><td>37</td><td>22</td><td>20</td><td>22</td><td>101</td></tr>
+</table>
+
+<h3>영향력 순위 TOP 5 조치</h3>
+<table>
+  <tr><th>#</th><th>Action</th><th>Impact</th><th>Effort</th></tr>
+  <tr><td>1</td><td><strong>데모 앱 4개 복구 또는 README 업데이트</strong></td><td>심사 기간 중 dead link = 감점</td><td>30분</td></tr>
+  <tr><td>2</td><td><strong>YouTube Start alert() → disabled + tooltip</strong></td><td>첫 인상 결정적 개선</td><td>15분</td></tr>
+  <tr><td>3</td><td><strong>/zero-prompt에 안내 배너 + Demo 링크</strong></td><td>Guest experience 대폭 개선</td><td>30분</td></tr>
+  <tr><td>4</td><td><strong>데모 비디오 링크 등록</strong></td><td>심사 필수 요건 충족</td><td>10분</td></tr>
+  <tr><td>5</td><td><strong>CI에 web-test job 추가</strong></td><td>Technical Implementation 점수 보강</td><td>15분</td></tr>
+</table>
+
+<div class="note">
+  <p><strong>Backend Architect 최종 평가:</strong> "The multi-provider LLM integration with retry/fallback, the LangGraph state machine with 37 nodes, the per-file code generation pipeline with Docker-based validation, and the real DigitalOcean deployment chain represent genuine engineering depth."</p>
+  <p><strong>Frontend Architect 최종 평가:</strong> "The single highest-leverage fix: Create one static showcase route that displays a real session with real generated code, real documents, and a link to a real deployed app — proving the full pipeline works."</p>
+  <p><strong>Deep Researcher 핵심 인사이트:</strong> "vibeDeploy documented 13 DigitalOcean capabilities — nearly every Gradient feature available. The 2nd place project used 8. This breadth gap is significant."</p>
+</div>
+
+<p style="text-align:center; color:var(--muted); margin-top:3rem; font-size:.85rem;">
+  Generated by 6 expert agents (total analysis: 101 findings across 589K+ tokens)<br>
+  Frontend Architect | Backend Architect | Security Engineer | Quality Engineer | Code Explorer | Deep Researcher<br>
+  Analysis date: 2026-04-07 | vibeDeploy commit: ec8b84b (main) | Judging period: 2026-04-07 ~ 04-14
+</p>
+
+</div>
+</body>
+</html>
