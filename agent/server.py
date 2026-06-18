@@ -28,12 +28,11 @@ import httpx
 import uvicorn
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
-
-from .auth import rate_limit_check, verify_api_key
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from starlette.responses import JSONResponse, StreamingResponse
 
+from .auth import rate_limit_check, verify_api_key
 from .cost import estimate_pipeline_cost
 from .db.store import ResultStore
 from .llm import get_runtime_model_config
@@ -2078,16 +2077,18 @@ async def dashboard_list_apps():
         spec = app.get("spec", {})
         name = spec.get("name", "")
         active = app.get("active_deployment", {})
-        result.append({
-            "id": app.get("id", ""),
-            "name": name,
-            "live_url": app.get("live_url", ""),
-            "region": app.get("region", {}).get("slug", ""),
-            "phase": active.get("phase", "UNKNOWN"),
-            "created_at": app.get("created_at", ""),
-            "updated_at": app.get("updated_at", ""),
-            "protected": name in _PROTECTED_APP_NAMES,
-        })
+        result.append(
+            {
+                "id": app.get("id", ""),
+                "name": name,
+                "live_url": app.get("live_url", ""),
+                "region": app.get("region", {}).get("slug", ""),
+                "phase": active.get("phase", "UNKNOWN"),
+                "created_at": app.get("created_at", ""),
+                "updated_at": app.get("updated_at", ""),
+                "protected": name in _PROTECTED_APP_NAMES,
+            }
+        )
     return result
 
 

@@ -167,14 +167,33 @@ async def add_card(session_id: str, card_id: str, video_id: str, title: str = ""
     return {"card_id": card_id, "video_id": video_id, "title": title, "status": "analyzing"}
 
 
-_ALLOWED_CARD_COLUMNS = frozenset({
-    "status", "score", "domain", "reason", "reason_code",
-    "score_breakdown", "papers_found", "competitors_found",
-    "saturation", "novelty_boost", "video_summary", "insights",
-    "mvp_proposal", "build_step", "analysis_step", "repo_url",
-    "live_url", "thread_id", "title", "video_id",
-    "build_events", "build_phase", "build_node",
-})
+_ALLOWED_CARD_COLUMNS = frozenset(
+    {
+        "status",
+        "score",
+        "domain",
+        "reason",
+        "reason_code",
+        "score_breakdown",
+        "papers_found",
+        "competitors_found",
+        "saturation",
+        "novelty_boost",
+        "video_summary",
+        "insights",
+        "mvp_proposal",
+        "build_step",
+        "analysis_step",
+        "repo_url",
+        "live_url",
+        "thread_id",
+        "title",
+        "video_id",
+        "build_events",
+        "build_phase",
+        "build_node",
+    }
+)
 
 _JSONB_COLUMNS = frozenset({"insights", "mvp_proposal", "score_breakdown", "build_events"})
 

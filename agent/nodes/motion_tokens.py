@@ -39,6 +39,7 @@ def generate_motion_tokens(design_system: dict) -> str:
         llm_easing = llm_motion.get("easing", "")
         if llm_easing and "cubic-bezier" in llm_easing:
             import re as _re
+
             m = _re.search(r"cubic-bezier\(([^)]+)\)", llm_easing)
             if m:
                 intensity = {**intensity, "ease": f"[{m.group(1)}]"}
