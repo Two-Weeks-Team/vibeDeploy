@@ -106,11 +106,15 @@ def to_css_variables(domain: str = "saas", design_system: dict | None = None) ->
     if design_system:
         palette = _get_palette(design_system)
     else:
-        palette = {**DOMAIN_PRESETS.get(domain, DOMAIN_PRESETS["tech"]),
-                   "surface": None, "surface_alt": None, "on_primary": None,
-                   "semantic_success": "oklch(55% 0.18 142)",
-                   "semantic_warning": "oklch(75% 0.18 75)",
-                   "semantic_error": "oklch(55% 0.22 25)"}
+        palette = {
+            **DOMAIN_PRESETS.get(domain, DOMAIN_PRESETS["tech"]),
+            "surface": None,
+            "surface_alt": None,
+            "on_primary": None,
+            "semantic_success": "oklch(55% 0.18 142)",
+            "semantic_warning": "oklch(75% 0.18 75)",
+            "semantic_error": "oklch(55% 0.22 25)",
+        }
 
     primary = palette["primary"]
     accent = palette["accent"]

@@ -420,7 +420,9 @@ async def deployer(state: VibeDeployState, config=None) -> dict:
     if v_verdict == "verified":
         logger.info(
             "[DEPLOYER] Live URL verified (score=%d, verdict=%s): %s",
-            v_score, v_verdict, live_url,
+            v_score,
+            v_verdict,
+            live_url,
         )
         await _emit_step_complete(
             "verified",
@@ -433,7 +435,9 @@ async def deployer(state: VibeDeployState, config=None) -> dict:
     elif v_verdict == "partial":
         logger.warning(
             "[DEPLOYER] Live URL partially verified (score=%d, verdict=%s): %s",
-            v_score, v_verdict, live_url,
+            v_score,
+            v_verdict,
+            live_url,
         )
         await _emit_step_complete(
             "verified",
@@ -447,7 +451,9 @@ async def deployer(state: VibeDeployState, config=None) -> dict:
         # verdict == "failed" (score < 50) — attempt repair
         logger.warning(
             "[DEPLOYER] Live URL verification FAILED (score=%d, verdict=%s): %s — attempting repair",
-            v_score, v_verdict, live_url,
+            v_score,
+            v_verdict,
+            live_url,
         )
         await _emit_step_error(
             "verified",
@@ -473,16 +479,10 @@ async def deployer(state: VibeDeployState, config=None) -> dict:
             diag_lines.append(f"Missing: interactive elements (only {cs.get('interactive_count', 0)} found, need >=3)")
         if cs.get("broken_images"):
             diag_lines.append(f"Broken images: {cs['broken_images'][:3]}")
-        failed_eps = [
-            k for k, v in url_verification.get("endpoint_results", {}).items()
-            if not v.get("ok")
-        ]
+        failed_eps = [k for k, v in url_verification.get("endpoint_results", {}).items() if not v.get("ok")]
         if failed_eps:
             diag_lines.append(f"Failed API endpoints: {', '.join(failed_eps[:5])}")
-        failed_assets = [
-            k for k, v in url_verification.get("asset_checks", {}).items()
-            if not v.get("ok")
-        ]
+        failed_assets = [k for k, v in url_verification.get("asset_checks", {}).items() if not v.get("ok")]
         if failed_assets:
             diag_lines.append(f"Failed assets: {', '.join(failed_assets[:5])}")
 
@@ -516,7 +516,8 @@ async def deployer(state: VibeDeployState, config=None) -> dict:
                         v_verdict = url_verification.get("verification_verdict", "failed")
                         logger.info(
                             "[DEPLOYER] Post-repair verification: score=%d, verdict=%s",
-                            v_score, v_verdict,
+                            v_score,
+                            v_verdict,
                         )
 
     homepage = live_url or github_repo_url
@@ -1895,8 +1896,10 @@ def _verify_live_url(live_url: str) -> dict:
         content_signals["has_title"] = bool(re.search(r"<title>[^<]{3,}</title>", root_html, re.IGNORECASE))
         content_signals["has_components"] = root_html.count("<div") >= 3 or root_html.count("<section") >= 2
         content_signals["has_styles"] = (
-            "tailwind" in html_lower or "globals.css" in html_lower or "<style" in html_lower
-            or bool(re.search(r'<link[^>]+\.css', root_html, re.IGNORECASE))
+            "tailwind" in html_lower
+            or "globals.css" in html_lower
+            or "<style" in html_lower
+            or bool(re.search(r"<link[^>]+\.css", root_html, re.IGNORECASE))
         )
 
         # Score: has title: +5
@@ -1916,7 +1919,7 @@ def _verify_live_url(live_url: str) -> dict:
         # SPA framework detection
         content_signals["has_spa_framework"] = any(
             marker in root_html
-            for marker in ("__NEXT_DATA__", "__NUXT__", "window.__remixContext", "id=\"__next\"", "id=\"app\"")
+            for marker in ("__NEXT_DATA__", "__NUXT__", "window.__remixContext", 'id="__next"', 'id="app"')
         ) or bool(re.search(r'<script[^>]+src="[^"]*\.(bundle|chunk|app)\.[^"]*\.js"', root_html, re.IGNORECASE))
 
         # Semantic HTML check: h1, nav/navigation, main/article
@@ -1957,7 +1960,11 @@ def _verify_live_url(live_url: str) -> dict:
             score += 10
             logger.info(
                 "[DEPLOYER][VERIFY] Interactive elements: %d (buttons=%d, forms=%d, links=%d, inputs=%d) → +10",
-                interactive_total, button_count, form_count, link_count, input_count,
+                interactive_total,
+                button_count,
+                form_count,
+                link_count,
+                input_count,
             )
         else:
             logger.warning("[DEPLOYER][VERIFY] Interactive elements insufficient (%d found)", interactive_total)
@@ -1973,7 +1980,9 @@ def _verify_live_url(live_url: str) -> dict:
         # Score: meta tags present: +5
         if content_signals["has_meta_tags"]:
             score += 5
-            logger.info("[DEPLOYER][VERIFY] Meta tags present (og:title=%s, description=%s) → +5", has_og_title, has_description)
+            logger.info(
+                "[DEPLOYER][VERIFY] Meta tags present (og:title=%s, description=%s) → +5", has_og_title, has_description
+            )
         else:
             logger.warning("[DEPLOYER][VERIFY] Meta tags MISSING")
 
@@ -2007,7 +2016,9 @@ def _verify_live_url(live_url: str) -> dict:
             all_endpoints_ok = False
             logger.warning(
                 "[DEPLOYER][VERIFY] Endpoint probe FAILED: %s %s → status=%s",
-                ep_method, ep_path, probe["status"],
+                ep_method,
+                ep_path,
+                probe["status"],
             )
         if not probe.get("valid_response"):
             all_responses_valid = False
@@ -2092,7 +2103,8 @@ def _verify_live_url(live_url: str) -> dict:
 
     logger.info(
         "[DEPLOYER][VERIFY] Final score: %d/100 → verdict=%s",
-        score, result["verification_verdict"],
+        score,
+        result["verification_verdict"],
     )
 
     return result

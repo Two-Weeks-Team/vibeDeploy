@@ -93,9 +93,7 @@ async def get_pool() -> asyncpg.Pool:
             except Exception:
                 import logging
 
-                logging.getLogger(__name__).warning(
-                    "Could not create users table — DB may not be ready yet"
-                )
+                logging.getLogger(__name__).warning("Could not create users table — DB may not be ready yet")
     return _pool
 
 

@@ -127,7 +127,9 @@ async def cleanup_expired_apps() -> dict:
             continue
         logger.info("[TTL] Deleting expired app %s (age=%.1fh, ttl=%dh)", name, age_hours, ttl_hours)
         result = await delete_app(app_id)
-        deleted.append({"name": name, "app_id": app_id, "age_hours": round(age_hours, 1), "result": result.get("status")})
+        deleted.append(
+            {"name": name, "app_id": app_id, "age_hours": round(age_hours, 1), "result": result.get("status")}
+        )
 
     return {"deleted": deleted, "skipped": skipped, "ttl_hours": ttl_hours}
 
@@ -321,9 +323,21 @@ def build_app_spec(
         envs.append({"key": "POSTGRES_URL", "value": generated_db_url, "scope": "RUN_TIME", "type": "SECRET"})
     generated_inference_key = os.getenv("GENERATED_APP_INFERENCE_KEY", "")
     if generated_inference_key:
-        envs.append({"key": "GRADIENT_MODEL_ACCESS_KEY", "value": generated_inference_key, "scope": "RUN_TIME", "type": "SECRET"})
         envs.append(
-            {"key": "DIGITALOCEAN_INFERENCE_KEY", "value": generated_inference_key, "scope": "RUN_TIME", "type": "SECRET"}
+            {
+                "key": "GRADIENT_MODEL_ACCESS_KEY",
+                "value": generated_inference_key,
+                "scope": "RUN_TIME",
+                "type": "SECRET",
+            }
+        )
+        envs.append(
+            {
+                "key": "DIGITALOCEAN_INFERENCE_KEY",
+                "value": generated_inference_key,
+                "scope": "RUN_TIME",
+                "type": "SECRET",
+            }
         )
     envs.append({"key": "DO_INFERENCE_MODEL", "value": "anthropic-claude-4.6-sonnet", "scope": "RUN_TIME"})
 

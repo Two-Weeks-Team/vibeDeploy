@@ -2077,16 +2077,18 @@ async def dashboard_list_apps():
         spec = app.get("spec", {})
         name = spec.get("name", "")
         active = app.get("active_deployment", {})
-        result.append({
-            "id": app.get("id", ""),
-            "name": name,
-            "live_url": app.get("live_url", ""),
-            "region": app.get("region", {}).get("slug", ""),
-            "phase": active.get("phase", "UNKNOWN"),
-            "created_at": app.get("created_at", ""),
-            "updated_at": app.get("updated_at", ""),
-            "protected": name in _PROTECTED_APP_NAMES,
-        })
+        result.append(
+            {
+                "id": app.get("id", ""),
+                "name": name,
+                "live_url": app.get("live_url", ""),
+                "region": app.get("region", {}).get("slug", ""),
+                "phase": active.get("phase", "UNKNOWN"),
+                "created_at": app.get("created_at", ""),
+                "updated_at": app.get("updated_at", ""),
+                "protected": name in _PROTECTED_APP_NAMES,
+            }
+        )
     return result
 
 
